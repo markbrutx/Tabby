@@ -45,6 +45,7 @@ test.beforeEach(async ({ page }) => {
       fontSize: 13,
       theme: "system",
       launchFullscreen: true,
+      hasCompletedOnboarding: true,
     };
 
     let tabCounter = 1;
@@ -79,6 +80,7 @@ test.beforeEach(async ({ page }) => {
         profileId: profile.id,
         profileLabel: profile.label,
         startupCommand: profile.startupCommand,
+        status: "running",
       };
     }
 
@@ -204,6 +206,7 @@ test.beforeEach(async ({ page }) => {
                 profileLabel: profile.label,
                 startupCommand: profile.startupCommand,
                 sessionId: `session-${sessionCounter++}`,
+                status: "running",
               };
             }),
           })),
@@ -222,6 +225,7 @@ test.beforeEach(async ({ page }) => {
                     ...pane,
                     cwd: request.cwd,
                     sessionId: `session-${sessionCounter++}`,
+                    status: "running",
                   }
                 : pane,
             ),
@@ -237,7 +241,11 @@ test.beforeEach(async ({ page }) => {
             ...tab,
             panes: tab.panes.map((pane) =>
               pane.id === paneId
-                ? { ...pane, sessionId: `session-${sessionCounter++}` }
+                ? {
+                    ...pane,
+                    sessionId: `session-${sessionCounter++}`,
+                    status: "running",
+                  }
                 : pane,
             ),
           })),
@@ -335,4 +343,112 @@ test("reconfigures an active pane to a custom command", async ({ page }) => {
   await page.getByRole("button", { name: "Launch" }).click();
 
   await expect(page.getByTestId(`profile-badge-${paneId}`)).toHaveText("Custom");
+});
+
+test("moves pane focus with keyboard shortcuts", async ({ page }) => {
+  const panes = page.locator('[data-testid^="pane-"]:visible');
+  const firstPaneId = (await panes.nth(0).getAttribute("data-testid"))?.replace("pane-", "");
+  const secondPaneId = (await panes.nth(1).getAttribute("data-testid"))?.replace("pane-", "");
+
+  if (!firstPaneId || !secondPaneId) {
+    throw new Error("expected at least two visible panes");
+  }
+
+  await panes.nth(0).click();
+  await expect(page.getByTestId(`cwd-input-${firstPaneId}`)).toBeVisible();
+
+  await page.keyboard.press("Meta+Alt+ArrowRight");
+
+  await expect(page.getByTestId(`cwd-input-${secondPaneId}`)).toBeVisible();
+  await expect(page.getByTestId(`cwd-input-${firstPaneId}`)).toHaveCount(0);
+});
+
+test("creates new workspace with Cmd+T shortcut", async ({ page }) => {
+  await expect(page.getByTestId("tab-1")).toBeVisible();
+
+  await page.keyboard.press("Meta+t");
+
+  await expect(page.getByTestId("tab-2")).toBeVisible();
+  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 2");
+});
+
+test("closes workspace with Cmd+W shortcut", async ({ page }) => {
+  await page.keyboard.press("Meta+t");
+  await expect(page.getByTestId("tab-2")).toBeVisible();
+
+  await page.keyboard.press("Meta+w");
+
+  await expect(page.getByTestId("tab-2")).toHaveCount(0);
+  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 1");
+});
+
+test("launches 3x3 war room from sidebar", async ({ page }) => {
+  await page.getByTestId("launchpad-3x3").click();
+
+  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 2");
+  await expect(page.locator('[data-testid^="pane-"]:visible')).toHaveCount(9);
+});
+
+test("restarts a pane with Cmd+Shift+R", async ({ page }) => {
+  const firstPane = page.locator('[data-testid^="pane-"]:visible').first();
+  await firstPane.click();
+
+  const paneTestId = await firstPane.getAttribute("data-testid");
+  if (!paneTestId) {
+    throw new Error("visible pane should expose a data-testid");
+  }
+
+  const paneId = paneTestId.replace("pane-", "");
+  const badgeBefore = await page.getByTestId(`profile-badge-${paneId}`).textContent();
+
+  await page.keyboard.press("Meta+Shift+r");
+
+  await expect(page.getByTestId(`profile-badge-${paneId}`)).toHaveText(badgeBefore ?? "Terminal");
+});
+
+test("shows onboarding on first launch and proceeds to main UI after completion", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const mock = window.__TABBY_MOCK__;
+    if (mock) {
+      const originalGetSettings = mock.getAppSettings.bind(mock);
+      const originalUpdateSettings = mock.updateAppSettings.bind(mock);
+      const originalBootstrap = mock.bootstrapWorkspace.bind(mock);
+
+      mock.getAppSettings = async () => {
+        const s = await originalGetSettings();
+        return { ...s, hasCompletedOnboarding: false };
+      };
+
+      mock.bootstrapWorkspace = async () => {
+        const result = await originalBootstrap();
+        return {
+          ...result,
+          settings: { ...result.settings, hasCompletedOnboarding: false },
+        };
+      };
+
+      mock.updateAppSettings = async (nextSettings) => {
+        const result = await originalUpdateSettings(nextSettings);
+        return result;
+      };
+    }
+  });
+
+  await page.reload();
+
+  await expect(page.getByTestId("onboarding-wizard")).toBeVisible();
+  await expect(page.getByText("Pick your deck")).toBeVisible();
+
+  await page.getByTestId("onboarding-layout-1x2").click();
+  await page.getByTestId("onboarding-next").click();
+
+  await expect(page.getByText("Choose your shell")).toBeVisible();
+  await page.getByTestId("onboarding-next").click();
+
+  await expect(page.getByText("Make it yours")).toBeVisible();
+  await page.getByTestId("onboarding-finish").click();
+
+  await expect(page.getByTestId("active-workspace-title")).toBeVisible();
 });

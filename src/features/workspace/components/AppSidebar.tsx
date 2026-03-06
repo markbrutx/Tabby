@@ -1,52 +1,11 @@
 import {
   Command,
   FolderTree,
-  Grid2x2,
-  Grid3x3,
-  PanelTop,
   Settings2,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import type { LayoutPreset, WorkspaceSettings } from "@/features/workspace/domain";
-
-const PRESET_CARDS: {
-  preset: LayoutPreset;
-  title: string;
-  description: string;
-  icon: typeof PanelTop;
-}[] = [
-  {
-    preset: "1x1",
-    title: "Solo",
-    description: "Single focused shell for one command stream.",
-    icon: PanelTop,
-  },
-  {
-    preset: "1x2",
-    title: "Pair",
-    description: "Two terminals side by side for compare-and-apply flows.",
-    icon: Grid2x2,
-  },
-  {
-    preset: "2x2",
-    title: "Quad",
-    description: "Balanced workspace for implementation, logs, and notes.",
-    icon: Grid2x2,
-  },
-  {
-    preset: "2x3",
-    title: "Research",
-    description: "Six panes for agent work, test loops, and diagnostics.",
-    icon: Grid3x3,
-  },
-  {
-    preset: "3x3",
-    title: "War Room",
-    description: "Nine live panes for broad sweeps and parallel sessions.",
-    icon: Sparkles,
-  },
-];
+import { LAYOUT_PRESET_CARDS } from "@/features/workspace/presets";
 
 interface AppSidebarProps {
   isWorking: boolean;
@@ -91,7 +50,7 @@ export function AppSidebar({
         </div>
 
         <div className="space-y-2">
-          {PRESET_CARDS.map((card) => {
+          {LAYOUT_PRESET_CARDS.map((card) => {
             const Icon = card.icon;
             return (
               <button

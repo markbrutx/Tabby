@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use specta::Type;
 use uuid::Uuid;
 
 use crate::domain::error::TabbyError;
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 pub enum ThemeMode {
     #[serde(rename = "system")]
     #[default]
@@ -14,7 +15,7 @@ pub enum ThemeMode {
     Midnight,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 pub enum LayoutPreset {
     #[serde(rename = "1x1")]
     OneByOne,
@@ -30,7 +31,7 @@ pub enum LayoutPreset {
 }
 
 impl LayoutPreset {
-    pub fn dimensions(self) -> (usize, usize) {
+    pub fn dimensions(self) -> (u16, u16) {
         match self {
             Self::OneByOne => (1, 1),
             Self::OneByTwo => (1, 2),
@@ -40,22 +41,22 @@ impl LayoutPreset {
         }
     }
 
-    pub fn pane_count(self) -> usize {
+    pub fn pane_count(self) -> u16 {
         let (rows, columns) = self.dimensions();
         rows * columns
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GridDefinition {
     pub preset: LayoutPreset,
-    pub rows: usize,
-    pub columns: usize,
-    pub pane_count: usize,
+    pub rows: u16,
+    pub columns: u16,
+    pub pane_count: u16,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PaneProfile {
     pub id: String,
@@ -64,7 +65,7 @@ pub struct PaneProfile {
     pub startup_command: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub default_layout: LayoutPreset,
@@ -74,83 +75,8 @@ pub struct AppSettings {
     pub font_size: u16,
     pub theme: ThemeMode,
     pub launch_fullscreen: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct PaneSnapshot {
-    pub id: String,
-    pub session_id: String,
-    pub title: String,
-    pub cwd: String,
-    pub profile_id: String,
-    pub profile_label: String,
-    pub startup_command: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TabSnapshot {
-    pub id: String,
-    pub title: String,
-    pub preset: LayoutPreset,
-    pub panes: Vec<PaneSnapshot>,
-    pub active_pane_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspaceSnapshot {
-    pub active_tab_id: String,
-    pub tabs: Vec<TabSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct BootstrapSnapshot {
-    pub workspace: WorkspaceSnapshot,
-    pub settings: AppSettings,
-    pub profiles: Vec<PaneProfile>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct NewTabRequest {
-    pub preset: LayoutPreset,
-    pub cwd: Option<String>,
-    pub profile_id: Option<String>,
-    pub startup_command: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdatePaneProfileRequest {
-    pub pane_id: String,
-    pub profile_id: String,
-    pub startup_command: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdatePaneCwdRequest {
-    pub pane_id: String,
-    pub cwd: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct PtyResizeRequest {
-    pub pane_id: String,
-    pub cols: u16,
-    pub rows: u16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct PtyOutputEvent {
-    pub pane_id: String,
-    pub session_id: String,
-    pub chunk: String,
+    #[serde(default)]
+    pub has_completed_onboarding: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -239,6 +165,7 @@ pub fn default_settings(default_working_directory: String) -> AppSettings {
         font_size: 13,
         theme: ThemeMode::System,
         launch_fullscreen: true,
+        has_completed_onboarding: false,
     }
 }
 

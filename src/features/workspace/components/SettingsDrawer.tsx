@@ -1,5 +1,4 @@
 import { FolderOpen, X } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -9,8 +8,8 @@ import type {
   PaneProfile,
   WorkspaceSettings,
 } from "@/features/workspace/domain";
-
-const LAYOUTS: LayoutPreset[] = ["1x1", "1x2", "2x2", "2x3", "3x3"];
+import { LAYOUT_PRESET_CARDS, THEME_OPTIONS } from "@/features/workspace/presets";
+import { pickDirectory } from "@/lib/pickDirectory";
 
 interface SettingsDrawerProps {
   settings: WorkspaceSettings;
@@ -33,16 +32,11 @@ export function SettingsDrawer({
   }, [settings]);
 
   async function handlePickDirectory() {
-    const selection = await open({
-      directory: true,
-      multiple: false,
-      defaultPath: draft.defaultWorkingDirectory || undefined,
-    });
-
-    if (typeof selection === "string") {
+    const selected = await pickDirectory(draft.defaultWorkingDirectory);
+    if (selected) {
       setDraft((current) => ({
         ...current,
-        defaultWorkingDirectory: selection,
+        defaultWorkingDirectory: selected,
       }));
     }
   }
@@ -91,9 +85,9 @@ export function SettingsDrawer({
                 }))
               }
             >
-              {LAYOUTS.map((layout) => (
-                <option key={layout} value={layout}>
-                  {layout}
+              {LAYOUT_PRESET_CARDS.map((card) => (
+                <option key={card.preset} value={card.preset}>
+                  {card.preset}
                 </option>
               ))}
             </Select>
@@ -199,9 +193,11 @@ export function SettingsDrawer({
                 }))
               }
             >
-              <option value="system">System</option>
-              <option value="dawn">Dawn</option>
-              <option value="midnight">Midnight</option>
+              {THEME_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </Select>
           </label>
 

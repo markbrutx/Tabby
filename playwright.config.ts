@@ -7,9 +7,15 @@ export default defineConfig({
     timeout: 5_000,
   },
   use: {
-    baseURL: "http://127.0.0.1:1420",
+    baseURL: "http://localhost:1420",
     headless: true,
     trace: "retain-on-failure",
+  },
+  webServer: {
+    command: "bun run dev",
+    url: "http://localhost:1420",
+    reuseExistingServer: true,
+    timeout: 15_000,
   },
   projects: [
     {

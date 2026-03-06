@@ -1,7 +1,8 @@
 use serde::Serialize;
+use specta::Type;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Type)]
 pub enum TabbyError {
     #[error("Validation error: {0}")]
     Validation(String),
@@ -12,11 +13,17 @@ pub enum TabbyError {
     #[error("PTY error: {0}")]
     Pty(String),
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(String),
     #[error("Store error: {0}")]
     Store(String),
     #[error("Serialization error: {0}")]
     Serialization(String),
+}
+
+impl From<std::io::Error> for TabbyError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value.to_string())
+    }
 }
 
 impl Serialize for TabbyError {

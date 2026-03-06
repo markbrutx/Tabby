@@ -8,7 +8,8 @@ use tauri::{AppHandle, Emitter};
 use tracing::warn;
 
 use crate::domain::error::TabbyError;
-use crate::domain::types::{PtyOutputEvent, ResolvedProfile};
+use crate::domain::events::{PtyOutputEvent, PTY_OUTPUT_EVENT_NAME};
+use crate::domain::types::ResolvedProfile;
 
 #[derive(Debug, Clone)]
 pub struct SpawnRequest {
@@ -62,6 +63,8 @@ impl PtyManager {
         let mut command = CommandBuilder::new(shell);
         command.arg("-l");
         command.env("TERM", "xterm-256color");
+        command.env_remove("CLAUDECODE");
+        command.env_remove("CLAUDE_CODE_ENTRYPOINT");
 
         if !request.cwd.trim().is_empty() {
             command.cwd(PathBuf::from(&request.cwd));
@@ -101,7 +104,7 @@ impl PtyManager {
                     Ok(size) => {
                         let chunk = String::from_utf8_lossy(&buffer[..size]).to_string();
                         if let Err(error) = app.emit(
-                            "pty-output",
+                            PTY_OUTPUT_EVENT_NAME,
                             PtyOutputEvent {
                                 pane_id: pane_id.clone(),
                                 session_id: session_id_for_thread.clone(),

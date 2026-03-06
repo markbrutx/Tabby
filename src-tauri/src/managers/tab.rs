@@ -1,9 +1,8 @@
 use std::sync::Mutex;
 
 use crate::domain::error::TabbyError;
-use crate::domain::types::{
-    create_tab_id, LayoutPreset, PaneSeed, PaneSnapshot, TabSnapshot, WorkspaceSnapshot,
-};
+use crate::domain::snapshot::{PaneRuntimeStatus, PaneSnapshot, TabSnapshot, WorkspaceSnapshot};
+use crate::domain::types::{create_tab_id, LayoutPreset, PaneSeed};
 
 #[derive(Debug, Default)]
 struct WorkspaceState {
@@ -47,42 +46,18 @@ impl TabManager {
         preset: LayoutPreset,
         pane_seeds: Vec<PaneSeed>,
     ) -> Result<WorkspaceSnapshot, TabbyError> {
-        if pane_seeds.is_empty() {
-            return Err(TabbyError::Validation(String::from(
-                "Cannot create a tab without panes",
-            )));
-        }
-
         let mut state = self.lock_state()?;
         let tab_id = create_tab_id();
         let title = format!("Workspace {}", state.next_tab_index);
-
-        let panes = pane_seeds
-            .into_iter()
-            .enumerate()
-            .map(|(index, seed)| PaneSnapshot {
-                id: seed.pane_id,
-                session_id: seed.session_id,
-                title: format!("Pane {}", index + 1),
-                cwd: seed.cwd,
-                profile_id: seed.profile_id,
-                profile_label: seed.profile_label,
-                startup_command: seed.startup_command,
-            })
-            .collect::<Vec<_>>();
-
-        let active_pane_id = panes
-            .first()
-            .map(|pane| pane.id.clone())
-            .ok_or_else(|| TabbyError::State(String::from("New tab has no active pane")))?;
-
-        state.tabs.push(TabSnapshot {
-            id: tab_id.clone(),
+        let snapshot = TabSnapshot::from_seeds(
+            tab_id.clone(),
             title,
             preset,
-            panes,
-            active_pane_id,
-        });
+            pane_seeds,
+            PaneRuntimeStatus::Running,
+        )?;
+
+        state.tabs.push(snapshot);
         state.active_tab_id = Some(tab_id);
         state.next_tab_index += 1;
 
@@ -189,10 +164,7 @@ impl TabManager {
     }
 
     fn workspace_snapshot(state: &WorkspaceState) -> WorkspaceSnapshot {
-        WorkspaceSnapshot {
-            active_tab_id: state.active_tab_id.clone().unwrap_or_default(),
-            tabs: state.tabs.clone(),
-        }
+        WorkspaceSnapshot::new(state.active_tab_id.clone(), state.tabs.clone())
     }
 
     fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, WorkspaceState>, TabbyError> {

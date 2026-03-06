@@ -8,6 +8,7 @@ use crate::domain::types::AppSettings;
 use crate::managers::settings::SettingsManager;
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_app_settings(
     settings_manager: State<'_, Arc<SettingsManager>>,
 ) -> Result<AppSettings, TabbyError> {
@@ -15,6 +16,7 @@ pub fn get_app_settings(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn update_app_settings(
     app: AppHandle,
     settings_manager: State<'_, Arc<SettingsManager>>,

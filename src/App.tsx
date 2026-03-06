@@ -1,10 +1,15 @@
 import { useEffect } from "react";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { OnboardingWizard } from "@/features/onboarding/OnboardingWizard";
 import { AppSidebar } from "@/features/workspace/components/AppSidebar";
 import { PaneGrid } from "@/features/workspace/components/PaneGrid";
 import { SettingsDrawer } from "@/features/workspace/components/SettingsDrawer";
 import { TabStrip } from "@/features/workspace/components/TabStrip";
+import {
+  selectActiveTab,
+  selectWorkspaceSummary,
+} from "@/features/workspace/selectors";
 import { useWorkspaceStore } from "@/features/workspace/store/workspaceStore";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
 
@@ -46,6 +51,8 @@ function App() {
     },
     onCloseTab: closeTab,
     onSelectTab: setActiveTab,
+    onFocusPane: focusPane,
+    onRestartPane: restartPane,
   });
 
   if (isHydrating) {
@@ -83,8 +90,42 @@ function App() {
     );
   }
 
-  const activeTab =
-    workspace.tabs.find((tab) => tab.id === workspace.activeTabId) ?? workspace.tabs[0];
+  if (!settings.hasCompletedOnboarding) {
+    return (
+      <OnboardingWizard
+        initialSettings={settings}
+        profiles={profiles}
+        onComplete={async (nextSettings) => {
+          const existingTabIds = workspace.tabs.map((tab) => tab.id);
+          await updateSettings(nextSettings);
+          await createTab(nextSettings.defaultLayout);
+          await Promise.all(existingTabIds.map((tabId) => closeTab(tabId)));
+        }}
+      />
+    );
+  }
+
+  const activeTab = selectActiveTab(workspace);
+  const workspaceSummary = selectWorkspaceSummary(workspace);
+
+  if (!activeTab) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-8 text-[var(--color-text)]">
+        <div className="surface-panel w-full max-w-xl rounded-[32px] p-8">
+          <div className="flex items-center gap-3 text-[var(--color-warning)]">
+            <AlertTriangle size={20} />
+            <p className="text-sm uppercase tracking-[0.25em]">Workspace unavailable</p>
+          </div>
+          <p className="mt-4 text-sm text-[var(--color-text-soft)]">
+            {error ?? "Tabby could not resolve an active workspace."}
+          </p>
+          <Button className="mt-6" onClick={() => void initialize()}>
+            Retry bootstrap
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen p-4 text-[var(--color-text)]">
@@ -116,7 +157,7 @@ function App() {
             <div className="flex items-center gap-3">
               <div className="rounded-2xl border border-[var(--color-border)] bg-white/3 px-4 py-3 text-right text-sm">
                 <p className="text-[var(--color-text-soft)]">
-                  {activeTab.panes.length} panes, {settings.fontSize}px font
+                  {workspaceSummary.paneCount} panes, {settings.fontSize}px font
                 </p>
                 <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
                   {settings.defaultProfileId} default profile
@@ -158,7 +199,11 @@ function App() {
                     visible={isActive}
                     onFocus={focusPane}
                     onUpdateProfile={(paneId, profileId, startupCommand) =>
-                      updatePaneProfile({ paneId, profileId, startupCommand })
+                      updatePaneProfile({
+                        paneId,
+                        profileId,
+                        startupCommand: startupCommand ?? null,
+                      })
                     }
                     onUpdateCwd={(paneId, cwd) => updatePaneCwd({ paneId, cwd })}
                     onRestart={restartPane}

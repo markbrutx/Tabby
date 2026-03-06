@@ -1,3 +1,4 @@
+pub mod coordinator;
 pub mod grid;
 pub mod pty;
 pub mod settings;
