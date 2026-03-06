@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronRight, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { RecoveryScreen } from "@/components/RecoveryScreen";
 import { OnboardingWizard } from "@/features/onboarding/OnboardingWizard";
@@ -35,6 +35,8 @@ function App() {
     setSettingsOpen,
     clearError,
   } = useWorkspaceStore();
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     void initialize();
@@ -129,28 +131,32 @@ function App() {
 
   return (
     <div className="min-h-screen p-4 text-[var(--color-text)]">
-      <div className="grid h-[calc(100vh-2rem)] grid-cols-[320px_minmax(0,1fr)] gap-4">
-        <AppSidebar
-          settings={settings}
-          isWorking={isWorking}
-          onCreateTab={(preset) => void createTab(preset)}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
-
-        <main className="surface-panel flex min-h-0 flex-col rounded-[28px] p-4">
+      <div className="flex h-[calc(100vh-2rem)] flex-col gap-4">
+        <main className="surface-panel flex min-h-0 flex-1 flex-col rounded-[28px] p-4">
           <header className="mb-4 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-[var(--color-text-muted)]">
-                Active workspace
-              </p>
-              <div className="mt-2 flex items-center gap-2">
-                <h2 data-testid="active-workspace-title" className="text-2xl font-semibold">
-                  {activeTab.title}
-                </h2>
-                <ChevronRight size={16} className="text-[var(--color-text-muted)]" />
-                <span className="rounded-full bg-[var(--color-accent-soft)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--color-accent)]">
-                  {activeTab.preset}
-                </span>
+            <div className="flex items-center gap-3">
+              <Button
+                data-testid="toggle-sidebar"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open sidebar"
+              >
+                <PanelLeft size={18} />
+              </Button>
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-[var(--color-text-muted)]">
+                  Active workspace
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <h2 data-testid="active-workspace-title" className="text-2xl font-semibold">
+                    {activeTab.title}
+                  </h2>
+                  <ChevronRight size={16} className="text-[var(--color-text-muted)]" />
+                  <span className="rounded-full bg-[var(--color-accent-soft)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--color-accent)]">
+                    {activeTab.preset}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -214,6 +220,16 @@ function App() {
           </div>
         </main>
       </div>
+
+      {sidebarOpen ? (
+        <AppSidebar
+          settings={settings}
+          isWorking={isWorking}
+          onCreateTab={(preset) => void createTab(preset)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onClose={() => setSidebarOpen(false)}
+        />
+      ) : null}
 
       {settingsOpen ? (
         <SettingsDrawer

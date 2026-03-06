@@ -290,6 +290,7 @@ test.beforeEach(async ({ page }) => {
 
 test("creates a new pair workspace from the sidebar launchpad", async ({ page }) => {
   await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 1");
+  await page.getByTestId("toggle-sidebar").click();
   await page.getByTestId("launchpad-1x2").click();
 
   await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 2");
@@ -297,6 +298,7 @@ test("creates a new pair workspace from the sidebar launchpad", async ({ page })
 });
 
 test("switches tabs and closes the active tab", async ({ page }) => {
+  await page.getByTestId("toggle-sidebar").click();
   await page.getByTestId("launchpad-1x2").click();
   await page.getByTestId("tab-1").click();
 
@@ -311,6 +313,7 @@ test("switches tabs and closes the active tab", async ({ page }) => {
 });
 
 test("updates workspace defaults through the settings drawer", async ({ page }) => {
+  await page.getByTestId("toggle-sidebar").click();
   await page.getByTestId("open-settings").click();
   await expect(page.getByTestId("settings-drawer")).toBeVisible();
 
@@ -383,6 +386,7 @@ test("closes workspace with Cmd+W shortcut", async ({ page }) => {
 });
 
 test("launches 3x3 war room from sidebar", async ({ page }) => {
+  await page.getByTestId("toggle-sidebar").click();
   await page.getByTestId("launchpad-3x3").click();
 
   await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 2");

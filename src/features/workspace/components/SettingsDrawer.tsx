@@ -1,6 +1,7 @@
 import { FolderOpen, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { DrawerOverlay } from "@/components/ui/DrawerOverlay";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import type {
@@ -49,11 +50,8 @@ export function SettingsDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm">
-      <div
-        data-testid="settings-drawer"
-        className="surface-panel flex h-full w-full max-w-[480px] flex-col rounded-none rounded-l-[28px] p-6"
-      >
+    <DrawerOverlay side="right" maxWidth={480} onClose={onClose}>
+      <div data-testid="settings-drawer" className="flex flex-1 flex-col">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-[var(--color-text-muted)]">
@@ -236,6 +234,6 @@ export function SettingsDrawer({
           </Button>
         </div>
       </div>
-    </div>
+    </DrawerOverlay>
   );
 }
