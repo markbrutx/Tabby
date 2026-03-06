@@ -1,0 +1,44 @@
+# Dependencies & build output
+node_modules/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# Rust / Tauri build output
+src-tauri/target/
+
+# Local workspace and research material
+workbench/
+
+# AI tooling configs (local only)
+.agents/
+.claude/
+.codex/
+AGENTS.md
+
+# Local environment overrides
+.env
+.env.local
+.env.*.local
+
+# Editor state
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

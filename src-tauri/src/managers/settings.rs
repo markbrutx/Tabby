@@ -1,0 +1,78 @@
+use tauri::AppHandle;
+use tauri_plugin_store::StoreExt;
+
+use crate::domain::error::TabbyError;
+use crate::domain::types::{default_settings, AppSettings};
+
+const STORE_PATH: &str = "tabby-settings.json";
+const SETTINGS_KEY: &str = "settings";
+
+#[derive(Debug, Clone)]
+pub struct SettingsManager {
+    app: AppHandle,
+}
+
+impl SettingsManager {
+    pub fn new(app: AppHandle) -> Self {
+        Self { app }
+    }
+
+    pub fn get_settings(&self) -> Result<AppSettings, TabbyError> {
+        let store = self
+            .app
+            .store(STORE_PATH)
+            .map_err(|error| TabbyError::Store(error.to_string()))?;
+
+        if let Some(value) = store.get(SETTINGS_KEY) {
+            return serde_json::from_value::<AppSettings>(value)
+                .map_err(|error| TabbyError::Serialization(error.to_string()));
+        }
+
+        let settings = self.default_settings();
+        let value = serde_json::to_value(&settings)
+            .map_err(|error| TabbyError::Serialization(error.to_string()))?;
+        store.set(SETTINGS_KEY, value);
+        Ok(settings)
+    }
+
+    pub fn update_settings(&self, settings: AppSettings) -> Result<AppSettings, TabbyError> {
+        self.validate_settings(&settings)?;
+
+        let store = self
+            .app
+            .store(STORE_PATH)
+            .map_err(|error| TabbyError::Store(error.to_string()))?;
+        let value = serde_json::to_value(&settings)
+            .map_err(|error| TabbyError::Serialization(error.to_string()))?;
+
+        store.set(SETTINGS_KEY, value);
+        Ok(settings)
+    }
+
+    fn default_settings(&self) -> AppSettings {
+        let home = std::env::var("HOME")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| String::from("/"));
+
+        default_settings(home)
+    }
+
+    fn validate_settings(&self, settings: &AppSettings) -> Result<(), TabbyError> {
+        if settings.font_size < 10 || settings.font_size > 24 {
+            return Err(TabbyError::Validation(String::from(
+                "Font size must be between 10 and 24",
+            )));
+        }
+
+        if settings.default_profile_id == "custom"
+            && settings.default_custom_command.trim().is_empty()
+        {
+            return Err(TabbyError::Validation(String::from(
+                "Default custom profile requires a default custom command",
+            )));
+        }
+
+        Ok(())
+    }
+}
