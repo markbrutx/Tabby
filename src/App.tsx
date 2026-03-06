@@ -1,6 +1,7 @@
 import { useEffect } from "react";
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { RecoveryScreen } from "@/components/RecoveryScreen";
 import { OnboardingWizard } from "@/features/onboarding/OnboardingWizard";
 import { AppSidebar } from "@/features/workspace/components/AppSidebar";
 import { PaneGrid } from "@/features/workspace/components/PaneGrid";
@@ -73,20 +74,11 @@ function App() {
 
   if (!workspace || !settings) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-8 text-[var(--color-text)]">
-        <div className="surface-panel w-full max-w-xl rounded-[32px] p-8">
-          <div className="flex items-center gap-3 text-[var(--color-warning)]">
-            <AlertTriangle size={20} />
-            <p className="text-sm uppercase tracking-[0.25em]">Workspace unavailable</p>
-          </div>
-          <p className="mt-4 text-sm text-[var(--color-text-soft)]">
-            {error ?? "Tabby could not bootstrap the workspace."}
-          </p>
-          <Button className="mt-6" onClick={() => void initialize()}>
-            Retry bootstrap
-          </Button>
-        </div>
-      </div>
+      <RecoveryScreen
+        title="Workspace unavailable"
+        message={error ?? "Tabby could not bootstrap the workspace."}
+        onRetry={() => void initialize()}
+      />
     );
   }
 
@@ -97,33 +89,41 @@ function App() {
         profiles={profiles}
         onComplete={async (nextSettings) => {
           const existingTabIds = workspace.tabs.map((tab) => tab.id);
+
+          // Create the new tab FIRST so the workspace is ready before transition
+          await createTab(nextSettings.defaultLayout, {
+            cwd: nextSettings.defaultWorkingDirectory,
+            profileId: nextSettings.defaultProfileId,
+            startupCommand:
+              nextSettings.defaultProfileId === "custom"
+                ? nextSettings.defaultCustomCommand
+                : undefined,
+          });
+
+          // Close old bootstrap tabs sequentially
+          for (const tabId of existingTabIds) {
+            await closeTab(tabId);
+          }
+
+          // Update settings LAST — this flips hasCompletedOnboarding and
+          // triggers the transition from onboarding to workspace UI.
           await updateSettings(nextSettings);
-          await createTab(nextSettings.defaultLayout);
-          await Promise.all(existingTabIds.map((tabId) => closeTab(tabId)));
         }}
       />
     );
   }
 
   const activeTab = selectActiveTab(workspace);
-  const workspaceSummary = selectWorkspaceSummary(workspace);
+  const workspaceSummary = selectWorkspaceSummary(workspace, activeTab);
 
   if (!activeTab) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-8 text-[var(--color-text)]">
-        <div className="surface-panel w-full max-w-xl rounded-[32px] p-8">
-          <div className="flex items-center gap-3 text-[var(--color-warning)]">
-            <AlertTriangle size={20} />
-            <p className="text-sm uppercase tracking-[0.25em]">Workspace unavailable</p>
-          </div>
-          <p className="mt-4 text-sm text-[var(--color-text-soft)]">
-            {error ?? "Tabby could not resolve an active workspace."}
-          </p>
-          <Button className="mt-6" onClick={() => void initialize()}>
-            Retry bootstrap
-          </Button>
-        </div>
-      </div>
+      <RecoveryScreen
+        title="No active workspace"
+        message={error ?? "All workspaces have been closed. Pick a layout to get back to work."}
+        onRetry={() => void initialize()}
+        onCreateTab={(preset) => void createTab(preset)}
+      />
     );
   }
 

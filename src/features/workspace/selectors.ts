@@ -40,13 +40,16 @@ export function selectVisiblePanes(
 
 export function selectWorkspaceSummary(
   workspace: WorkspaceSnapshot | null | undefined,
+  activeTab?: TabSnapshot | null,
 ): WorkspaceSummary {
-  const activeTab = selectActiveTab(workspace);
-  const activePane = selectActivePane(workspace);
+  const tab = activeTab ?? selectActiveTab(workspace);
+  const activePane = tab
+    ? (tab.panes.find((pane) => pane.id === tab.activePaneId) ?? tab.panes[0] ?? null)
+    : null;
 
   return {
-    activeTabId: activeTab?.id ?? null,
-    activeTabTitle: activeTab?.title ?? null,
+    activeTabId: tab?.id ?? null,
+    activeTabTitle: tab?.title ?? null,
     activePaneId: activePane?.id ?? null,
     activePaneTitle: activePane?.title ?? null,
     activePaneStatus: activePane?.status ?? null,
