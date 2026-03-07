@@ -78,6 +78,7 @@ interface SettingsAccessor {
   loadSettings: (settings: import("@/features/workspace/domain").WorkspaceSettings, profiles: import("@/features/workspace/domain").PaneProfile[]) => void;
   getSettings: () => import("@/features/workspace/domain").WorkspaceSettings | null;
   getProfiles: () => import("@/features/workspace/domain").PaneProfile[];
+  updateSettings: (settings: import("@/features/workspace/domain").WorkspaceSettings) => Promise<void>;
 }
 
 function createWorkspaceStoreState(
@@ -211,11 +212,10 @@ function createWorkspaceStoreState(
 
         const currentSettings = settingsStoreAccessor().getSettings();
         if (currentSettings && !currentSettings.hasCompletedOnboarding) {
-          const updatedSettings = await transport.updateAppSettings({
+          await settingsStoreAccessor().updateSettings({
             ...currentSettings,
             hasCompletedOnboarding: true,
           });
-          settingsStoreAccessor().loadSettings(updatedSettings, settingsStoreAccessor().getProfiles());
         }
 
         set({
@@ -298,6 +298,7 @@ export function createWorkspaceStore(transport: WorkspaceTransport = bridge) {
     loadSettings: settingsStore.getState().loadSettings,
     getSettings: () => settingsStore.getState().settings,
     getProfiles: () => settingsStore.getState().profiles,
+    updateSettings: settingsStore.getState().updateSettings,
   })));
   return Object.assign(workspaceStore, { settingsStore });
 }
@@ -307,5 +308,6 @@ export const useWorkspaceStore = create<WorkspaceStore>(
     loadSettings: useSettingsStore.getState().loadSettings,
     getSettings: () => useSettingsStore.getState().settings,
     getProfiles: () => useSettingsStore.getState().profiles,
+    updateSettings: useSettingsStore.getState().updateSettings,
   })),
 );

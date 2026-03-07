@@ -1,25 +1,11 @@
 import { listen } from "@tauri-apps/api/event";
 import type { BrowserUrlChangedEvent } from "@/features/workspace/domain";
-import { commands, type Result } from "@/lib/tauri-bindings";
+import { commands } from "@/lib/tauri-bindings";
 import { isTauriRuntime } from "@/lib/runtime";
-import { asErrorMessage, type BrowserBounds, type UnlistenFn } from "@/lib/bridge/shared";
+import { ensureTauri, unwrapResult, type BrowserBounds, type UnlistenFn } from "@/lib/bridge/shared";
 import type { BrowserTransport } from "./browserTransport";
 
 const BROWSER_URL_CHANGED_EVENT = "browser-url-changed";
-
-function ensureTauri() {
-  if (!isTauriRuntime()) {
-    throw new Error("Live terminals are available only inside the Tauri shell.");
-  }
-}
-
-function unwrapResult<T>(result: Result<T, unknown>): T {
-  if (result.status === "ok") {
-    return result.data;
-  }
-
-  throw new Error(asErrorMessage(result.error));
-}
 
 export function createTauriBrowserTransport(): BrowserTransport {
   return {

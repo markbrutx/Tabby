@@ -8,26 +8,12 @@ import type {
   UpdatePaneProfileRequest,
   WorkspaceSnapshot,
 } from "@/features/workspace/domain";
-import { commands, type Result } from "@/lib/tauri-bindings";
+import { commands } from "@/lib/tauri-bindings";
 import { isTauriRuntime } from "@/lib/runtime";
-import { asErrorMessage, type UnlistenFn } from "@/lib/bridge/shared";
+import { ensureTauri, unwrapResult, type UnlistenFn } from "@/lib/bridge/shared";
 import type { WorkspaceTransportInterface } from "./workspaceTransport";
 
 const PANE_LIFECYCLE_EVENT_NAME = "pane-lifecycle";
-
-function ensureTauri() {
-  if (!isTauriRuntime()) {
-    throw new Error("Live terminals are available only inside the Tauri shell.");
-  }
-}
-
-function unwrapResult<T>(result: Result<T, unknown>): T {
-  if (result.status === "ok") {
-    return result.data;
-  }
-
-  throw new Error(asErrorMessage(result.error));
-}
 
 export function createTauriWorkspaceTransport(): WorkspaceTransportInterface {
   return {
