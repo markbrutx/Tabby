@@ -5,6 +5,7 @@ import {
   PanelResizeHandle,
 } from "react-resizable-panels";
 import type { PaneProfile, TabSnapshot } from "@/features/workspace/domain";
+import type { ResolvedTheme } from "@/features/workspace/theme";
 import { createGridDefinition } from "@/features/workspace/layouts";
 import { TerminalPane } from "./TerminalPane";
 
@@ -12,6 +13,7 @@ interface PaneGridProps {
   tab: TabSnapshot;
   profiles: PaneProfile[];
   fontSize: number;
+  theme: ResolvedTheme;
   visible: boolean;
   onFocus: (tabId: string, paneId: string) => Promise<void>;
   onUpdateProfile: (
@@ -37,6 +39,7 @@ export function PaneGrid({
   tab,
   profiles,
   fontSize,
+  theme,
   visible,
   onFocus,
   onUpdateProfile,
@@ -59,6 +62,7 @@ export function PaneGrid({
                       pane={pane}
                       profiles={profiles}
                       fontSize={fontSize}
+                      theme={theme}
                       active={tab.activePaneId === pane.id}
                       visible={visible}
                       onFocus={(paneId) => onFocus(tab.id, paneId)}

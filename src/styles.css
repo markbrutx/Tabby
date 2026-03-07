@@ -1,21 +1,6 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #08090d;
-  --color-background-raised: #11141b;
-  --color-background-soft: #171c25;
-  --color-background-muted: #202734;
-  --color-background-shell: #05070b;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.14);
-  --color-text: #f6efe9;
-  --color-text-soft: #c7bec3;
-  --color-text-muted: #8f8691;
-  --color-accent: #f597b8;
-  --color-accent-strong: #da5893;
-  --color-accent-soft: rgba(245, 151, 184, 0.18);
-  --color-success: #6dd4a7;
-  --color-warning: #f4bf75;
   --font-sans:
     "IBM Plex Sans", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono:
@@ -23,11 +8,45 @@
 }
 
 :root {
+  --color-background: #1b120d;
+  --color-background-raised: #241712;
+  --color-background-soft: #2f1f18;
+  --color-background-muted: #422d24;
+  --color-background-shell: #130c08;
+  --color-border: rgba(252, 232, 217, 0.08);
+  --color-border-strong: rgba(252, 232, 217, 0.16);
+  --color-text: #f8ece2;
+  --color-text-soft: #dcc7ba;
+  --color-text-muted: #b79684;
+  --color-accent: #f2a084;
+  --color-accent-strong: #e97d61;
+  --color-accent-soft: rgba(233, 125, 97, 0.18);
+  --color-danger: #d56a67;
+  --color-danger-strong: #bf5656;
+  --color-danger-soft: rgba(213, 106, 103, 0.14);
+  --color-success: #8eb79a;
+  --color-warning: #d6a06f;
+  --color-surface-overlay: rgba(255, 240, 232, 0.05);
+  --color-surface-hover: rgba(255, 240, 232, 0.1);
+  --color-surface-header: rgba(0, 0, 0, 0.16);
+  --color-surface-contrast: rgba(0, 0, 0, 0.22);
+  --color-badge-bg: rgba(255, 240, 232, 0.08);
+  --color-brand-mark-bg: rgba(255, 245, 239, 0.08);
+  --color-backdrop: rgba(8, 5, 3, 0.56);
+  --color-scrollbar: rgba(255, 240, 232, 0.18);
+  --color-status-idle: rgba(255, 240, 232, 0.22);
+  --gradient-brand-card:
+    linear-gradient(135deg, rgba(242, 160, 132, 0.2), rgba(255, 244, 237, 0.04));
+  --color-panel-highlight: rgba(255, 245, 239, 0.03);
+  --color-panel-inset: rgba(255, 245, 239, 0.04);
+  --color-panel-shadow: rgba(0, 0, 0, 0.38);
+  --color-terminal-glow: rgba(242, 160, 132, 0.08);
+  --app-background:
+    radial-gradient(circle at top center, rgba(248, 236, 226, 0.16), transparent 34%),
+    radial-gradient(circle at bottom center, rgba(66, 45, 36, 0.48), transparent 58%),
+    linear-gradient(180deg, #241711 0%, #120b08 100%);
   color: var(--color-text);
-  background:
-    radial-gradient(circle at top left, rgba(245, 151, 184, 0.16), transparent 38%),
-    radial-gradient(circle at top right, rgba(95, 132, 255, 0.14), transparent 32%),
-    linear-gradient(180deg, #0b0d12 0%, #05060a 100%);
+  background: var(--app-background);
   font-family: var(--font-sans);
   font-size: 15px;
   font-synthesis: none;
@@ -35,6 +54,46 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+:root[data-theme="dawn"] {
+  --color-background: #fbefe2;
+  --color-background-raised: #f6e8dc;
+  --color-background-soft: #f2ddd0;
+  --color-background-muted: #e7cab8;
+  --color-background-shell: #fff7f1;
+  --color-border: rgba(182, 145, 123, 0.24);
+  --color-border-strong: rgba(176, 133, 108, 0.36);
+  --color-text: #5f463b;
+  --color-text-soft: #82665a;
+  --color-text-muted: #aa8571;
+  --color-accent: #ee8f72;
+  --color-accent-strong: #db735b;
+  --color-accent-soft: rgba(219, 115, 91, 0.16);
+  --color-danger: #cf6d63;
+  --color-danger-strong: #b75a56;
+  --color-danger-soft: rgba(207, 109, 99, 0.12);
+  --color-success: #7f9f89;
+  --color-warning: #c38b59;
+  --color-surface-overlay: rgba(255, 255, 255, 0.56);
+  --color-surface-hover: rgba(255, 255, 255, 0.82);
+  --color-surface-header: rgba(255, 255, 255, 0.48);
+  --color-surface-contrast: rgba(197, 152, 129, 0.16);
+  --color-badge-bg: rgba(255, 255, 255, 0.74);
+  --color-brand-mark-bg: rgba(255, 255, 255, 0.92);
+  --color-backdrop: rgba(80, 51, 37, 0.24);
+  --color-scrollbar: rgba(120, 84, 64, 0.26);
+  --color-status-idle: rgba(120, 84, 64, 0.16);
+  --gradient-brand-card:
+    linear-gradient(135deg, rgba(245, 192, 170, 0.42), rgba(255, 255, 255, 0.72));
+  --color-panel-highlight: rgba(255, 255, 255, 0.48);
+  --color-panel-inset: rgba(255, 255, 255, 0.72);
+  --color-panel-shadow: rgba(174, 127, 97, 0.18);
+  --color-terminal-glow: rgba(238, 143, 114, 0.08);
+  --app-background:
+    radial-gradient(circle at top center, rgba(255, 248, 240, 0.98), transparent 36%),
+    radial-gradient(circle at bottom center, rgba(214, 171, 148, 0.28), transparent 54%),
+    linear-gradient(180deg, #f5e4d5 0%, #ead4c3 100%);
 }
 
 html,
@@ -61,28 +120,28 @@ textarea {
 
 .xterm-viewport::-webkit-scrollbar-thumb {
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--color-scrollbar);
 }
 
 @layer utilities {
   .surface-panel {
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
+      linear-gradient(180deg, var(--color-panel-highlight), transparent),
       var(--color-background-raised);
     border: 1px solid var(--color-border);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.03),
-      0 18px 50px rgba(0, 0, 0, 0.35);
+      inset 0 1px 0 var(--color-panel-inset),
+      0 18px 50px var(--color-panel-shadow);
   }
 
   .surface-muted {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--color-surface-overlay);
     border: 1px solid var(--color-border);
   }
 
   .terminal-shell {
     background:
-      radial-gradient(circle at top, rgba(245, 151, 184, 0.08), transparent 25%),
+      radial-gradient(circle at top, var(--color-terminal-glow), transparent 25%),
       var(--color-background-shell);
   }
 
@@ -93,7 +152,7 @@ textarea {
   }
 
   .resize-handle[data-resize-handle-active] {
-    background: rgba(245, 151, 184, 0.22);
+    background: var(--color-accent-soft);
   }
 }
 

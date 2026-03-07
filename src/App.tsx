@@ -12,6 +12,10 @@ import {
   selectWorkspaceSummary,
 } from "@/features/workspace/selectors";
 import { useWorkspaceStore } from "@/features/workspace/store/workspaceStore";
+import {
+  applyResolvedTheme,
+  useResolvedTheme,
+} from "@/features/workspace/theme";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
 
 function App() {
@@ -37,10 +41,15 @@ function App() {
   } = useWorkspaceStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const resolvedTheme = useResolvedTheme(settings?.theme);
 
   useEffect(() => {
     void initialize();
   }, [initialize]);
+
+  useEffect(() => {
+    applyResolvedTheme(resolvedTheme);
+  }, [resolvedTheme]);
 
   useWorkspaceShortcuts({
     workspace,
@@ -161,7 +170,7 @@ function App() {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl border border-[var(--color-border)] bg-white/3 px-4 py-3 text-right text-sm">
+              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] px-4 py-3 text-right text-sm">
                 <p className="text-[var(--color-text-soft)]">
                   {workspaceSummary.paneCount} panes, {settings.fontSize}px font
                 </p>
@@ -176,7 +185,7 @@ function App() {
           </header>
 
           {error ? (
-            <div className="mb-4 flex items-center justify-between gap-4 rounded-2xl border border-[#c9555d]/40 bg-[#c9555d]/10 px-4 py-3 text-sm">
+            <div className="mb-4 flex items-center justify-between gap-4 rounded-2xl border border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-4 py-3 text-sm">
               <span>{error}</span>
               <Button variant="ghost" size="sm" onClick={clearError}>
                 Dismiss
@@ -202,6 +211,7 @@ function App() {
                     tab={tab}
                     profiles={profiles}
                     fontSize={settings.fontSize}
+                    theme={resolvedTheme}
                     visible={isActive}
                     onFocus={focusPane}
                     onUpdateProfile={(paneId, profileId, startupCommand) =>

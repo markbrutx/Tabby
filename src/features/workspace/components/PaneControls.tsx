@@ -31,7 +31,7 @@ export function PaneControls({
   }
 
   return (
-    <div className="border-b border-[var(--color-border)] bg-black/15 px-4 pb-3">
+    <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-header)] px-4 pb-3">
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex gap-2">
           <Input
@@ -69,7 +69,7 @@ export function PaneControls({
             </Button>
           </div>
         ) : (
-          <div className="rounded-xl border border-[var(--color-border)] bg-white/4 px-3 py-2 text-xs text-[var(--color-text-muted)]">
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] px-3 py-2 text-xs text-[var(--color-text-muted)]">
             Built-in profiles relaunch instantly when selected.
           </div>
         )}

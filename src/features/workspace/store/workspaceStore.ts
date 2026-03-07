@@ -15,7 +15,7 @@ interface CreateTabOverrides {
   startupCommand?: string;
 }
 
-export interface WorkspaceStore {
+interface WorkspaceStore {
   workspace: WorkspaceSnapshot | null;
   settings: WorkspaceSettings | null;
   profiles: { id: string; label: string; description: string; startupCommand: string | null }[];

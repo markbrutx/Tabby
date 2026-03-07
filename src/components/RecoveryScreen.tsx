@@ -46,7 +46,7 @@ export function RecoveryScreen({
                 return (
                   <button
                     key={card.preset}
-                    className="surface-muted flex items-center gap-3 rounded-2xl p-3 text-start transition hover:bg-white/6"
+                    className="surface-muted flex items-center gap-3 rounded-2xl p-3 text-start transition hover:bg-[var(--color-surface-hover)]"
                     onClick={() => onCreateTab(card.preset)}
                   >
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">

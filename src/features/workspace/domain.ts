@@ -4,7 +4,6 @@ export type {
   GridDefinition,
   LayoutPreset,
   NewTabRequest,
-  PaneLifecycleEvent,
   PaneProfile,
   PaneRuntimeStatus,
   PaneSnapshot,
@@ -14,6 +13,5 @@ export type {
   ThemeMode,
   UpdatePaneCwdRequest,
   UpdatePaneProfileRequest,
-  WorkspaceChangedEvent,
   WorkspaceSnapshot,
 } from "@/lib/tauri-bindings";

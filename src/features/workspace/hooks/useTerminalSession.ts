@@ -3,12 +3,17 @@ import { FitAddon } from "xterm-addon-fit";
 import { WebglAddon } from "xterm-addon-webgl";
 import { Terminal } from "xterm";
 import type { PaneSnapshot } from "@/features/workspace/domain";
+import {
+  getTerminalTheme,
+  type ResolvedTheme,
+} from "@/features/workspace/theme";
 import { bridge } from "@/lib/bridge";
 import { isTauriRuntime } from "@/lib/runtime";
 
 interface UseTerminalSessionOptions {
   pane: PaneSnapshot;
   fontSize: number;
+  theme: ResolvedTheme;
   active: boolean;
   visible: boolean;
 }
@@ -26,6 +31,7 @@ function safeFit(fitAddon: FitAddon, container: HTMLElement) {
 export function useTerminalSession({
   pane,
   fontSize,
+  theme,
   active,
   visible,
 }: UseTerminalSessionOptions) {
@@ -47,28 +53,7 @@ export function useTerminalSession({
       fontSize,
       lineHeight: 1.2,
       letterSpacing: 0,
-      theme: {
-        background: "#05070b",
-        foreground: "#f6efe9",
-        cursor: "#f597b8",
-        selectionBackground: "rgba(245,151,184,0.25)",
-        black: "#090b10",
-        red: "#ff8da1",
-        green: "#7de4b8",
-        yellow: "#f4bf75",
-        blue: "#91a9ff",
-        magenta: "#f597b8",
-        cyan: "#72d5ff",
-        white: "#f6efe9",
-        brightBlack: "#6c7482",
-        brightRed: "#ffadb9",
-        brightGreen: "#98f0cb",
-        brightYellow: "#ffd099",
-        brightBlue: "#b6c4ff",
-        brightMagenta: "#ffc0d4",
-        brightCyan: "#90defd",
-        brightWhite: "#ffffff",
-      },
+      theme: getTerminalTheme(theme),
     });
 
     const fitAddon = new FitAddon();
@@ -147,6 +132,14 @@ export function useTerminalSession({
       fitAddonRef.current = null;
     };
   }, [fontSize, pane.id, pane.sessionId]);
+
+  useEffect(() => {
+    if (!terminalRef.current) {
+      return;
+    }
+
+    terminalRef.current.options.theme = getTerminalTheme(theme);
+  }, [theme]);
 
   useEffect(() => {
     const container = containerRef.current;

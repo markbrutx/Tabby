@@ -7,7 +7,7 @@ export function Select({
 }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`h-10 w-full rounded-xl border border-[var(--color-border)] bg-white/4 px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent-strong)] ${className}`}
+      className={`h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent-strong)] ${className}`}
       {...props}
     >
       {children}

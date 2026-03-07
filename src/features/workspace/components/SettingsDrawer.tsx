@@ -199,7 +199,7 @@ export function SettingsDrawer({
             </Select>
           </label>
 
-          <label className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-white/3 px-4 py-3">
+          <label className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] px-4 py-3">
             <div>
               <span className="block text-sm font-medium">Launch fullscreen</span>
               <span className="block text-xs text-[var(--color-text-muted)]">

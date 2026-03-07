@@ -25,4 +25,4 @@ export const bridge: WorkspaceTransport = {
 };
 
 export { asErrorMessage };
-export type { UnlistenFn, WorkspaceTransport } from "@/lib/bridge/shared";
+export type { WorkspaceTransport } from "@/lib/bridge/shared";

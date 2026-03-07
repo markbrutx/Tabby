@@ -175,7 +175,7 @@ function StepLayout({
             className={`surface-muted w-full rounded-2xl p-4 text-start transition ${
               isSelected
                 ? "border-[var(--color-accent-strong)] bg-[var(--color-accent-soft)]"
-                : "hover:bg-white/6"
+                : "hover:bg-[var(--color-surface-hover)]"
             }`}
             onClick={() => onSelect(card.preset)}
           >
@@ -192,7 +192,7 @@ function StepLayout({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{card.title}</p>
-                  <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+                  <span className="rounded-full bg-[var(--color-badge-bg)] px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
                     {card.preset}
                   </span>
                 </div>
@@ -319,7 +319,7 @@ function StepPersonalize({
         </span>
       </label>
 
-      <label className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-white/3 px-4 py-3">
+      <label className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] px-4 py-3">
         <div>
           <span className="block text-sm font-medium">Launch fullscreen</span>
           <span className="block text-xs text-[var(--color-text-muted)]">

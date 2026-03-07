@@ -18,7 +18,7 @@ export function DrawerOverlay({
     side === "left" ? "rounded-r-[28px]" : "rounded-l-[28px]";
 
   return (
-    <div className={`fixed inset-0 z-50 flex bg-black/50 ${justify}`}>
+    <div className={`fixed inset-0 z-50 flex bg-[var(--color-backdrop)] ${justify}`}>
       {side === "right" && (
         <button
           className="flex-1"

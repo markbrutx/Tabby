@@ -29,7 +29,7 @@ export function TabStrip({
             className={`group flex min-w-[180px] items-center gap-3 rounded-2xl border px-4 py-3 text-start transition ${
               isActive
                 ? "border-[var(--color-accent-strong)] bg-[var(--color-accent-soft)]"
-                : "border-transparent bg-white/4 hover:border-[var(--color-border-strong)]"
+                : "border-transparent bg-[var(--color-surface-overlay)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-hover)]"
             }`}
             onClick={() => onSelect(tab.id)}
           >

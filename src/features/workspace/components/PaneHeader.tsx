@@ -25,11 +25,11 @@ export function PaneHeader({
   onRestart,
 }: PaneHeaderProps) {
   return (
-    <div className="border-b border-[var(--color-border)] bg-black/15 px-4 py-3">
+    <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-header)] px-4 py-3">
       <div className="flex items-start gap-3">
         <div
           className={`mt-1.5 h-2.5 w-2.5 rounded-full ${
-            active ? "bg-[var(--color-success)]" : "bg-white/20"
+            active ? "bg-[var(--color-success)]" : "bg-[var(--color-status-idle)]"
           }`}
         />
         <div className="min-w-0 flex-1">
@@ -37,7 +37,7 @@ export function PaneHeader({
             <p className="truncate text-sm font-medium">{pane.title}</p>
             <span
               data-testid={`profile-badge-${pane.id}`}
-              className="rounded-full bg-white/6 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-[var(--color-text-muted)]"
+              className="rounded-full bg-[var(--color-badge-bg)] px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-[var(--color-text-muted)]"
             >
               {pane.profileLabel}
             </span>

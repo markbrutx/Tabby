@@ -3,12 +3,14 @@ import type { PaneProfile, PaneSnapshot } from "@/features/workspace/domain";
 import { pickDirectory } from "@/lib/pickDirectory";
 import { PaneControls } from "@/features/workspace/components/PaneControls";
 import { PaneHeader } from "@/features/workspace/components/PaneHeader";
+import type { ResolvedTheme } from "@/features/workspace/theme";
 import { useTerminalSession } from "@/features/workspace/hooks/useTerminalSession";
 
 interface TerminalPaneProps {
   pane: PaneSnapshot;
   profiles: PaneProfile[];
   fontSize: number;
+  theme: ResolvedTheme;
   active: boolean;
   visible: boolean;
   onFocus: (paneId: string) => Promise<void>;
@@ -25,6 +27,7 @@ export function TerminalPane({
   pane,
   profiles,
   fontSize,
+  theme,
   active,
   visible,
   onFocus,
@@ -39,6 +42,7 @@ export function TerminalPane({
   const { containerRef } = useTerminalSession({
     pane,
     fontSize,
+    theme,
     active,
     visible,
   });

@@ -4,6 +4,7 @@ import {
   Settings2,
   X,
 } from "lucide-react";
+import brandIcon from "@/assets/tabby-brand.png";
 import { Button } from "@/components/ui/Button";
 import { DrawerOverlay } from "@/components/ui/DrawerOverlay";
 import type { LayoutPreset, WorkspaceSettings } from "@/features/workspace/domain";
@@ -27,13 +28,20 @@ export function AppSidebar({
   return (
     <DrawerOverlay side="left" maxWidth={360} onClose={onClose}>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 rounded-[24px] border border-[var(--color-border)] bg-[linear-gradient(135deg,rgba(245,151,184,0.22),rgba(255,255,255,0.04))] p-5">
+        <div
+          className="flex-1 rounded-[24px] border border-[var(--color-border)] p-5"
+          style={{ background: "var(--gradient-brand-card)" }}
+        >
           <p className="text-xs uppercase tracking-[0.35em] text-[var(--color-text-muted)]">
             Terminal Workspace
           </p>
           <div className="mt-3 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/25 text-xl font-semibold">
-              T
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-brand-mark-bg)] p-0.5">
+              <img
+                src={brandIcon}
+                alt=""
+                className="h-full w-full rounded-[14px] object-cover"
+              />
             </div>
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">Tabby</h1>
@@ -53,7 +61,7 @@ export function AppSidebar({
           <p className="text-xs uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
             Launchpads
           </p>
-          <span className="rounded-full bg-white/6 px-3 py-1 text-[11px] text-[var(--color-text-soft)]">
+          <span className="rounded-full bg-[var(--color-badge-bg)] px-3 py-1 text-[11px] text-[var(--color-text-soft)]">
             default {settings.defaultLayout}
           </span>
         </div>
@@ -65,7 +73,7 @@ export function AppSidebar({
               <button
                 key={card.preset}
                 data-testid={`launchpad-${card.preset}`}
-                className="surface-muted w-full rounded-2xl p-4 text-start transition hover:border-[var(--color-accent-strong)] hover:bg-white/6"
+                className="surface-muted w-full rounded-2xl p-4 text-start transition hover:border-[var(--color-accent-strong)] hover:bg-[var(--color-surface-hover)]"
                 onClick={() => {
                   onCreateTab(card.preset);
                   onClose();
@@ -79,7 +87,7 @@ export function AppSidebar({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{card.title}</p>
-                      <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+                      <span className="rounded-full bg-[var(--color-badge-bg)] px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
                         {card.preset}
                       </span>
                     </div>
@@ -93,7 +101,7 @@ export function AppSidebar({
           })}
         </div>
 
-        <div className="mt-5 rounded-2xl border border-[var(--color-border)] bg-black/20 p-4">
+        <div className="mt-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-contrast)] p-4">
           <p className="text-xs uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
             Defaults
           </p>
@@ -129,7 +137,7 @@ export function AppSidebar({
           <Settings2 size={16} />
         </Button>
 
-        <div className="rounded-2xl border border-[var(--color-border)] bg-white/3 p-4 text-sm text-[var(--color-text-soft)]">
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-4 text-sm text-[var(--color-text-soft)]">
           <p className="text-xs uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
             Shortcuts
           </p>
