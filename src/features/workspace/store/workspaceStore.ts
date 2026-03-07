@@ -4,14 +4,13 @@ import {
   BROWSER_PROFILE_ID,
   CUSTOM_PROFILE_ID,
   type LayoutPreset,
-  type PaneProfile,
   type SplitPaneRequest,
   type UpdatePaneCwdRequest,
   type UpdatePaneProfileRequest,
-  type WorkspaceSettings,
   type WorkspaceSnapshot,
 } from "@/features/workspace/domain";
 import { asErrorMessage, bridge, type WorkspaceTransport } from "@/lib/bridge";
+import { useSettingsStore, createSettingsStore } from "@/features/settings/store/settingsStore";
 
 import type { PaneGroupConfig, SetupWizardConfig, WizardTab } from "./types";
 export type { PaneGroupConfig, SetupWizardConfig, WizardTab };
@@ -24,8 +23,6 @@ interface CreateTabOverrides {
 
 interface WorkspaceStore {
   workspace: WorkspaceSnapshot | null;
-  settings: WorkspaceSettings | null;
-  profiles: PaneProfile[];
   error: string | null;
   isHydrating: boolean;
   isWorking: boolean;
@@ -44,8 +41,6 @@ interface WorkspaceStore {
   splitPane: (request: SplitPaneRequest) => Promise<void>;
   closePane: (paneId: string) => Promise<void>;
   swapPanes: (paneIdA: string, paneIdB: string) => Promise<void>;
-  updateSettings: (settings: WorkspaceSettings) => Promise<void>;
-  resetSettings: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -79,21 +74,16 @@ async function runWorkspaceMutation(
   }
 }
 
-async function runSettingsMutation(
-  set: SetFn,
-  mutation: () => Promise<WorkspaceSettings>,
-) {
-  set({ isWorking: true });
-
-  try {
-    const settings = await mutation();
-    set({ settings, error: null, isWorking: false });
-  } catch (error) {
-    set({ error: asErrorMessage(error), isWorking: false });
-  }
+interface SettingsAccessor {
+  loadSettings: (settings: import("@/features/workspace/domain").WorkspaceSettings, profiles: import("@/features/workspace/domain").PaneProfile[]) => void;
+  getSettings: () => import("@/features/workspace/domain").WorkspaceSettings | null;
+  getProfiles: () => import("@/features/workspace/domain").PaneProfile[];
 }
 
-function createWorkspaceStoreState(transport: WorkspaceTransport) {
+function createWorkspaceStoreState(
+  transport: WorkspaceTransport,
+  settingsStoreAccessor: () => SettingsAccessor,
+) {
   return (set: SetFn, get: () => WorkspaceStore): WorkspaceStore => {
     let paneLifecycleUnlisten: (() => void) | null = null;
     let paneLifecycleInitPromise: Promise<void> | null = null;
@@ -146,8 +136,6 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
 
     return {
       workspace: null,
-      settings: null,
-      profiles: [],
       error: null,
       isHydrating: true,
       isWorking: false,
@@ -159,11 +147,10 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
         try {
           const payload = await transport.bootstrapWorkspace();
           await ensurePaneLifecycleListener();
+          settingsStoreAccessor().loadSettings(payload.settings, payload.profiles);
           const shouldShowWizard = payload.workspace.tabs.length === 0;
           set({
             workspace: payload.workspace,
-            settings: payload.settings,
-            profiles: payload.profiles,
             error: null,
             isHydrating: false,
             wizardTab: shouldShowWizard
@@ -179,7 +166,7 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
       },
 
     async createTab(preset, overrides = {}) {
-      const settings = get().settings;
+      const settings = settingsStoreAccessor().getSettings();
       if (!settings) {
         return;
       }
@@ -222,20 +209,17 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
           paneConfigs,
         });
 
-        const currentSettings = get().settings;
-        const settingsUpdate =
-          currentSettings && !currentSettings.hasCompletedOnboarding
-            ? {
-                settings: await transport.updateAppSettings({
-                  ...currentSettings,
-                  hasCompletedOnboarding: true,
-                }),
-              }
-            : {};
+        const currentSettings = settingsStoreAccessor().getSettings();
+        if (currentSettings && !currentSettings.hasCompletedOnboarding) {
+          const updatedSettings = await transport.updateAppSettings({
+            ...currentSettings,
+            hasCompletedOnboarding: true,
+          });
+          settingsStoreAccessor().loadSettings(updatedSettings, settingsStoreAccessor().getProfiles());
+        }
 
         set({
           workspace,
-          ...settingsUpdate,
           error: null,
           isWorking: false,
           wizardTab: null,
@@ -301,14 +285,6 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
       await runWorkspaceMutation(set, () => transport.swapPanes(paneIdA, paneIdB));
     },
 
-    async updateSettings(settings) {
-      await runSettingsMutation(set, () => transport.updateAppSettings(settings));
-    },
-
-    async resetSettings() {
-      await runSettingsMutation(set, () => transport.resetAppSettings());
-    },
-
     clearError() {
       set({ error: null });
     },
@@ -317,7 +293,19 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
 }
 
 export function createWorkspaceStore(transport: WorkspaceTransport = bridge) {
-  return createStore<WorkspaceStore>(createWorkspaceStoreState(transport));
+  const settingsStore = createSettingsStore(transport);
+  const workspaceStore = createStore<WorkspaceStore>(createWorkspaceStoreState(transport, () => ({
+    loadSettings: settingsStore.getState().loadSettings,
+    getSettings: () => settingsStore.getState().settings,
+    getProfiles: () => settingsStore.getState().profiles,
+  })));
+  return Object.assign(workspaceStore, { settingsStore });
 }
 
-export const useWorkspaceStore = create<WorkspaceStore>(createWorkspaceStoreState(bridge));
+export const useWorkspaceStore = create<WorkspaceStore>(
+  createWorkspaceStoreState(bridge, () => ({
+    loadSettings: useSettingsStore.getState().loadSettings,
+    getSettings: () => useSettingsStore.getState().settings,
+    getProfiles: () => useSettingsStore.getState().profiles,
+  })),
+);

@@ -19,7 +19,8 @@ describe("workspaceStore + mockTransport integration", () => {
     const { store } = await setup();
     await store.getState().initialize();
 
-    const { workspace, settings, profiles, isHydrating } = store.getState();
+    const { workspace, isHydrating } = store.getState();
+    const { settings, profiles } = store.settingsStore.getState();
     expect(isHydrating).toBe(false);
     expect(workspace).not.toBeNull();
     expect(workspace!.tabs).toHaveLength(1);
@@ -142,14 +143,14 @@ describe("workspaceStore + mockTransport integration", () => {
     const { store } = await setup();
     await store.getState().initialize();
 
-    const current = store.getState().settings!;
-    await store.getState().updateSettings({
+    const current = store.settingsStore.getState().settings!;
+    await store.settingsStore.getState().updateSettings({
       ...current,
       fontSize: 18,
       defaultLayout: "3x3",
     });
 
-    const updated = store.getState().settings!;
+    const updated = store.settingsStore.getState().settings!;
     expect(updated.fontSize).toBe(18);
     expect(updated.defaultLayout).toBe("3x3");
   });

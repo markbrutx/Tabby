@@ -4,6 +4,8 @@ import "xterm/css/xterm.css";
 import "./styles.css";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RecoveryScreen } from "@/components/RecoveryScreen";
+import { TransportContext } from "@/lib/bridge/TransportContext";
+import { bridge } from "@/lib/bridge";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
@@ -17,7 +19,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         />
       )}
     >
-      <App />
+      <TransportContext.Provider value={bridge}>
+        <App />
+      </TransportContext.Provider>
     </ErrorBoundary>
   </React.StrictMode>,
 );

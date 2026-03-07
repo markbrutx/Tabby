@@ -1,8 +1,11 @@
+mod application;
+mod browser;
 pub mod cli;
-mod commands;
-mod domain;
-mod managers;
 mod menu;
+mod settings;
+mod shared;
+mod terminal;
+mod workspace;
 
 pub use cli::CliArgs;
 
@@ -14,16 +17,16 @@ use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
-use crate::commands::workspace::LaunchOverrides;
-use crate::domain::events::{
+use crate::application::coordinator::Coordinator;
+use crate::settings::repository::settings_repository::SettingsManager;
+use crate::shared::events::{
     BrowserUrlChangedEvent, PaneLifecycleEvent, PtyOutputEvent, WorkspaceChangedEvent,
 };
-use crate::domain::layout::SplitNode;
-use crate::domain::pane::PaneKind;
-use crate::managers::coordinator::Coordinator;
-use crate::managers::pty::PtyManager;
-use crate::managers::settings::SettingsManager;
-use crate::managers::tab::TabManager;
+use crate::terminal::service::pty_service::PtyManager;
+use crate::workspace::commands::workspace_commands::LaunchOverrides;
+use crate::workspace::domain::layout::SplitNode;
+use crate::workspace::domain::pane::PaneKind;
+use crate::workspace::service::tab_service::TabManager;
 
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env()
@@ -35,28 +38,28 @@ fn init_tracing() {
 fn specta_builder() -> SpectaBuilder<tauri::Wry> {
     SpectaBuilder::<tauri::Wry>::new()
         .commands(collect_commands![
-            commands::settings::get_app_settings,
-            commands::settings::update_app_settings,
-            commands::settings::reset_app_settings,
-            commands::workspace::bootstrap_workspace,
-            commands::workspace::create_tab,
-            commands::workspace::close_tab,
-            commands::workspace::set_active_tab,
-            commands::workspace::focus_pane,
-            commands::workspace::restart_pane,
-            commands::workspace::update_pane_profile,
-            commands::workspace::update_pane_cwd,
-            commands::workspace::split_pane,
-            commands::workspace::close_pane,
-            commands::workspace::track_pane_cwd,
-            commands::workspace::swap_panes,
-            commands::browser::create_browser_webview,
-            commands::browser::navigate_browser,
-            commands::browser::close_browser_webview,
-            commands::browser::set_browser_webview_bounds,
-            commands::browser::set_browser_webview_visible,
-            commands::pty::write_pty,
-            commands::pty::resize_pty,
+            settings::commands::get_app_settings,
+            settings::commands::update_app_settings,
+            settings::commands::reset_app_settings,
+            workspace::commands::workspace_commands::bootstrap_workspace,
+            workspace::commands::workspace_commands::create_tab,
+            workspace::commands::workspace_commands::close_tab,
+            workspace::commands::workspace_commands::set_active_tab,
+            workspace::commands::workspace_commands::focus_pane,
+            workspace::commands::workspace_commands::restart_pane,
+            workspace::commands::workspace_commands::update_pane_profile,
+            workspace::commands::workspace_commands::update_pane_cwd,
+            workspace::commands::workspace_commands::split_pane,
+            workspace::commands::workspace_commands::close_pane,
+            workspace::commands::workspace_commands::track_pane_cwd,
+            workspace::commands::workspace_commands::swap_panes,
+            browser::commands::create_browser_webview,
+            browser::commands::navigate_browser,
+            browser::commands::close_browser_webview,
+            browser::commands::set_browser_webview_bounds,
+            browser::commands::set_browser_webview_visible,
+            terminal::commands::write_pty,
+            terminal::commands::resize_pty,
         ])
         .typ::<SplitNode>()
         .typ::<PaneKind>()
@@ -82,7 +85,7 @@ pub fn run(cli_args: CliArgs) {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .menu(|handle| menu::build_menu(handle))
+        .menu(menu::build_menu)
         .on_menu_event(|app_handle, event| menu::handle_menu_event(app_handle, &event))
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

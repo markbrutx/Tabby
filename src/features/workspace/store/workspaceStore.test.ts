@@ -101,8 +101,8 @@ describe("createWorkspaceStore", () => {
 
     expect(transport.bootstrapWorkspace).toHaveBeenCalledTimes(1);
     expect(store.getState().workspace).toEqual(workspace);
-    expect(store.getState().settings).toEqual(settings);
-    expect(store.getState().profiles).toEqual(bootstrapPayload.profiles);
+    expect(store.settingsStore.getState().settings).toEqual(settings);
+    expect(store.settingsStore.getState().profiles).toEqual(bootstrapPayload.profiles);
     expect(store.getState().isHydrating).toBe(false);
   });
 

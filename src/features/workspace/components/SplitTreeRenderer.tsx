@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/Button";
 import type { PaneSnapshot, SplitNode, TabSnapshot } from "@/features/workspace/domain";
 import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain";
 import type { ResolvedTheme } from "@/features/workspace/theme";
-import { BrowserPane, type BrowserPaneHandle } from "./BrowserPane";
-import { BrowserToolbar } from "./BrowserToolbar";
-import { PaneHeader } from "./PaneHeader";
-import { TerminalPane } from "./TerminalPane";
+import { BrowserPane, type BrowserPaneHandle } from "@/features/browser/components/BrowserPane";
+import { BrowserToolbar } from "@/features/browser/components/BrowserToolbar";
+import { PaneHeader } from "@/features/terminal/components/PaneHeader";
+import { TerminalPane } from "@/features/terminal/components/TerminalPane";
 
 // ---------------------------------------------------------------------------
 // Context — holds cross-cutting state shared by all nodes in the tree

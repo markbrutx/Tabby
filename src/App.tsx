@@ -4,14 +4,15 @@ import { RecoveryScreen } from "@/components/RecoveryScreen";
 import { ConfirmDialog } from "@/features/workspace/components/ConfirmDialog";
 import { SplitTreeRenderer } from "@/features/workspace/components/SplitTreeRenderer";
 import { TabBar } from "@/features/workspace/components/TabBar";
-import { SettingsModal } from "@/features/workspace/components/SettingsModal";
-import { ShortcutsModal } from "@/features/workspace/components/ShortcutsModal";
+import { SettingsModal } from "@/features/settings/components/SettingsModal";
+import { ShortcutsModal } from "@/features/settings/components/ShortcutsModal";
 import { SplitPopup } from "@/features/workspace/components/SplitPopup";
 import { WorkspaceSetupWizard } from "@/features/workspace/components/WorkspaceSetupWizard";
 import { useConfirmAction } from "@/features/workspace/hooks/useConfirmAction";
 import { useTauriMenuEvents } from "@/features/workspace/hooks/useTauriMenuEvents";
 import { selectActiveTab, selectActivePane } from "@/features/workspace/selectors";
 import { useWorkspaceStore } from "@/features/workspace/store/workspaceStore";
+import { useSettingsStore } from "@/features/settings/store/settingsStore";
 import type { SplitDirection } from "@/features/workspace/domain";
 import type { SetupWizardConfig } from "@/features/workspace/store/types";
 import {
@@ -23,8 +24,6 @@ import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcut
 function App() {
   const {
     workspace,
-    settings,
-    profiles,
     error,
     isHydrating,
     wizardTab,
@@ -39,14 +38,10 @@ function App() {
     splitPane,
     closePane,
     swapPanes,
-    updateSettings,
-    resetSettings,
     clearError,
   } = useWorkspaceStore(
     useShallow((state) => ({
       workspace: state.workspace,
-      settings: state.settings,
-      profiles: state.profiles,
       error: state.error,
       isHydrating: state.isHydrating,
       wizardTab: state.wizardTab,
@@ -61,9 +56,21 @@ function App() {
       splitPane: state.splitPane,
       closePane: state.closePane,
       swapPanes: state.swapPanes,
+      clearError: state.clearError,
+    })),
+  );
+
+  const {
+    settings,
+    profiles,
+    updateSettings,
+    resetSettings,
+  } = useSettingsStore(
+    useShallow((state) => ({
+      settings: state.settings,
+      profiles: state.profiles,
       updateSettings: state.updateSettings,
       resetSettings: state.resetSettings,
-      clearError: state.clearError,
     })),
   );
 

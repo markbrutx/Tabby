@@ -90,12 +90,9 @@ pub fn build_menu(handle: &AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
 
     for i in 1u8..=9 {
         ws = ws.item(
-            &MenuItemBuilder::with_id(
-                format!("shortcut-tab-{i}"),
-                format!("Switch to Tab {i}"),
-            )
-            .accelerator(format!("CmdOrCtrl+{i}"))
-            .build(handle)?,
+            &MenuItemBuilder::with_id(format!("shortcut-tab-{i}"), format!("Switch to Tab {i}"))
+                .accelerator(format!("CmdOrCtrl+{i}"))
+                .build(handle)?,
         );
     }
 
