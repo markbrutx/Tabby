@@ -15,3 +15,5 @@ export type {
   UpdatePaneProfileRequest,
   WorkspaceSnapshot,
 } from "@/lib/tauri-bindings";
+
+export const CUSTOM_PROFILE_ID = "custom" as const;

@@ -1,15 +1,19 @@
 import { FolderOpen, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import type { PaneProfile, PaneSnapshot } from "@/features/workspace/domain";
+import { CUSTOM_PROFILE_ID, type PaneProfile, type PaneSnapshot } from "@/features/workspace/domain";
 
 interface PaneHeaderProps {
   pane: PaneSnapshot;
   profiles: PaneProfile[];
   active: boolean;
   profileDraft: string;
+  commandDraft: string;
   isApplying: boolean;
   onSelectProfile: (profileId: string) => void;
+  onCommandChange: (value: string) => void;
+  onApplyProfile: () => void;
   onChooseDirectory: () => void;
   onRestart: () => void;
 }
@@ -19,8 +23,11 @@ export function PaneHeader({
   profiles,
   active,
   profileDraft,
+  commandDraft,
   isApplying,
   onSelectProfile,
+  onCommandChange,
+  onApplyProfile,
   onChooseDirectory,
   onRestart,
 }: PaneHeaderProps) {
@@ -72,6 +79,25 @@ export function PaneHeader({
           </Button>
         </div>
       </div>
+
+      {profileDraft === CUSTOM_PROFILE_ID && (
+        <div className="mt-2 flex gap-2">
+          <Input
+            data-testid={`command-input-${pane.id}`}
+            value={commandDraft}
+            onChange={(event) => onCommandChange(event.target.value)}
+            placeholder="Custom command"
+            className="h-8 text-xs"
+          />
+          <Button
+            size="sm"
+            onClick={onApplyProfile}
+            disabled={isApplying || !commandDraft.trim()}
+          >
+            Launch
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

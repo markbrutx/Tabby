@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import { createStore } from "zustand/vanilla";
-import type {
-  LayoutPreset,
-  UpdatePaneCwdRequest,
-  UpdatePaneProfileRequest,
-  WorkspaceSettings,
-  WorkspaceSnapshot,
+import {
+  CUSTOM_PROFILE_ID,
+  type LayoutPreset,
+  type UpdatePaneCwdRequest,
+  type UpdatePaneProfileRequest,
+  type WorkspaceSettings,
+  type WorkspaceSnapshot,
 } from "@/features/workspace/domain";
 import { asErrorMessage, bridge, type WorkspaceTransport } from "@/lib/bridge";
 
@@ -97,7 +98,7 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
       const profileId = overrides.profileId ?? settings.defaultProfileId;
       const startupCommand =
         overrides.startupCommand ??
-        (profileId === "custom" ? settings.defaultCustomCommand : "");
+        (profileId === CUSTOM_PROFILE_ID ? settings.defaultCustomCommand : "");
 
       await runWorkspaceMutation(set, () =>
         transport.createTab({

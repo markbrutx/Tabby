@@ -12,6 +12,7 @@ import {
   selectWorkspaceSummary,
 } from "@/features/workspace/selectors";
 import { useWorkspaceStore } from "@/features/workspace/store/workspaceStore";
+import { CUSTOM_PROFILE_ID } from "@/features/workspace/domain";
 import {
   applyResolvedTheme,
   useResolvedTheme,
@@ -76,7 +77,7 @@ function App() {
           </p>
           <h1 className="mt-4 text-4xl font-semibold">Preparing your terminal deck</h1>
           <p className="mt-3 text-sm text-[var(--color-text-soft)]">
-            Initializing PTY managers, workspace defaults and Handy-style chrome.
+            Initializing PTY managers and workspace defaults.
           </p>
         </div>
       </div>
@@ -106,7 +107,7 @@ function App() {
             cwd: nextSettings.defaultWorkingDirectory,
             profileId: nextSettings.defaultProfileId,
             startupCommand:
-              nextSettings.defaultProfileId === "custom"
+              nextSettings.defaultProfileId === CUSTOM_PROFILE_ID
                 ? nextSettings.defaultCustomCommand
                 : undefined,
           });

@@ -46,7 +46,7 @@ export function AppSidebar({
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">Tabby</h1>
               <p className="text-sm text-[var(--color-text-soft)]">
-                Handy-inspired command decks for Codex, Claude and plain shells.
+                Terminal workspace for Codex, Claude and plain shells.
               </p>
             </div>
           </div>

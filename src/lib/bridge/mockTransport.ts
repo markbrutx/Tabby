@@ -1,16 +1,17 @@
-import type {
-  BootstrapSnapshot,
-  LayoutPreset,
-  NewTabRequest,
-  PaneProfile,
-  PaneSnapshot,
-  PtyOutputEvent,
-  PtyResizeRequest,
-  TabSnapshot,
-  UpdatePaneCwdRequest,
-  UpdatePaneProfileRequest,
-  WorkspaceSettings,
-  WorkspaceSnapshot,
+import {
+  CUSTOM_PROFILE_ID,
+  type BootstrapSnapshot,
+  type LayoutPreset,
+  type NewTabRequest,
+  type PaneProfile,
+  type PaneSnapshot,
+  type PtyOutputEvent,
+  type PtyResizeRequest,
+  type TabSnapshot,
+  type UpdatePaneCwdRequest,
+  type UpdatePaneProfileRequest,
+  type WorkspaceSettings,
+  type WorkspaceSnapshot,
 } from "@/features/workspace/domain";
 import type { UnlistenFn, WorkspaceTransport } from "./shared";
 
@@ -40,7 +41,7 @@ const BUILT_IN_PROFILES: PaneProfile[] = [
     startupCommand: "codex",
   },
   {
-    id: "custom",
+    id: CUSTOM_PROFILE_ID,
     label: "Custom",
     description: "Run an arbitrary shell command",
     startupCommand: null,
@@ -68,7 +69,7 @@ function resolveProfile(
     id: profile.id,
     label: profile.label,
     startupCommand:
-      profile.id === "custom" ? startupCommand : profile.startupCommand,
+      profile.id === CUSTOM_PROFILE_ID ? startupCommand : profile.startupCommand,
   };
 }
 

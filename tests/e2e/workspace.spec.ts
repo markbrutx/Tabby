@@ -358,12 +358,12 @@ test("moves pane focus with keyboard shortcuts", async ({ page }) => {
   }
 
   await panes.nth(0).click();
-  await expect(page.getByTestId(`cwd-input-${firstPaneId}`)).toBeVisible();
+  await expect(page.getByTestId(`pane-${firstPaneId}`)).toHaveAttribute("data-active", "true");
 
   await page.keyboard.press("Meta+Alt+ArrowRight");
 
-  await expect(page.getByTestId(`cwd-input-${secondPaneId}`)).toBeVisible();
-  await expect(page.getByTestId(`cwd-input-${firstPaneId}`)).toHaveCount(0);
+  await expect(page.getByTestId(`pane-${secondPaneId}`)).toHaveAttribute("data-active", "true");
+  await expect(page.getByTestId(`pane-${firstPaneId}`)).toHaveAttribute("data-active", "false");
 });
 
 test("creates new workspace with Cmd+T shortcut", async ({ page }) => {

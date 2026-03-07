@@ -156,11 +156,10 @@ export function useTerminalSession({
       return;
     }
 
-    // Already initialized — just fit and focus.
+    // Already initialized — just fit and focus the active pane.
     if (initializedRef.current) {
-      safeFit(fitAddon, container);
-
       if (active) {
+        safeFit(fitAddon, container);
         try {
           terminal.focus();
         } catch {

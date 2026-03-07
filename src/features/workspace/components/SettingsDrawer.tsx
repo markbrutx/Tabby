@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/Button";
 import { DrawerOverlay } from "@/components/ui/DrawerOverlay";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import type {
-  LayoutPreset,
-  PaneProfile,
-  WorkspaceSettings,
+import {
+  CUSTOM_PROFILE_ID,
+  type LayoutPreset,
+  type PaneProfile,
+  type WorkspaceSettings,
 } from "@/features/workspace/domain";
 import { LAYOUT_PRESET_CARDS, THEME_OPTIONS } from "@/features/workspace/presets";
 import { pickDirectory } from "@/lib/pickDirectory";
@@ -113,7 +114,7 @@ export function SettingsDrawer({
             </Select>
           </label>
 
-          {draft.defaultProfileId === "custom" ? (
+          {draft.defaultProfileId === CUSTOM_PROFILE_ID ? (
             <label className="block">
               <span className="mb-2 block text-sm text-[var(--color-text-soft)]">
                 Default custom command
