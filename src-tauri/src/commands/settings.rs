@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager, State};
 use tracing::warn;
 
 use crate::domain::error::TabbyError;
-use crate::domain::types::AppSettings;
+use crate::domain::settings::AppSettings;
 use crate::managers::settings::SettingsManager;
 
 fn apply_fullscreen(app: &AppHandle, launch_fullscreen: bool) {

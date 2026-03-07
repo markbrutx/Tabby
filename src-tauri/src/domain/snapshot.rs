@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::domain::error::TabbyError;
-use crate::domain::types::{AppSettings, PaneKind, PaneProfile, PaneSeed, SplitNode};
+use crate::domain::layout::SplitNode;
+use crate::domain::pane::{PaneKind, PaneSeed};
+use crate::domain::profiles::PaneProfile;
+use crate::domain::settings::AppSettings;
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]

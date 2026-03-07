@@ -12,7 +12,7 @@ use crate::domain::events::{
     PaneLifecycleEvent, PtyOutputEvent, PANE_LIFECYCLE_EVENT_NAME, PTY_OUTPUT_EVENT_NAME,
 };
 use crate::domain::snapshot::PaneRuntimeStatus;
-use crate::domain::types::ResolvedProfile;
+use crate::domain::profiles::ResolvedProfile;
 
 #[derive(Debug, Clone)]
 pub struct SpawnRequest {
@@ -309,7 +309,7 @@ fn build_exit_event(pane_id: &str, session_id: &str, session: &PtySession) -> Pa
 #[cfg(test)]
 mod tests {
     use super::{build_pty_command, extract_valid_utf8};
-    use crate::domain::types::ResolvedProfile;
+    use crate::domain::profiles::ResolvedProfile;
 
     #[test]
     fn ascii_only_no_carry() {

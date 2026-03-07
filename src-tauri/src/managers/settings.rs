@@ -2,7 +2,7 @@ use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
 use crate::domain::error::TabbyError;
-use crate::domain::types::{default_settings, AppSettings};
+use crate::domain::settings::{default_settings, AppSettings};
 
 const STORE_PATH: &str = "tabby-settings.json";
 const SETTINGS_KEY: &str = "settings";

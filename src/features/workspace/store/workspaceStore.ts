@@ -13,27 +13,13 @@ import {
 } from "@/features/workspace/domain";
 import { asErrorMessage, bridge, type WorkspaceTransport } from "@/lib/bridge";
 
+import type { PaneGroupConfig, SetupWizardConfig, WizardTab } from "./types";
+export type { PaneGroupConfig, SetupWizardConfig, WizardTab };
+
 interface CreateTabOverrides {
   cwd?: string;
   profileId?: string;
   startupCommand?: string;
-}
-
-export interface PaneGroupConfig {
-  profileId: string;
-  workingDirectory: string;
-  customCommand?: string;
-  url?: string;
-  count: number;
-}
-
-export interface SetupWizardConfig {
-  groups: PaneGroupConfig[];
-}
-
-export interface WizardTab {
-  id: string;
-  title: string;
 }
 
 interface WorkspaceStore {

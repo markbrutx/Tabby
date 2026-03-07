@@ -9,10 +9,9 @@ use crate::domain::error::TabbyError;
 use crate::domain::events::{PaneLifecycleEvent, WorkspaceChangedEvent, PANE_LIFECYCLE_EVENT_NAME};
 use crate::domain::snapshot::{PaneRuntimeStatus, WorkspaceSnapshot};
 use crate::domain::split_tree::{tree_from_count, tree_from_preset};
-use crate::domain::types::{
-    create_pane_id, resolve_profile, AppSettings, PaneKind, PaneSeed, ResolvedProfile,
-    BROWSER_PROFILE_ID, CUSTOM_PROFILE_ID,
-};
+use crate::domain::pane::{create_pane_id, PaneKind, PaneSeed};
+use crate::domain::profiles::{resolve_profile, ResolvedProfile, BROWSER_PROFILE_ID, CUSTOM_PROFILE_ID};
+use crate::domain::settings::AppSettings;
 use crate::managers::pty::{PtyManager, SpawnRequest};
 use crate::managers::tab::TabManager;
 
@@ -299,6 +298,43 @@ impl Coordinator {
         Ok(snapshot)
     }
 
+    pub fn set_active_tab(&self, tab_id: &str) -> Result<WorkspaceSnapshot, TabbyError> {
+        let snapshot = self.tab_manager.set_active_tab(tab_id)?;
+        self.emit_workspace_changed(&snapshot);
+        Ok(snapshot)
+    }
+
+    pub fn focus_pane(
+        &self,
+        tab_id: &str,
+        pane_id: &str,
+    ) -> Result<WorkspaceSnapshot, TabbyError> {
+        let snapshot = self.tab_manager.focus_pane(tab_id, pane_id)?;
+        self.emit_workspace_changed(&snapshot);
+        Ok(snapshot)
+    }
+
+    pub fn swap_panes(
+        &self,
+        pane_id_a: &str,
+        pane_id_b: &str,
+    ) -> Result<WorkspaceSnapshot, TabbyError> {
+        let snapshot = self.tab_manager.swap_panes(pane_id_a, pane_id_b)?;
+        self.emit_workspace_changed(&snapshot);
+        Ok(snapshot)
+    }
+
+    pub fn track_pane_cwd(
+        &self,
+        pane_id: &str,
+        cwd: &str,
+        settings_manager: &crate::managers::settings::SettingsManager,
+    ) -> Result<(), TabbyError> {
+        self.tab_manager.update_tracked_cwd(pane_id, cwd)?;
+        settings_manager.update_last_working_directory(cwd)?;
+        Ok(())
+    }
+
     pub fn write_pty(&self, pane_id: &str, data: &str) -> Result<(), TabbyError> {
         let located = self.tab_manager.locate_pane(pane_id)?;
         if located.pane.pane_kind == PaneKind::Browser {
@@ -443,7 +479,7 @@ impl Coordinator {
         &self,
         pane_id: &str,
         cwd: &str,
-        profile: &crate::domain::types::ResolvedProfile,
+        profile: &crate::domain::profiles::ResolvedProfile,
     ) -> Result<String, TabbyError> {
         self.pty_manager.spawn(SpawnRequest {
             pane_id: String::from(pane_id),

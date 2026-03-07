@@ -1,4 +1,4 @@
-use crate::domain::types::{LayoutPreset, SplitDirection, SplitNode};
+use crate::domain::layout::{LayoutPreset, SplitDirection, SplitNode};
 
 pub fn tree_from_preset(preset: LayoutPreset, pane_ids: &[String]) -> SplitNode {
     match preset {

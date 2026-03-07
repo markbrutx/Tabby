@@ -3,7 +3,8 @@ use std::sync::Mutex;
 use crate::domain::error::TabbyError;
 use crate::domain::snapshot::{PaneRuntimeStatus, PaneSnapshot, TabSnapshot, WorkspaceSnapshot};
 use crate::domain::split_tree;
-use crate::domain::types::{create_tab_id, PaneKind, PaneSeed, SplitDirection, SplitNode};
+use crate::domain::layout::{SplitDirection, SplitNode};
+use crate::domain::pane::{create_tab_id, PaneKind, PaneSeed};
 
 #[derive(Debug, Default)]
 struct WorkspaceState {
@@ -236,7 +237,7 @@ impl TabManager {
         &self,
         pane_id: &str,
         session_id: String,
-        resolved: crate::domain::types::ResolvedProfile,
+        resolved: crate::domain::profiles::ResolvedProfile,
         cwd: String,
     ) -> Result<WorkspaceSnapshot, TabbyError> {
         self.replace_pane_full(pane_id, session_id, resolved, cwd, PaneKind::Terminal, None)
@@ -246,7 +247,7 @@ impl TabManager {
         &self,
         pane_id: &str,
         session_id: String,
-        resolved: crate::domain::types::ResolvedProfile,
+        resolved: crate::domain::profiles::ResolvedProfile,
         cwd: String,
         pane_kind: PaneKind,
         url: Option<String>,
@@ -369,7 +370,8 @@ impl TabManager {
 mod tests {
     use super::TabManager;
     use crate::domain::split_tree::tree_from_preset;
-    use crate::domain::types::{LayoutPreset, PaneSeed, SplitDirection};
+    use crate::domain::layout::{LayoutPreset, SplitDirection};
+    use crate::domain::pane::PaneSeed;
 
     fn pane_seed(id: &str) -> PaneSeed {
         PaneSeed {
@@ -379,7 +381,7 @@ mod tests {
             profile_id: String::from("terminal"),
             profile_label: String::from("Terminal"),
             startup_command: None,
-            pane_kind: crate::domain::types::PaneKind::Terminal,
+            pane_kind: crate::domain::pane::PaneKind::Terminal,
             url: None,
         }
     }

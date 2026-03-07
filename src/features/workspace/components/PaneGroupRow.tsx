@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { BROWSER_PROFILE_ID, CUSTOM_PROFILE_ID, type PaneProfile } from "@/features/workspace/domain";
-import type { PaneGroupConfig } from "@/features/workspace/store/workspaceStore";
+import type { PaneGroupConfig } from "@/features/workspace/store/types";
 import { pickDirectory } from "@/lib/pickDirectory";
 
 const GROUP_DOT_COLORS = [

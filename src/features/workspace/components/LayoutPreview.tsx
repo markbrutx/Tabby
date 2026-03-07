@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { treeFromCount, computePaneRects } from "@/features/workspace/splitTree";
-import type { PaneGroupConfig } from "@/features/workspace/store/workspaceStore";
+import type { PaneGroupConfig } from "@/features/workspace/store/types";
 
 const GROUP_COLORS = [
   "bg-[var(--color-accent)]",

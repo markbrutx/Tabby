@@ -2,26 +2,24 @@ pub mod cli;
 mod commands;
 mod domain;
 mod managers;
+mod menu;
 
 pub use cli::CliArgs;
 
 use std::sync::Arc;
 
 use specta_typescript::Typescript;
-use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
-const MENU_ITEM_SETTINGS: &str = "open-settings";
-const EVENT_OPEN_SETTINGS: &str = "menu-open-settings";
-
 use crate::commands::workspace::LaunchOverrides;
 use crate::domain::events::{
     BrowserUrlChangedEvent, PaneLifecycleEvent, PtyOutputEvent, WorkspaceChangedEvent,
 };
-use crate::domain::types::{PaneKind, SplitNode};
+use crate::domain::layout::SplitNode;
+use crate::domain::pane::PaneKind;
 use crate::managers::coordinator::Coordinator;
 use crate::managers::pty::PtyManager;
 use crate::managers::settings::SettingsManager;
@@ -84,122 +82,8 @@ pub fn run(cli_args: CliArgs) {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .menu(|handle| {
-            let about_meta = AboutMetadataBuilder::new()
-                .name(Some("Tabby"))
-                .version(Some(env!("CARGO_PKG_VERSION")))
-                .build();
-
-            let app_submenu = SubmenuBuilder::new(handle, "Tabby")
-                .about(Some(about_meta))
-                .separator()
-                .item(
-                    &MenuItemBuilder::with_id(MENU_ITEM_SETTINGS, "Settings…")
-                        .accelerator("CmdOrCtrl+,")
-                        .build(handle)?,
-                )
-                .separator()
-                .hide()
-                .hide_others()
-                .show_all()
-                .separator()
-                .quit()
-                .build()?;
-
-            let edit_submenu = SubmenuBuilder::new(handle, "Edit")
-                .undo()
-                .redo()
-                .separator()
-                .cut()
-                .copy()
-                .paste()
-                .select_all()
-                .build()?;
-
-            let mut ws = SubmenuBuilder::new(handle, "Workspace")
-                .item(
-                    &MenuItemBuilder::with_id("shortcut-new-tab", "New Tab")
-                        .accelerator("CmdOrCtrl+T")
-                        .build(handle)?,
-                )
-                .item(
-                    &MenuItemBuilder::with_id("shortcut-close-pane", "Close Pane")
-                        .accelerator("CmdOrCtrl+W")
-                        .build(handle)?,
-                )
-                .item(
-                    &MenuItemBuilder::with_id("shortcut-close-tab", "Close Workspace")
-                        .accelerator("CmdOrCtrl+Shift+W")
-                        .build(handle)?,
-                )
-                .separator()
-                .item(
-                    &MenuItemBuilder::with_id("shortcut-split-right", "Split Right")
-                        .accelerator("CmdOrCtrl+D")
-                        .build(handle)?,
-                )
-                .item(
-                    &MenuItemBuilder::with_id("shortcut-split-down", "Split Down")
-                        .accelerator("CmdOrCtrl+E")
-                        .build(handle)?,
-                )
-                .separator()
-                .item(
-                    &MenuItemBuilder::with_id("shortcut-restart-pane", "Restart Pane")
-                        .accelerator("CmdOrCtrl+Shift+R")
-                        .build(handle)?,
-                )
-                .item(
-                    &MenuItemBuilder::with_id("shortcut-next-pane", "Next Pane")
-                        .accelerator("CmdOrCtrl+]")
-                        .build(handle)?,
-                )
-                .item(
-                    &MenuItemBuilder::with_id("shortcut-prev-pane", "Previous Pane")
-                        .accelerator("CmdOrCtrl+[")
-                        .build(handle)?,
-                )
-                .separator()
-                .item(
-                    &MenuItemBuilder::with_id("shortcut-shortcuts-help", "Keyboard Shortcuts")
-                        .accelerator("CmdOrCtrl+/")
-                        .build(handle)?,
-                )
-                .separator();
-
-            for i in 1u8..=9 {
-                ws = ws.item(
-                    &MenuItemBuilder::with_id(
-                        format!("shortcut-tab-{i}"),
-                        format!("Switch to Tab {i}"),
-                    )
-                    .accelerator(format!("CmdOrCtrl+{i}"))
-                    .build(handle)?,
-                );
-            }
-
-            let workspace_submenu = ws.build()?;
-
-            MenuBuilder::new(handle)
-                .item(&app_submenu)
-                .item(&edit_submenu)
-                .item(&workspace_submenu)
-                .build()
-        })
-        .on_menu_event(|app_handle, event| {
-            let id = event.id().as_ref();
-            if id == MENU_ITEM_SETTINGS {
-                if let Err(emit_err) = app_handle.emit(EVENT_OPEN_SETTINGS, ()) {
-                    error!(?emit_err, "Failed to emit menu-open-settings event");
-                }
-                return;
-            }
-            if id.starts_with("shortcut-") {
-                if let Err(emit_err) = app_handle.emit(id, ()) {
-                    error!(?emit_err, "Failed to emit shortcut event");
-                }
-            }
-        })
+        .menu(|handle| menu::build_menu(handle))
+        .on_menu_event(|app_handle, event| menu::handle_menu_event(app_handle, &event))
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();

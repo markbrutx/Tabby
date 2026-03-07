@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import type { PaneProfile, WorkspaceSettings } from "@/features/workspace/domain";
-import type { PaneGroupConfig, SetupWizardConfig } from "@/features/workspace/store/workspaceStore";
+import type { PaneGroupConfig, SetupWizardConfig } from "@/features/workspace/store/types";
 import { LayoutPreview } from "./LayoutPreview";
 import { PaneGroupRow } from "./PaneGroupRow";
 

@@ -7,9 +7,9 @@ use crate::domain::commands::{
     LaunchRequest, NewTabRequest, SplitPaneRequest, UpdatePaneCwdRequest, UpdatePaneProfileRequest,
 };
 use crate::domain::error::TabbyError;
+use crate::domain::profiles::built_in_profiles;
+use crate::domain::settings::AppSettings;
 use crate::domain::snapshot::{BootstrapSnapshot, WorkspaceSnapshot};
-
-use crate::domain::types::built_in_profiles;
 use crate::managers::coordinator::Coordinator;
 use crate::managers::settings::SettingsManager;
 use crate::managers::tab::TabManager;
@@ -53,20 +53,20 @@ pub fn close_tab(
 #[tauri::command]
 #[specta::specta]
 pub fn set_active_tab(
-    tab_manager: State<'_, Arc<TabManager>>,
+    coordinator: State<'_, Arc<Coordinator>>,
     tab_id: String,
 ) -> Result<WorkspaceSnapshot, TabbyError> {
-    tab_manager.set_active_tab(&tab_id)
+    coordinator.set_active_tab(&tab_id)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn focus_pane(
-    tab_manager: State<'_, Arc<TabManager>>,
+    coordinator: State<'_, Arc<Coordinator>>,
     tab_id: String,
     pane_id: String,
 ) -> Result<WorkspaceSnapshot, TabbyError> {
-    tab_manager.focus_pane(&tab_id, &pane_id)
+    coordinator.focus_pane(&tab_id, &pane_id)
 }
 
 #[tauri::command]
@@ -123,31 +123,29 @@ pub fn close_pane(
 #[tauri::command]
 #[specta::specta]
 pub fn track_pane_cwd(
-    tab_manager: State<'_, Arc<TabManager>>,
+    coordinator: State<'_, Arc<Coordinator>>,
     settings_manager: State<'_, Arc<SettingsManager>>,
     pane_id: String,
     cwd: String,
 ) -> Result<(), TabbyError> {
-    tab_manager.update_tracked_cwd(&pane_id, &cwd)?;
-    settings_manager.update_last_working_directory(&cwd)?;
-    Ok(())
+    coordinator.track_pane_cwd(&pane_id, &cwd, &settings_manager)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn swap_panes(
-    tab_manager: State<'_, Arc<TabManager>>,
+    coordinator: State<'_, Arc<Coordinator>>,
     pane_id_a: String,
     pane_id_b: String,
 ) -> Result<WorkspaceSnapshot, TabbyError> {
-    tab_manager.swap_panes(&pane_id_a, &pane_id_b)
+    coordinator.swap_panes(&pane_id_a, &pane_id_b)
 }
 
 // TODO(phase-4): re-enable when single-instance CLI routing is wired
 #[allow(dead_code)]
 fn consume_launch_request(
     launch_overrides: &LaunchOverrides,
-    settings: &crate::domain::types::AppSettings,
+    settings: &AppSettings,
 ) -> Result<LaunchRequest, TabbyError> {
     let mut overrides = launch_overrides
         .0

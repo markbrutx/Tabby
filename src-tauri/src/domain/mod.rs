@@ -1,9 +1,12 @@
 pub mod commands;
 pub mod error;
 pub mod events;
+pub mod layout;
+pub mod pane;
+pub mod profiles;
+pub mod settings;
 pub mod snapshot;
 pub mod split_tree;
-pub mod types;
 
 #[cfg(test)]
 mod tests {
@@ -11,7 +14,9 @@ mod tests {
     use crate::domain::commands::{LaunchRequest, NewTabRequest, PaneConfig};
     use crate::domain::snapshot::{PaneRuntimeStatus, TabSnapshot};
     use crate::domain::split_tree::tree_from_preset;
-    use crate::domain::types::{default_settings, LayoutPreset, PaneSeed};
+    use crate::domain::layout::LayoutPreset;
+    use crate::domain::pane::PaneSeed;
+    use crate::domain::settings::default_settings;
 
     fn pane_seed(id: &str) -> PaneSeed {
         PaneSeed {
@@ -21,7 +26,7 @@ mod tests {
             profile_id: String::from("terminal"),
             profile_label: String::from("Terminal"),
             startup_command: None,
-            pane_kind: crate::domain::types::PaneKind::Terminal,
+            pane_kind: crate::domain::pane::PaneKind::Terminal,
             url: None,
         }
     }

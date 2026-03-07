@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { useShallow } from "zustand/react/shallow";
 import { RecoveryScreen } from "@/components/RecoveryScreen";
 import { ConfirmDialog } from "@/features/workspace/components/ConfirmDialog";
@@ -9,50 +8,17 @@ import { SettingsModal } from "@/features/workspace/components/SettingsModal";
 import { ShortcutsModal } from "@/features/workspace/components/ShortcutsModal";
 import { SplitPopup } from "@/features/workspace/components/SplitPopup";
 import { WorkspaceSetupWizard } from "@/features/workspace/components/WorkspaceSetupWizard";
+import { useConfirmAction } from "@/features/workspace/hooks/useConfirmAction";
+import { useTauriMenuEvents } from "@/features/workspace/hooks/useTauriMenuEvents";
 import { selectActiveTab, selectActivePane } from "@/features/workspace/selectors";
 import { useWorkspaceStore } from "@/features/workspace/store/workspaceStore";
 import type { SplitDirection } from "@/features/workspace/domain";
-import type { SetupWizardConfig, WizardTab } from "@/features/workspace/store/workspaceStore";
+import type { SetupWizardConfig } from "@/features/workspace/store/types";
 import {
   applyResolvedTheme,
   useResolvedTheme,
 } from "@/features/workspace/theme";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
-import { isTauriRuntime } from "@/lib/runtime";
-
-type ConfirmAction =
-  | { type: "closePane"; paneId: string }
-  | { type: "closeTab"; tabId: string }
-  | { type: "quitApp" };
-
-interface MinimalWorkspace {
-  tabs: Array<{ id: string; panes: unknown[] }>;
-}
-
-function confirmMessage(action: ConfirmAction, workspace: MinimalWorkspace): { title: string; message: string } {
-  switch (action.type) {
-    case "closePane":
-      return {
-        title: "Close pane?",
-        message: "The terminal session will be terminated.",
-      };
-    case "closeTab": {
-      const tab = workspace.tabs.find((t) => t.id === action.tabId);
-      const count = tab ? tab.panes.length : 0;
-      return {
-        title: "Close workspace?",
-        message: `All ${count} session${count !== 1 ? "s" : ""} will be terminated.`,
-      };
-    }
-    case "quitApp": {
-      const tabCount = workspace.tabs.length;
-      return {
-        title: "Quit Tabby?",
-        message: `All sessions across ${tabCount} workspace${tabCount !== 1 ? "s" : ""} will be terminated.`,
-      };
-    }
-  }
-}
 
 function App() {
   const {
@@ -107,8 +73,14 @@ function App() {
     paneId: string;
     direction: SplitDirection;
   } | null>(null);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+
   const resolvedTheme = useResolvedTheme(settings?.theme);
+
+  const confirmDialog = useConfirmAction({
+    workspace: workspace ?? { tabs: [] },
+    closePane,
+    closeTab,
+  });
 
   useEffect(() => {
     void initialize();
@@ -118,49 +90,11 @@ function App() {
     applyResolvedTheme(resolvedTheme);
   }, [resolvedTheme]);
 
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
+  const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
+  const handleOpenShortcuts = useCallback(() => setShortcutsOpen(true), []);
+  const handleCloseShortcuts = useCallback(() => setShortcutsOpen(false), []);
 
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-
-    void listen("menu-open-settings", () => {
-      setSettingsOpen(true);
-    }).then((fn) => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-
-    void listen("app-close-requested", () => {
-      setConfirmAction({ type: "quitApp" });
-    }).then((fn) => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
+  useTauriMenuEvents(handleOpenSettings, confirmDialog.requestQuitApp);
 
   const handleSplitRight = useCallback(
     (paneId: string) => setSplitPopup({ paneId, direction: "horizontal" }),
@@ -172,44 +106,6 @@ function App() {
     [],
   );
 
-  const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
-  const handleOpenShortcuts = useCallback(() => setShortcutsOpen(true), []);
-  const handleCloseShortcuts = useCallback(() => setShortcutsOpen(false), []);
-
-  const handleClosePaneConfirm = useCallback((paneId: string) => {
-    setConfirmAction({ type: "closePane", paneId });
-  }, []);
-
-  const handleCloseTabConfirm = useCallback((tabId: string) => {
-    setConfirmAction({ type: "closeTab", tabId });
-  }, []);
-
-  const handleConfirm = useCallback(() => {
-    if (!confirmAction) return;
-
-    switch (confirmAction.type) {
-      case "closePane":
-        void closePane(confirmAction.paneId);
-        break;
-      case "closeTab":
-        void closeTab(confirmAction.tabId);
-        break;
-      case "quitApp":
-        if (isTauriRuntime()) {
-          void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
-            void getCurrentWindow().destroy();
-          });
-        }
-        break;
-    }
-
-    setConfirmAction(null);
-  }, [confirmAction, closePane, closeTab]);
-
-  const handleCancelConfirm = useCallback(() => {
-    setConfirmAction(null);
-  }, []);
-
   const handleSwapPanes = useCallback(
     (paneIdA: string, paneIdB: string) => {
       void swapPanes(paneIdA, paneIdB);
@@ -220,8 +116,8 @@ function App() {
   useWorkspaceShortcuts({
     workspace,
     onCreateTab: openSetupWizard,
-    onCloseTab: handleCloseTabConfirm,
-    onClosePane: handleClosePaneConfirm,
+    onCloseTab: confirmDialog.requestCloseTab,
+    onClosePane: confirmDialog.requestClosePane,
     onSelectTab: setActiveTab,
     onFocusPane: focusPane,
     onRestartPane: restartPane,
@@ -251,7 +147,6 @@ function App() {
 
   const activeTab = selectActiveTab(workspace);
 
-  // No real tabs and no wizard — recovery screen.
   if (!activeTab && !wizardTab) {
     return (
       <RecoveryScreen
@@ -263,14 +158,16 @@ function App() {
   }
 
   const activePane = selectActivePane(workspace);
-  const modalOpen = splitPopup !== null || confirmAction !== null || settingsOpen || shortcutsOpen;
+  const modalOpen =
+    splitPopup !== null ||
+    confirmDialog.action !== null ||
+    settingsOpen ||
+    shortcutsOpen;
 
-  // Build display tabs: real tabs + phantom wizard tab at the end.
   const displayTabs = wizardTab
     ? [...workspace.tabs, { id: wizardTab.id, title: wizardTab.title }]
     : workspace.tabs;
 
-  // Wizard tab is always active when open; otherwise use real active tab.
   const displayActiveTabId = wizardTab
     ? wizardTab.id
     : workspace.activeTabId;
@@ -284,7 +181,6 @@ function App() {
         activeTabId={displayActiveTabId}
         onSelect={(tabId) => {
           if (wizardTab && tabId !== wizardTab.id) {
-            // Clicking a real tab while wizard is open — close wizard, switch tab.
             closeSetupWizard();
             void setActiveTab(tabId);
           } else if (!wizardTab) {
@@ -295,7 +191,7 @@ function App() {
           if (wizardTab && tabId === wizardTab.id) {
             closeSetupWizard();
           } else {
-            handleCloseTabConfirm(tabId);
+            confirmDialog.requestCloseTab(tabId);
           }
         }}
         onNewTab={openSetupWizard}
@@ -329,7 +225,7 @@ function App() {
                 modalOpen={modalOpen}
                 onFocus={focusPane}
                 onRestart={restartPane}
-                onClosePane={handleClosePaneConfirm}
+                onClosePane={confirmDialog.requestClosePane}
                 onSwapPanes={handleSwapPanes}
               />
             </div>
@@ -383,11 +279,11 @@ function App() {
         />
       ) : null}
 
-      {confirmAction ? (
+      {confirmDialog.message ? (
         <ConfirmDialog
-          {...confirmMessage(confirmAction, workspace)}
-          onConfirm={handleConfirm}
-          onCancel={handleCancelConfirm}
+          {...confirmDialog.message}
+          onConfirm={confirmDialog.confirm}
+          onCancel={confirmDialog.cancel}
         />
       ) : null}
     </div>

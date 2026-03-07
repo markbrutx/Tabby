@@ -3,7 +3,8 @@ use specta::Type;
 
 use crate::cli::CliArgs;
 use crate::domain::error::TabbyError;
-use crate::domain::types::{AppSettings, LayoutPreset, SplitDirection};
+use crate::domain::layout::{LayoutPreset, SplitDirection};
+use crate::domain::settings::AppSettings;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
