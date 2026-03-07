@@ -18,6 +18,22 @@ interface CreateTabOverrides {
   startupCommand?: string;
 }
 
+export interface PaneGroupConfig {
+  profileId: string;
+  workingDirectory: string;
+  customCommand?: string;
+  count: number;
+}
+
+export interface SetupWizardConfig {
+  groups: PaneGroupConfig[];
+}
+
+export interface WizardTab {
+  id: string;
+  title: string;
+}
+
 interface WorkspaceStore {
   workspace: WorkspaceSnapshot | null;
   settings: WorkspaceSettings | null;
@@ -25,8 +41,12 @@ interface WorkspaceStore {
   error: string | null;
   isHydrating: boolean;
   isWorking: boolean;
+  wizardTab: WizardTab | null;
   initialize: () => Promise<void>;
   createTab: (preset: LayoutPreset, overrides?: CreateTabOverrides) => Promise<void>;
+  createTabFromWizard: (config: SetupWizardConfig) => Promise<void>;
+  openSetupWizard: () => void;
+  closeSetupWizard: () => void;
   closeTab: (tabId: string) => Promise<void>;
   setActiveTab: (tabId: string) => Promise<void>;
   focusPane: (tabId: string, paneId: string) => Promise<void>;
@@ -46,15 +66,25 @@ type SetFn = (
     | ((state: WorkspaceStore) => Partial<WorkspaceStore>),
 ) => void;
 
+function makeWizardTab(workspace?: WorkspaceSnapshot | null): WizardTab {
+  const nextIndex = (workspace?.tabs.length ?? 0) + 1;
+  return {
+    id: `__wizard_${Date.now()}__`,
+    title: `Workspace ${nextIndex}`,
+  };
+}
+
 async function runWorkspaceMutation(
   set: SetFn,
   mutation: () => Promise<WorkspaceSnapshot>,
+  onSuccess?: (workspace: WorkspaceSnapshot) => Partial<WorkspaceStore>,
 ) {
   set({ isWorking: true });
 
   try {
     const workspace = await mutation();
-    set({ workspace, error: null, isWorking: false });
+    const extra = onSuccess?.(workspace) ?? {};
+    set({ workspace, error: null, isWorking: false, ...extra });
   } catch (error) {
     set({ error: asErrorMessage(error), isWorking: false });
   }
@@ -82,18 +112,24 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
     error: null,
     isHydrating: true,
     isWorking: false,
+    wizardTab: null,
 
     async initialize() {
       set({ isHydrating: true, error: null });
 
       try {
         const payload = await transport.bootstrapWorkspace();
+        const shouldShowWizard =
+          payload.workspace.tabs.length === 0;
         set({
           workspace: payload.workspace,
           settings: payload.settings,
           profiles: payload.profiles,
           error: null,
           isHydrating: false,
+          wizardTab: shouldShowWizard
+            ? makeWizardTab(payload.workspace)
+            : null,
         });
       } catch (error) {
         set({
@@ -125,8 +161,67 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
       );
     },
 
+    async createTabFromWizard(config) {
+      set({ isWorking: true });
+
+      try {
+        const paneConfigs = config.groups.flatMap((group) =>
+          Array.from({ length: group.count }, () => ({
+            profileId: group.profileId,
+            cwd: group.workingDirectory,
+            startupCommand: group.customCommand ?? null,
+          })),
+        );
+
+        const workspace = await transport.createTab({
+          preset: "1x1",
+          cwd: null,
+          profileId: null,
+          startupCommand: null,
+          paneConfigs,
+        });
+
+        const currentSettings = get().settings;
+        const settingsUpdate =
+          currentSettings && !currentSettings.hasCompletedOnboarding
+            ? {
+                settings: await transport.updateAppSettings({
+                  ...currentSettings,
+                  hasCompletedOnboarding: true,
+                }),
+              }
+            : {};
+
+        set({
+          workspace,
+          ...settingsUpdate,
+          error: null,
+          isWorking: false,
+          wizardTab: null,
+        });
+      } catch (error) {
+        set({ error: asErrorMessage(error), isWorking: false });
+      }
+    },
+
+    openSetupWizard() {
+      set({ wizardTab: makeWizardTab(get().workspace) });
+    },
+
+    closeSetupWizard() {
+      const workspace = get().workspace;
+      if (workspace && workspace.tabs.length === 0) {
+        return;
+      }
+      set({ wizardTab: null });
+    },
+
     async closeTab(tabId) {
-      await runWorkspaceMutation(set, () => transport.closeTab(tabId));
+      await runWorkspaceMutation(
+        set,
+        () => transport.closeTab(tabId),
+        (ws) => (ws.tabs.length === 0 ? { wizardTab: makeWizardTab(ws) } : {}),
+      );
     },
 
     async setActiveTab(tabId) {
@@ -154,7 +249,11 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
     },
 
     async closePane(paneId) {
-      await runWorkspaceMutation(set, () => transport.closePane(paneId));
+      await runWorkspaceMutation(
+        set,
+        () => transport.closePane(paneId),
+        (ws) => (ws.tabs.length === 0 ? { wizardTab: makeWizardTab(ws) } : {}),
+      );
     },
 
     async updateSettings(settings) {

@@ -34,12 +34,14 @@ impl LaunchRequest {
         Ok(Self {
             new_tab: cli_args.new_tab,
             preset,
-            cwd: cli_args
-                .cwd
-                .or_else(|| Some(settings.default_working_directory.clone())),
-            profile_id: cli_args
-                .profile
-                .or_else(|| Some(settings.default_profile_id.clone())),
+            cwd: cli_args.cwd.or_else(|| {
+                (!settings.default_working_directory.trim().is_empty())
+                    .then(|| settings.default_working_directory.clone())
+            }),
+            profile_id: cli_args.profile.or_else(|| {
+                (!settings.default_profile_id.trim().is_empty())
+                    .then(|| settings.default_profile_id.clone())
+            }),
             startup_command: cli_args.command.or_else(|| {
                 (!settings.default_custom_command.trim().is_empty())
                     .then(|| settings.default_custom_command.clone())
@@ -50,11 +52,21 @@ impl LaunchRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
+pub struct PaneConfig {
+    pub profile_id: String,
+    pub cwd: String,
+    pub startup_command: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct NewTabRequest {
     pub preset: LayoutPreset,
     pub cwd: Option<String>,
     pub profile_id: Option<String>,
     pub startup_command: Option<String>,
+    #[serde(default)]
+    pub pane_configs: Option<Vec<PaneConfig>>,
 }
 
 impl From<LaunchRequest> for NewTabRequest {
@@ -64,6 +76,7 @@ impl From<LaunchRequest> for NewTabRequest {
             cwd: value.cwd,
             profile_id: value.profile_id,
             startup_command: value.startup_command,
+            pane_configs: None,
         }
     }
 }

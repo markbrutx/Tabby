@@ -8,23 +8,31 @@ export function paneCountForPreset(preset: LayoutPreset): number {
   return PANE_COUNTS[preset];
 }
 
+function leaf(id: string): SplitNode {
+  return { type: "pane", paneId: id };
+}
+
+function hsplit(a: string, b: string): SplitNode {
+  return { type: "split", direction: "horizontal", ratio: 500, first: leaf(a), second: leaf(b) };
+}
+
+function hsplit3(a: string, b: string, c: string): SplitNode {
+  return {
+    type: "split", direction: "horizontal", ratio: 333,
+    first: leaf(a),
+    second: { type: "split", direction: "horizontal", ratio: 500, first: leaf(b), second: leaf(c) },
+  };
+}
+
+function hsplit4(a: string, b: string, c: string, d: string): SplitNode {
+  return {
+    type: "split", direction: "horizontal", ratio: 500,
+    first: hsplit(a, b),
+    second: hsplit(c, d),
+  };
+}
+
 export function treeFromPreset(preset: LayoutPreset, paneIds: string[]): SplitNode {
-  function leaf(id: string): SplitNode {
-    return { type: "pane", paneId: id };
-  }
-
-  function hsplit(a: string, b: string): SplitNode {
-    return { type: "split", direction: "horizontal", ratio: 500, first: leaf(a), second: leaf(b) };
-  }
-
-  function hsplit3(a: string, b: string, c: string): SplitNode {
-    return {
-      type: "split", direction: "horizontal", ratio: 333,
-      first: leaf(a),
-      second: { type: "split", direction: "horizontal", ratio: 500, first: leaf(b), second: leaf(c) },
-    };
-  }
-
   switch (preset) {
     case "1x1": return leaf(paneIds[0]);
     case "1x2": return hsplit(paneIds[0], paneIds[1]);
@@ -47,6 +55,58 @@ export function treeFromPreset(preset: LayoutPreset, paneIds: string[]): SplitNo
         second: hsplit3(paneIds[6], paneIds[7], paneIds[8]),
       },
     };
+  }
+}
+
+export function treeFromCount(paneIds: string[]): SplitNode {
+  const n = paneIds.length;
+  if (n < 1 || n > 9) {
+    throw new Error(`treeFromCount supports 1–9 panes, got ${n}`);
+  }
+
+  switch (n) {
+    case 1: return leaf(paneIds[0]);
+    case 2: return hsplit(paneIds[0], paneIds[1]);
+    case 3: return {
+      type: "split", direction: "horizontal", ratio: 333,
+      first: leaf(paneIds[0]),
+      second: hsplit(paneIds[1], paneIds[2]),
+    };
+    case 4: return {
+      type: "split", direction: "vertical", ratio: 500,
+      first: hsplit(paneIds[0], paneIds[1]),
+      second: hsplit(paneIds[2], paneIds[3]),
+    };
+    case 5: return {
+      type: "split", direction: "vertical", ratio: 500,
+      first: hsplit3(paneIds[0], paneIds[1], paneIds[2]),
+      second: hsplit(paneIds[3], paneIds[4]),
+    };
+    case 6: return {
+      type: "split", direction: "vertical", ratio: 500,
+      first: hsplit3(paneIds[0], paneIds[1], paneIds[2]),
+      second: hsplit3(paneIds[3], paneIds[4], paneIds[5]),
+    };
+    case 7: return {
+      type: "split", direction: "vertical", ratio: 500,
+      first: hsplit4(paneIds[0], paneIds[1], paneIds[2], paneIds[3]),
+      second: hsplit3(paneIds[4], paneIds[5], paneIds[6]),
+    };
+    case 8: return {
+      type: "split", direction: "vertical", ratio: 500,
+      first: hsplit4(paneIds[0], paneIds[1], paneIds[2], paneIds[3]),
+      second: hsplit4(paneIds[4], paneIds[5], paneIds[6], paneIds[7]),
+    };
+    case 9: return {
+      type: "split", direction: "vertical", ratio: 333,
+      first: hsplit3(paneIds[0], paneIds[1], paneIds[2]),
+      second: {
+        type: "split", direction: "vertical", ratio: 500,
+        first: hsplit3(paneIds[3], paneIds[4], paneIds[5]),
+        second: hsplit3(paneIds[6], paneIds[7], paneIds[8]),
+      },
+    };
+    default: throw new Error(`treeFromCount supports 1–9 panes, got ${n}`);
   }
 }
 
@@ -115,14 +175,22 @@ export function collectPaneIds(root: SplitNode): string[] {
   return [...collectPaneIds(root.first), ...collectPaneIds(root.second)];
 }
 
-type NavigationDirection = "up" | "down" | "left" | "right";
-
-interface Rect {
+export interface PaneRect {
   x: number;
   y: number;
   w: number;
   h: number;
 }
+
+export function computePaneRects(root: SplitNode): Map<string, PaneRect> {
+  const rects = new Map<string, PaneRect>();
+  buildRects(root, { x: 0, y: 0, w: 1, h: 1 }, rects);
+  return rects;
+}
+
+type NavigationDirection = "up" | "down" | "left" | "right";
+
+type Rect = PaneRect;
 
 function buildRects(
   node: SplitNode,

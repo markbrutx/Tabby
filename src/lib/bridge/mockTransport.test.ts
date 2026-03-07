@@ -1,9 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { createMockTransport } from "./mockTransport";
 
+async function setupOnboarded() {
+  const transport = createMockTransport();
+  const defaults = await transport.getAppSettings();
+  await transport.updateAppSettings({
+    ...defaults,
+    hasCompletedOnboarding: true,
+    defaultProfileId: "terminal",
+    defaultWorkingDirectory: "~",
+  });
+  return transport;
+}
+
 describe("mockTransport", () => {
-  it("bootstraps with default settings and one tab", async () => {
+  it("bootstraps with empty workspace when onboarding not completed", async () => {
     const transport = createMockTransport();
+    const result = await transport.bootstrapWorkspace();
+
+    expect(result.workspace.tabs).toHaveLength(0);
+    expect(result.settings.hasCompletedOnboarding).toBe(false);
+    expect(result.settings.defaultProfileId).toBe("");
+    expect(result.settings.defaultWorkingDirectory).toBe("");
+    expect(result.profiles).toHaveLength(4);
+  });
+
+  it("bootstraps with one tab when onboarding completed", async () => {
+    const transport = await setupOnboarded();
     const result = await transport.bootstrapWorkspace();
 
     expect(result.workspace.tabs).toHaveLength(1);
@@ -13,7 +36,7 @@ describe("mockTransport", () => {
   });
 
   it("creates a tab with the correct pane count for preset", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     await transport.bootstrapWorkspace();
 
     const snapshot = await transport.createTab({
@@ -31,7 +54,7 @@ describe("mockTransport", () => {
   });
 
   it("closes a tab and falls back to previous", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
     const firstTabId = bootstrap.workspace.tabs[0].id;
 
@@ -50,7 +73,7 @@ describe("mockTransport", () => {
   });
 
   it("creates a new tab when closing the last tab", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
     const tabId = bootstrap.workspace.tabs[0].id;
 
@@ -61,7 +84,7 @@ describe("mockTransport", () => {
   });
 
   it("switches active tab", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
     const firstTabId = bootstrap.workspace.tabs[0].id;
 
@@ -77,7 +100,7 @@ describe("mockTransport", () => {
   });
 
   it("updates pane profile", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
     const paneId = bootstrap.workspace.tabs[0].panes[0].id;
 
@@ -93,7 +116,7 @@ describe("mockTransport", () => {
   });
 
   it("updates pane cwd", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
     const paneId = bootstrap.workspace.tabs[0].panes[0].id;
 
@@ -107,7 +130,7 @@ describe("mockTransport", () => {
   });
 
   it("restarts a pane with new session id", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
     const pane = bootstrap.workspace.tabs[0].panes[0];
     const oldSessionId = pane.sessionId;
@@ -137,7 +160,7 @@ describe("mockTransport", () => {
   });
 
   it("emits pty output to listeners", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const chunks: string[] = [];
 
     await transport.listenToPtyOutput((payload) => {
@@ -153,7 +176,7 @@ describe("mockTransport", () => {
   });
 
   it("unlisten stops receiving output", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const chunks: string[] = [];
 
     const unlisten = await transport.listenToPtyOutput((payload) => {
@@ -170,7 +193,7 @@ describe("mockTransport", () => {
   });
 
   it("custom profile requires startup command", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
     const paneId = bootstrap.workspace.tabs[0].panes[0].id;
 
@@ -186,7 +209,7 @@ describe("mockTransport", () => {
   });
 
   it("splits a pane and adds new pane to tab", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
     const paneId = bootstrap.workspace.tabs[0].panes[0].id;
 
@@ -202,8 +225,75 @@ describe("mockTransport", () => {
     expect(afterSplit.tabs[0].layout.type).toBe("split");
   });
 
+  it("creates a tab with per-pane configs", async () => {
+    const transport = await setupOnboarded();
+    await transport.bootstrapWorkspace();
+
+    const snapshot = await transport.createTab({
+      preset: "1x2",
+      cwd: null,
+      profileId: null,
+      startupCommand: null,
+      paneConfigs: [
+        { profileId: "terminal", cwd: "/projects/a", startupCommand: null },
+        { profileId: "claude", cwd: "/projects/b", startupCommand: null },
+      ],
+    });
+
+    const tab = snapshot.tabs[1];
+    expect(tab.panes).toHaveLength(2);
+    expect(tab.panes[0].profileId).toBe("terminal");
+    expect(tab.panes[0].cwd).toBe("/projects/a");
+    expect(tab.panes[1].profileId).toBe("claude");
+    expect(tab.panes[1].cwd).toBe("/projects/b");
+  });
+
+  it("creates a tab with uniform config when paneConfigs is absent", async () => {
+    const transport = await setupOnboarded();
+    await transport.bootstrapWorkspace();
+
+    const snapshot = await transport.createTab({
+      preset: "1x2",
+      cwd: "/uniform",
+      profileId: "terminal",
+      startupCommand: null,
+    });
+
+    const tab = snapshot.tabs[1];
+    expect(tab.panes).toHaveLength(2);
+    expect(tab.panes[0].cwd).toBe("/uniform");
+    expect(tab.panes[1].cwd).toBe("/uniform");
+    expect(tab.panes[0].profileId).toBe("terminal");
+    expect(tab.panes[1].profileId).toBe("terminal");
+  });
+
+  it("creates a tab with arbitrary paneConfigs count (e.g. 5)", async () => {
+    const transport = await setupOnboarded();
+    await transport.bootstrapWorkspace();
+
+    const snapshot = await transport.createTab({
+      preset: "1x1",
+      cwd: null,
+      profileId: null,
+      startupCommand: null,
+      paneConfigs: [
+        { profileId: "terminal", cwd: "/a", startupCommand: null },
+        { profileId: "terminal", cwd: "/a", startupCommand: null },
+        { profileId: "claude", cwd: "/b", startupCommand: null },
+        { profileId: "claude", cwd: "/b", startupCommand: null },
+        { profileId: "claude", cwd: "/b", startupCommand: null },
+      ],
+    });
+
+    const tab = snapshot.tabs[1];
+    expect(tab.panes).toHaveLength(5);
+    expect(tab.panes[0].cwd).toBe("/a");
+    expect(tab.panes[4].cwd).toBe("/b");
+    expect(tab.layout.type).toBe("split");
+  });
+
   it("closes a pane and collapses layout", async () => {
-    const transport = createMockTransport();
+    const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
     const paneId = bootstrap.workspace.tabs[0].panes[0].id;
 

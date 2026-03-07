@@ -58,12 +58,7 @@ impl SettingsManager {
     }
 
     fn default_settings(&self) -> AppSettings {
-        let home = std::env::var("HOME")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| String::from("/"));
-
-        default_settings(home)
+        default_settings()
     }
 
     fn validate_settings(&self, settings: &AppSettings) -> Result<(), TabbyError> {

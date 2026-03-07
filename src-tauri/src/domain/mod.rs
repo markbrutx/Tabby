@@ -8,7 +8,7 @@ pub mod types;
 #[cfg(test)]
 mod tests {
     use crate::cli::CliArgs;
-    use crate::domain::commands::LaunchRequest;
+    use crate::domain::commands::{LaunchRequest, NewTabRequest, PaneConfig};
     use crate::domain::snapshot::{PaneRuntimeStatus, TabSnapshot};
     use crate::domain::split_tree::tree_from_preset;
     use crate::domain::types::{default_settings, LayoutPreset, PaneSeed};
@@ -25,14 +25,68 @@ mod tests {
     }
 
     #[test]
-    fn launch_request_uses_settings_defaults_when_cli_is_empty() {
-        let settings = default_settings(String::from("/Users/mark"));
+    fn launch_request_returns_none_when_defaults_are_empty() {
+        let settings = default_settings();
+        let request = LaunchRequest::from_cli_args(CliArgs::default(), &settings)
+            .expect("launch request should be created");
+
+        assert_eq!(request.preset, LayoutPreset::OneByOne);
+        assert_eq!(request.cwd, None);
+        assert_eq!(request.profile_id, None);
+    }
+
+    #[test]
+    fn launch_request_uses_settings_defaults_when_set() {
+        let mut settings = default_settings();
+        settings.default_working_directory = String::from("/Users/mark");
+        settings.default_profile_id = String::from("terminal");
+
         let request = LaunchRequest::from_cli_args(CliArgs::default(), &settings)
             .expect("launch request should be created");
 
         assert_eq!(request.preset, LayoutPreset::OneByOne);
         assert_eq!(request.cwd.as_deref(), Some("/Users/mark"));
         assert_eq!(request.profile_id.as_deref(), Some("terminal"));
+    }
+
+    #[test]
+    fn new_tab_request_backward_compat_defaults_pane_configs_to_none() {
+        let json = r#"{"preset":"1x1","cwd":null,"profileId":null,"startupCommand":null}"#;
+        let request: NewTabRequest = serde_json::from_str(json).expect("should deserialize");
+        assert_eq!(request.pane_configs, None);
+    }
+
+    #[test]
+    fn new_tab_request_deserializes_with_pane_configs() {
+        let json = r#"{
+            "preset": "1x2",
+            "cwd": null,
+            "profileId": null,
+            "startupCommand": null,
+            "paneConfigs": [
+                {"profileId": "terminal", "cwd": "/tmp/a", "startupCommand": null},
+                {"profileId": "claude", "cwd": "/tmp/b", "startupCommand": null}
+            ]
+        }"#;
+        let request: NewTabRequest = serde_json::from_str(json).expect("should deserialize");
+        let configs = request.pane_configs.expect("should have pane_configs");
+        assert_eq!(configs.len(), 2);
+        assert_eq!(configs[0].profile_id, "terminal");
+        assert_eq!(configs[0].cwd, "/tmp/a");
+        assert_eq!(configs[1].profile_id, "claude");
+        assert_eq!(configs[1].cwd, "/tmp/b");
+    }
+
+    #[test]
+    fn pane_config_serializes_correctly() {
+        let config = PaneConfig {
+            profile_id: String::from("terminal"),
+            cwd: String::from("/home/user"),
+            startup_command: Some(String::from("npm start")),
+        };
+        let json = serde_json::to_string(&config).expect("should serialize");
+        assert!(json.contains("profileId"));
+        assert!(json.contains("npm start"));
     }
 
     #[test]

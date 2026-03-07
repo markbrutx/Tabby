@@ -1,13 +1,18 @@
-import { Plus, Settings, X } from "lucide-react";
-import type { TabSnapshot } from "@/features/workspace/domain";
+import { HelpCircle, Plus, Settings, X } from "lucide-react";
+
+interface TabEntry {
+  id: string;
+  title: string;
+}
 
 interface TabBarProps {
-  tabs: TabSnapshot[];
+  tabs: TabEntry[];
   activeTabId: string;
   onSelect: (tabId: string) => void;
   onClose: (tabId: string) => void;
   onNewTab: () => void;
   onOpenSettings: () => void;
+  onOpenShortcuts: () => void;
 }
 
 export function TabBar({
@@ -17,6 +22,7 @@ export function TabBar({
   onClose,
   onNewTab,
   onOpenSettings,
+  onOpenShortcuts,
 }: TabBarProps) {
   return (
     <div className="flex h-8 shrink-0 select-none items-center gap-0 overflow-x-auto bg-[var(--color-surface)] text-xs">
@@ -68,6 +74,14 @@ export function TabBar({
         <Plus size={14} />
       </button>
       <div className="flex-1" />
+      <button
+        data-testid="shortcuts-button"
+        className="flex h-full items-center px-3 text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+        onClick={onOpenShortcuts}
+        aria-label="Keyboard shortcuts"
+      >
+        <HelpCircle size={14} />
+      </button>
       <button
         data-testid="settings-button"
         className="flex h-full items-center px-3 text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"

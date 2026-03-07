@@ -9,7 +9,7 @@ import {
 
 interface WorkspaceShortcutsProps {
   workspace: WorkspaceSnapshot | null;
-  onCreateTab: () => Promise<void>;
+  onCreateTab: () => void | Promise<void>;
   onCloseTab: (tabId: string) => Promise<void>;
   onClosePane: (paneId: string) => Promise<void>;
   onSelectTab: (tabId: string) => Promise<void>;
@@ -18,6 +18,7 @@ interface WorkspaceShortcutsProps {
   onSplitHorizontal: (paneId: string) => void;
   onSplitVertical: (paneId: string) => void;
   onOpenSettings: () => void;
+  onOpenShortcuts: () => void;
 }
 
 export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
@@ -39,6 +40,7 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
         onSplitHorizontal,
         onSplitVertical,
         onOpenSettings,
+        onOpenShortcuts,
       } = propsRef.current;
 
       if (!workspace || !event.metaKey) {
@@ -56,6 +58,13 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
       if (event.key === ",") {
         event.preventDefault();
         onOpenSettings();
+        return;
+      }
+
+      // Cmd+/ — Shortcuts help
+      if (event.key === "/") {
+        event.preventDefault();
+        onOpenShortcuts();
         return;
       }
 

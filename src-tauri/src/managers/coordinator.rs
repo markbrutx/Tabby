@@ -7,7 +7,7 @@ use crate::domain::commands::{NewTabRequest, SplitPaneRequest};
 use crate::domain::error::TabbyError;
 use crate::domain::events::{PaneLifecycleEvent, WorkspaceChangedEvent};
 use crate::domain::snapshot::{PaneRuntimeStatus, WorkspaceSnapshot};
-use crate::domain::split_tree::tree_from_preset;
+use crate::domain::split_tree::{tree_from_count, tree_from_preset};
 use crate::domain::types::{
     create_pane_id, resolve_profile, AppSettings, PaneSeed, ResolvedProfile, CUSTOM_PROFILE_ID,
 };
@@ -43,42 +43,28 @@ impl Coordinator {
         settings: &AppSettings,
     ) -> Result<WorkspaceSnapshot, TabbyError> {
         let preset = request.preset;
-        let profile_id = request
-            .profile_id
-            .as_deref()
-            .unwrap_or(&settings.default_profile_id);
-        let resolved = Self::resolve_effective_profile(
-            profile_id,
-            request.startup_command.clone(),
-            &settings.default_custom_command,
-        )?;
-        let cwd = request
-            .cwd
-            .as_deref()
-            .filter(|v| !v.trim().is_empty())
-            .unwrap_or(&settings.default_working_directory);
 
-        let pane_count = usize::from(preset.pane_count());
-        let mut seeds = Vec::with_capacity(pane_count);
-
-        for _ in 0..pane_count {
-            let pane_id = create_pane_id();
-            let session_id = self.spawn_pty(&pane_id, cwd, &resolved)?;
-
-            self.emit_lifecycle(&pane_id, Some(&session_id), PaneRuntimeStatus::Running, None);
-
-            seeds.push(PaneSeed {
-                pane_id,
-                session_id,
-                cwd: String::from(cwd),
-                profile_id: resolved.id.clone(),
-                profile_label: resolved.label.clone(),
-                startup_command: resolved.startup_command.clone(),
-            });
-        }
+        let seeds = match &request.pane_configs {
+            Some(configs) => {
+                if configs.is_empty() || configs.len() > 9 {
+                    return Err(TabbyError::Validation(format!(
+                        "pane_configs length must be 1–9, got {}",
+                        configs.len(),
+                    )));
+                }
+                self.seeds_from_pane_configs(configs, &settings.default_custom_command)?
+            }
+            None => {
+                let pane_count = usize::from(preset.pane_count());
+                self.seeds_uniform(request, settings, pane_count)?
+            }
+        };
 
         let pane_ids: Vec<String> = seeds.iter().map(|s| s.pane_id.clone()).collect();
-        let layout = tree_from_preset(preset, &pane_ids);
+        let layout = match &request.pane_configs {
+            Some(_) => tree_from_count(&pane_ids),
+            None => tree_from_preset(preset, &pane_ids),
+        };
         let snapshot = self.tab_manager.create_tab(layout, seeds)?;
         self.emit_workspace_changed(&snapshot);
 
@@ -94,25 +80,11 @@ impl Coordinator {
     pub fn close_tab(
         &self,
         tab_id: &str,
-        settings: &AppSettings,
     ) -> Result<WorkspaceSnapshot, TabbyError> {
         let (snapshot, session_ids) = self.tab_manager.close_tab(tab_id)?;
         self.pty_manager.kill_many(&session_ids);
 
         info!(tab_id, killed_sessions = session_ids.len(), "Tab closed");
-
-        if snapshot.tabs.is_empty() {
-            let fresh = self.create_tab(
-                &NewTabRequest {
-                    preset: settings.default_layout,
-                    cwd: Some(settings.default_working_directory.clone()),
-                    profile_id: Some(settings.default_profile_id.clone()),
-                    startup_command: Some(settings.default_custom_command.clone()),
-                },
-                settings,
-            )?;
-            return Ok(fresh);
-        }
 
         self.emit_workspace_changed(&snapshot);
         Ok(snapshot)
@@ -180,7 +152,6 @@ impl Coordinator {
     pub fn close_pane(
         &self,
         pane_id: &str,
-        settings: &AppSettings,
     ) -> Result<WorkspaceSnapshot, TabbyError> {
         let (snapshot, session_id, removed_tab_id) =
             self.tab_manager.close_pane(pane_id)?;
@@ -188,19 +159,6 @@ impl Coordinator {
         self.kill_session_quiet(&session_id);
 
         info!(pane_id, session_id, ?removed_tab_id, "Pane closed");
-
-        if snapshot.tabs.is_empty() {
-            let fresh = self.create_tab(
-                &NewTabRequest {
-                    preset: settings.default_layout,
-                    cwd: Some(settings.default_working_directory.clone()),
-                    profile_id: Some(settings.default_profile_id.clone()),
-                    startup_command: Some(settings.default_custom_command.clone()),
-                },
-                settings,
-            )?;
-            return Ok(fresh);
-        }
 
         self.emit_workspace_changed(&snapshot);
         Ok(snapshot)
@@ -316,6 +274,79 @@ impl Coordinator {
     ) -> Result<(), TabbyError> {
         let session_id = self.tab_manager.session_id_for_pane(pane_id)?;
         self.pty_manager.resize(&session_id, cols, rows)
+    }
+
+    fn seeds_uniform(
+        &self,
+        request: &NewTabRequest,
+        settings: &AppSettings,
+        pane_count: usize,
+    ) -> Result<Vec<PaneSeed>, TabbyError> {
+        let profile_id = request
+            .profile_id
+            .as_deref()
+            .unwrap_or(&settings.default_profile_id);
+        let resolved = Self::resolve_effective_profile(
+            profile_id,
+            request.startup_command.clone(),
+            &settings.default_custom_command,
+        )?;
+        let cwd = request
+            .cwd
+            .as_deref()
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or(&settings.default_working_directory);
+
+        let mut seeds = Vec::with_capacity(pane_count);
+        for _ in 0..pane_count {
+            let pane_id = create_pane_id();
+            let session_id = self.spawn_pty(&pane_id, cwd, &resolved)?;
+            self.emit_lifecycle(&pane_id, Some(&session_id), PaneRuntimeStatus::Running, None);
+            seeds.push(PaneSeed {
+                pane_id,
+                session_id,
+                cwd: String::from(cwd),
+                profile_id: resolved.id.clone(),
+                profile_label: resolved.label.clone(),
+                startup_command: resolved.startup_command.clone(),
+            });
+        }
+        Ok(seeds)
+    }
+
+    fn seeds_from_pane_configs(
+        &self,
+        configs: &[crate::domain::commands::PaneConfig],
+        fallback_custom_command: &str,
+    ) -> Result<Vec<PaneSeed>, TabbyError> {
+        let mut seeds = Vec::with_capacity(configs.len());
+        for config in configs {
+            let resolved = Self::resolve_effective_profile(
+                &config.profile_id,
+                config.startup_command.clone(),
+                fallback_custom_command,
+            )?;
+            let cwd = if config.cwd.trim().is_empty() {
+                return Err(TabbyError::Validation(String::from(
+                    "Pane config cwd cannot be empty",
+                )));
+            } else {
+                &config.cwd
+            };
+
+            let pane_id = create_pane_id();
+            let session_id = self.spawn_pty(&pane_id, cwd, &resolved)?;
+            self.emit_lifecycle(&pane_id, Some(&session_id), PaneRuntimeStatus::Running, None);
+            seeds.push(PaneSeed {
+                pane_id,
+                session_id,
+                cwd: String::from(cwd),
+                profile_id: resolved.id.clone(),
+                profile_label: resolved.label.clone(),
+                startup_command: resolved.startup_command.clone(),
+            });
+        }
+        Ok(seeds)
     }
 
     fn resolve_effective_profile(

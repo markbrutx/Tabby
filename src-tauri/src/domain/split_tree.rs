@@ -170,6 +170,71 @@ fn hsplit3(a: &str, b: &str, c: &str) -> SplitNode {
     }
 }
 
+fn hsplit4(a: &str, b: &str, c: &str, d: &str) -> SplitNode {
+    SplitNode::Split {
+        direction: SplitDirection::Horizontal,
+        ratio: 500,
+        first: Box::new(hsplit(a, b)),
+        second: Box::new(hsplit(c, d)),
+    }
+}
+
+pub fn tree_from_count(pane_ids: &[String]) -> SplitNode {
+    match pane_ids.len() {
+        0 => panic!("tree_from_count requires at least 1 pane"),
+        1 => leaf(&pane_ids[0]),
+        2 => hsplit(&pane_ids[0], &pane_ids[1]),
+        3 => SplitNode::Split {
+            direction: SplitDirection::Horizontal,
+            ratio: 333,
+            first: Box::new(leaf(&pane_ids[0])),
+            second: Box::new(hsplit(&pane_ids[1], &pane_ids[2])),
+        },
+        4 => SplitNode::Split {
+            direction: SplitDirection::Vertical,
+            ratio: 500,
+            first: Box::new(hsplit(&pane_ids[0], &pane_ids[1])),
+            second: Box::new(hsplit(&pane_ids[2], &pane_ids[3])),
+        },
+        5 => SplitNode::Split {
+            direction: SplitDirection::Vertical,
+            ratio: 500,
+            first: Box::new(hsplit3(&pane_ids[0], &pane_ids[1], &pane_ids[2])),
+            second: Box::new(hsplit(&pane_ids[3], &pane_ids[4])),
+        },
+        6 => SplitNode::Split {
+            direction: SplitDirection::Vertical,
+            ratio: 500,
+            first: Box::new(hsplit3(&pane_ids[0], &pane_ids[1], &pane_ids[2])),
+            second: Box::new(hsplit3(&pane_ids[3], &pane_ids[4], &pane_ids[5])),
+        },
+        7 => SplitNode::Split {
+            direction: SplitDirection::Vertical,
+            ratio: 500,
+            first: Box::new(hsplit4(&pane_ids[0], &pane_ids[1], &pane_ids[2], &pane_ids[3])),
+            second: Box::new(hsplit3(&pane_ids[4], &pane_ids[5], &pane_ids[6])),
+        },
+        8 => SplitNode::Split {
+            direction: SplitDirection::Vertical,
+            ratio: 500,
+            first: Box::new(hsplit4(&pane_ids[0], &pane_ids[1], &pane_ids[2], &pane_ids[3])),
+            second: Box::new(hsplit4(&pane_ids[4], &pane_ids[5], &pane_ids[6], &pane_ids[7])),
+        },
+        9 => SplitNode::Split {
+            direction: SplitDirection::Vertical,
+            ratio: 333,
+            first: Box::new(hsplit3(&pane_ids[0], &pane_ids[1], &pane_ids[2])),
+            second: Box::new(SplitNode::Split {
+                direction: SplitDirection::Vertical,
+                ratio: 500,
+                first: Box::new(hsplit3(&pane_ids[3], &pane_ids[4], &pane_ids[5])),
+                second: Box::new(hsplit3(&pane_ids[6], &pane_ids[7], &pane_ids[8])),
+            }),
+        },
+        n => panic!("tree_from_count supports 1–9 panes, got {n}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,6 +310,80 @@ mod tests {
             .expect("close ok")
             .expect("tree remains");
         assert_eq!(collect_pane_ids(&after_close), vec!["p1"]);
+    }
+
+    #[test]
+    fn tree_from_count_1() {
+        let tree = tree_from_count(&ids(1));
+        assert_eq!(collect_pane_ids(&tree), vec!["p1"]);
+    }
+
+    #[test]
+    fn tree_from_count_2() {
+        let tree = tree_from_count(&ids(2));
+        assert_eq!(collect_pane_ids(&tree), vec!["p1", "p2"]);
+    }
+
+    #[test]
+    fn tree_from_count_3() {
+        let tree = tree_from_count(&ids(3));
+        assert_eq!(collect_pane_ids(&tree), vec!["p1", "p2", "p3"]);
+    }
+
+    #[test]
+    fn tree_from_count_4() {
+        let tree = tree_from_count(&ids(4));
+        assert_eq!(collect_pane_ids(&tree), vec!["p1", "p2", "p3", "p4"]);
+    }
+
+    #[test]
+    fn tree_from_count_5() {
+        let tree = tree_from_count(&ids(5));
+        let panes = collect_pane_ids(&tree);
+        assert_eq!(panes.len(), 5);
+        assert_eq!(panes, vec!["p1", "p2", "p3", "p4", "p5"]);
+    }
+
+    #[test]
+    fn tree_from_count_6() {
+        let tree = tree_from_count(&ids(6));
+        let panes = collect_pane_ids(&tree);
+        assert_eq!(panes.len(), 6);
+    }
+
+    #[test]
+    fn tree_from_count_7() {
+        let tree = tree_from_count(&ids(7));
+        let panes = collect_pane_ids(&tree);
+        assert_eq!(panes.len(), 7);
+    }
+
+    #[test]
+    fn tree_from_count_8() {
+        let tree = tree_from_count(&ids(8));
+        let panes = collect_pane_ids(&tree);
+        assert_eq!(panes.len(), 8);
+    }
+
+    #[test]
+    fn tree_from_count_9() {
+        let tree = tree_from_count(&ids(9));
+        let panes = collect_pane_ids(&tree);
+        assert_eq!(panes.len(), 9);
+        assert_eq!(panes[0], "p1");
+        assert_eq!(panes[8], "p9");
+    }
+
+    #[test]
+    #[should_panic(expected = "at least 1 pane")]
+    fn tree_from_count_0_panics() {
+        tree_from_count(&ids(0));
+    }
+
+    #[test]
+    #[should_panic(expected = "1–9 panes")]
+    fn tree_from_count_10_panics() {
+        tree_from_count(&ids(10));
     }
 
     #[test]

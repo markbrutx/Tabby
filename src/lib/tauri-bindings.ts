@@ -140,7 +140,8 @@ async resizePty(request: PtyResizeRequest) : Promise<Result<null, TabbyError>> {
 export type AppSettings = { defaultLayout: LayoutPreset; defaultProfileId: string; defaultWorkingDirectory: string; defaultCustomCommand: string; fontSize: number; theme: ThemeMode; launchFullscreen: boolean; hasCompletedOnboarding?: boolean }
 export type BootstrapSnapshot = { workspace: WorkspaceSnapshot; settings: AppSettings; profiles: PaneProfile[] }
 export type LayoutPreset = "1x1" | "1x2" | "2x2" | "2x3" | "3x3"
-export type NewTabRequest = { preset: LayoutPreset; cwd: string | null; profileId: string | null; startupCommand: string | null }
+export type NewTabRequest = { preset: LayoutPreset; cwd: string | null; profileId: string | null; startupCommand: string | null; paneConfigs?: PaneConfig[] | null }
+export type PaneConfig = { profileId: string; cwd: string; startupCommand: string | null }
 export type PaneLifecycleEvent = { paneId: string; sessionId: string | null; status: PaneRuntimeStatus; errorMessage: string | null }
 export type PaneProfile = { id: string; label: string; description: string; startupCommand: string | null }
 export type PaneRuntimeStatus = "starting" | "running" | "restarting" | "exited" | "failed"

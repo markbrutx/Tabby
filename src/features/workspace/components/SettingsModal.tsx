@@ -1,5 +1,6 @@
 import { FolderOpen, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -47,16 +48,7 @@ export function SettingsModal({
     setDraft(settings);
   }, [settings]);
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   async function handlePickDirectory() {
     const selected = await pickDirectory(draft.defaultWorkingDirectory);
@@ -107,7 +99,7 @@ export function SettingsModal({
         <div className="mt-5 space-y-4">
           <label className="block">
             <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
-              Default layout (Cmd+T)
+              Default layout
             </span>
             <Select
               data-testid="settings-layout"
@@ -141,6 +133,7 @@ export function SettingsModal({
                 }))
               }
             >
+              <option value="">No default (ask each time)</option>
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
                   {profile.label}
@@ -182,7 +175,7 @@ export function SettingsModal({
                     defaultWorkingDirectory: event.target.value,
                   }))
                 }
-                placeholder="~/projects"
+                placeholder="Not set — you'll choose each time"
               />
               <Button variant="secondary" onClick={() => void handlePickDirectory()}>
                 <FolderOpen size={14} />

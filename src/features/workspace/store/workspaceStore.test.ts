@@ -74,6 +74,7 @@ function createTransportMock(overrides: Partial<WorkspaceTransport> = {}): Works
     resizePty: vi.fn().mockResolvedValue(undefined),
     getAppSettings: vi.fn().mockResolvedValue(settings),
     updateAppSettings: vi.fn().mockResolvedValue(settings),
+    resetAppSettings: vi.fn().mockResolvedValue(settings),
     listenToPtyOutput: vi.fn().mockResolvedValue(() => undefined),
     ...overrides,
   };
@@ -105,6 +106,53 @@ describe("createWorkspaceStore", () => {
       cwd: settings.defaultWorkingDirectory,
       profileId: settings.defaultProfileId,
       startupCommand: null,
+    });
+  });
+
+  it("createTabFromWizard expands groups into flat paneConfigs", async () => {
+    const transport = createTransportMock();
+    const store = createWorkspaceStore(transport);
+    await store.getState().initialize();
+
+    await store.getState().createTabFromWizard({
+      groups: [
+        { profileId: "terminal", workingDirectory: "/a", count: 2 },
+        { profileId: "claude", workingDirectory: "/b", count: 1 },
+      ],
+    });
+
+    expect(transport.createTab).toHaveBeenCalledWith({
+      preset: "1x1",
+      cwd: null,
+      profileId: null,
+      startupCommand: null,
+      paneConfigs: [
+        { profileId: "terminal", cwd: "/a", startupCommand: null },
+        { profileId: "terminal", cwd: "/a", startupCommand: null },
+        { profileId: "claude", cwd: "/b", startupCommand: null },
+      ],
+    });
+  });
+
+  it("createTabFromWizard sends customCommand for custom profile", async () => {
+    const transport = createTransportMock();
+    const store = createWorkspaceStore(transport);
+    await store.getState().initialize();
+
+    await store.getState().createTabFromWizard({
+      groups: [
+        { profileId: "custom", workingDirectory: "/c", customCommand: "npm dev", count: 1 },
+      ],
+    });
+
+    expect(transport.createTab).toHaveBeenCalledWith({
+      preset: "1x1",
+      cwd: null,
+      profileId: null,
+      startupCommand: null,
+      paneConfigs: [
+        { profileId: "custom", cwd: "/c", startupCommand: "npm dev" },
+      ],
     });
   });
 

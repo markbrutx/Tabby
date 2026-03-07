@@ -3,14 +3,20 @@ import { createWorkspaceStore } from "./workspaceStore";
 import { createMockTransport } from "@/lib/bridge/mockTransport";
 
 describe("workspaceStore + mockTransport integration", () => {
-  function setup() {
+  async function setup() {
     const transport = createMockTransport();
+    await transport.updateAppSettings({
+      ...(await transport.getAppSettings()),
+      hasCompletedOnboarding: true,
+      defaultProfileId: "terminal",
+      defaultWorkingDirectory: "~",
+    });
     const store = createWorkspaceStore(transport);
     return { store, transport };
   }
 
   it("initializes with a default 1x1 tab", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     const { workspace, settings, profiles, isHydrating } = store.getState();
@@ -24,7 +30,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("creates a new tab and switches to it", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
     await store.getState().createTab("1x2");
 
@@ -35,7 +41,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("closes a tab and falls back", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
     await store.getState().createTab("1x1");
 
@@ -50,7 +56,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("closing last tab auto-creates a fresh one", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
     const tabId = store.getState().workspace!.tabs[0].id;
 
@@ -62,7 +68,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("switches tabs with setActiveTab", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
     const firstTabId = store.getState().workspace!.tabs[0].id;
 
@@ -73,7 +79,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("focuses pane within active tab", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
     await store.getState().createTab("1x2");
 
@@ -87,7 +93,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("updates pane profile to claude", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     const paneId = store.getState().workspace!.tabs[0].panes[0].id;
@@ -104,7 +110,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("updates pane working directory", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     const paneId = store.getState().workspace!.tabs[0].panes[0].id;
@@ -119,7 +125,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("restarts pane with a new session", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     const pane = store.getState().workspace!.tabs[0].panes[0];
@@ -133,7 +139,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("saves and applies settings", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     const current = store.getState().settings!;
@@ -149,7 +155,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("creates custom profile tab with startup command", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     const paneId = store.getState().workspace!.tabs[0].panes[0].id;
@@ -164,8 +170,31 @@ describe("workspaceStore + mockTransport integration", () => {
     expect(pane.startupCommand).toBe("npm run dev");
   });
 
+  it("creates tab from wizard with group-based config", async () => {
+    const { store } = await setup();
+    await store.getState().initialize();
+
+    await store.getState().createTabFromWizard({
+      groups: [
+        { profileId: "terminal", workingDirectory: "/project/a", count: 2 },
+        { profileId: "claude", workingDirectory: "/project/b", count: 1 },
+      ],
+    });
+
+    const { workspace } = store.getState();
+    expect(workspace!.tabs).toHaveLength(2);
+    const newTab = workspace!.tabs[1];
+    expect(newTab.panes).toHaveLength(3);
+    expect(newTab.panes[0].profileId).toBe("terminal");
+    expect(newTab.panes[0].cwd).toBe("/project/a");
+    expect(newTab.panes[1].profileId).toBe("terminal");
+    expect(newTab.panes[1].cwd).toBe("/project/a");
+    expect(newTab.panes[2].profileId).toBe("claude");
+    expect(newTab.panes[2].cwd).toBe("/project/b");
+  });
+
   it("clears error state", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     store.getState().clearError();
@@ -173,7 +202,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("handles multiple tab create/close cycles", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     await store.getState().createTab("1x1");
@@ -189,7 +218,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("splits a pane horizontally", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     const paneId = store.getState().workspace!.tabs[0].panes[0].id;
@@ -207,7 +236,7 @@ describe("workspaceStore + mockTransport integration", () => {
   });
 
   it("closes a pane (not the last one)", async () => {
-    const { store } = setup();
+    const { store } = await setup();
     await store.getState().initialize();
 
     const paneId = store.getState().workspace!.tabs[0].panes[0].id;

@@ -112,25 +112,31 @@ pub fn built_in_profiles() -> Vec<PaneProfile> {
         PaneProfile {
             id: String::from(TERMINAL_PROFILE_ID),
             label: String::from("Terminal"),
-            description: String::from("Pure login shell"),
+            description: String::from(
+                "Standard shell session \u{2014} your system shell (zsh, bash)",
+            ),
             startup_command: None,
         },
         PaneProfile {
             id: String::from("claude"),
             label: String::from("Claude Code"),
-            description: String::from("Open Claude Code in a fresh shell"),
+            description: String::from(
+                "Anthropic AI coding assistant \u{2014} launches \u{2018}claude\u{2019} CLI",
+            ),
             startup_command: Some(String::from("claude")),
         },
         PaneProfile {
             id: String::from("codex"),
             label: String::from("Codex"),
-            description: String::from("Open Codex in a fresh shell"),
+            description: String::from(
+                "OpenAI Codex agent \u{2014} launches \u{2018}codex\u{2019} CLI",
+            ),
             startup_command: Some(String::from("codex")),
         },
         PaneProfile {
             id: String::from(CUSTOM_PROFILE_ID),
             label: String::from("Custom"),
-            description: String::from("Run an arbitrary shell command"),
+            description: String::from("Run any command of your choice"),
             startup_command: None,
         },
     ]
@@ -167,16 +173,16 @@ pub fn resolve_profile(
     })
 }
 
-pub fn default_settings(default_working_directory: String) -> AppSettings {
+pub fn default_settings() -> AppSettings {
     AppSettings {
         default_layout: LayoutPreset::OneByOne,
-        default_profile_id: String::from(TERMINAL_PROFILE_ID),
-        default_working_directory,
+        default_profile_id: String::new(),
+        default_working_directory: String::new(),
         default_custom_command: String::new(),
         font_size: 13,
         theme: ThemeMode::System,
         launch_fullscreen: true,
-        has_completed_onboarding: true,
+        has_completed_onboarding: false,
     }
 }
 

@@ -20,19 +20,20 @@ import {
   splitPane as treeSplitPane,
   closePane as treeClosePane,
   treeFromPreset,
+  treeFromCount,
   paneCountForPreset,
 } from "@/features/workspace/splitTree";
 import type { UnlistenFn, WorkspaceTransport } from "./shared";
 
 const MOCK_DEFAULT_SETTINGS: WorkspaceSettings = {
   defaultLayout: "1x1",
-  defaultProfileId: "terminal",
-  defaultWorkingDirectory: "~",
+  defaultProfileId: "",
+  defaultWorkingDirectory: "",
   defaultCustomCommand: "",
   fontSize: 13,
   theme: "midnight",
   launchFullscreen: false,
-  hasCompletedOnboarding: true,
+  hasCompletedOnboarding: false,
 };
 
 let idCounter = 0;
@@ -45,25 +46,25 @@ const BUILT_IN_PROFILES: PaneProfile[] = [
   {
     id: "terminal",
     label: "Terminal",
-    description: "Pure login shell",
+    description: "Standard shell session \u2014 your system shell (zsh, bash)",
     startupCommand: null,
   },
   {
     id: "claude",
     label: "Claude Code",
-    description: "Open Claude Code in a fresh shell",
+    description: "Anthropic AI coding assistant \u2014 launches \u2018claude\u2019 CLI",
     startupCommand: "claude",
   },
   {
     id: "codex",
     label: "Codex",
-    description: "Open Codex in a fresh shell",
+    description: "OpenAI Codex agent \u2014 launches \u2018codex\u2019 CLI",
     startupCommand: "codex",
   },
   {
     id: CUSTOM_PROFILE_ID,
     label: "Custom",
-    description: "Run an arbitrary shell command",
+    description: "Run any command of your choice",
     startupCommand: null,
   },
 ];
@@ -104,22 +105,26 @@ function createPane(
   };
 }
 
+interface PaneSlotInput {
+  cwd: string;
+  profileId: string;
+  startupCommand: string | null;
+}
+
 function createTab(
   preset: LayoutPreset,
-  cwd: string,
-  profileId: string,
-  startupCommand: string | null,
+  slots: PaneSlotInput[],
   tabIndex: number,
+  useCountLayout: boolean,
 ): TabSnapshot {
-  const paneCount = paneCountForPreset(preset);
-  const panes: PaneSnapshot[] = [];
-
-  for (let i = 0; i < paneCount; i++) {
-    panes.push(createPane(cwd, profileId, startupCommand, i));
-  }
+  const panes: PaneSnapshot[] = slots.map((slot, i) =>
+    createPane(slot.cwd, slot.profileId, slot.startupCommand, i),
+  );
 
   const paneIds = panes.map((p) => p.id);
-  const layout = treeFromPreset(preset, paneIds);
+  const layout = useCountLayout
+    ? treeFromCount(paneIds)
+    : treeFromPreset(preset, paneIds);
 
   return {
     id: nextId("tab"),
@@ -184,11 +189,10 @@ export function createMockTransport(): WorkspaceTransport {
 
   function addTab(
     preset: LayoutPreset,
-    cwd: string,
-    profileId: string,
-    startupCommand: string | null,
+    slots: PaneSlotInput[],
+    useCountLayout = false,
   ): WorkspaceSnapshot {
-    const tab = createTab(preset, cwd, profileId, startupCommand, state.nextTabIndex);
+    const tab = createTab(preset, slots, state.nextTabIndex, useCountLayout);
     state.tabs = [...state.tabs, tab];
     state.activeTabId = tab.id;
     state.nextTabIndex += 1;
@@ -209,14 +213,31 @@ export function createMockTransport(): WorkspaceTransport {
     return snapshot(state);
   }
 
+  function uniformSlots(
+    preset: LayoutPreset,
+    cwd: string,
+    profileId: string,
+    startupCommand: string | null,
+  ): PaneSlotInput[] {
+    const count = paneCountForPreset(preset);
+    return Array.from({ length: count }, () => ({
+      cwd,
+      profileId,
+      startupCommand,
+    }));
+  }
+
   return {
     async bootstrapWorkspace(): Promise<BootstrapSnapshot> {
-      if (state.tabs.length === 0) {
+      if (state.tabs.length === 0 && state.settings.hasCompletedOnboarding) {
         const workspace = addTab(
           state.settings.defaultLayout,
-          state.settings.defaultWorkingDirectory,
-          state.settings.defaultProfileId,
-          null,
+          uniformSlots(
+            state.settings.defaultLayout,
+            state.settings.defaultWorkingDirectory || "~",
+            state.settings.defaultProfileId || "terminal",
+            null,
+          ),
         );
 
         return {
@@ -234,12 +255,20 @@ export function createMockTransport(): WorkspaceTransport {
     },
 
     async createTab(request: NewTabRequest): Promise<WorkspaceSnapshot> {
-      return addTab(
-        request.preset,
-        request.cwd ?? state.settings.defaultWorkingDirectory,
-        request.profileId ?? state.settings.defaultProfileId,
-        request.startupCommand ?? null,
-      );
+      const hasPaneConfigs = request.paneConfigs && request.paneConfigs.length > 0;
+      const slots = hasPaneConfigs
+        ? request.paneConfigs!.map((cfg) => ({
+            cwd: cfg.cwd,
+            profileId: cfg.profileId,
+            startupCommand: cfg.startupCommand,
+          }))
+        : uniformSlots(
+            request.preset,
+            request.cwd ?? state.settings.defaultWorkingDirectory,
+            request.profileId ?? state.settings.defaultProfileId,
+            request.startupCommand ?? null,
+          );
+      return addTab(request.preset, slots, !!hasPaneConfigs);
     },
 
     async closeTab(tabId: string): Promise<WorkspaceSnapshot> {
@@ -249,9 +278,12 @@ export function createMockTransport(): WorkspaceTransport {
       if (state.tabs.length === 0) {
         return addTab(
           state.settings.defaultLayout,
-          state.settings.defaultWorkingDirectory,
-          state.settings.defaultProfileId,
-          null,
+          uniformSlots(
+            state.settings.defaultLayout,
+            state.settings.defaultWorkingDirectory,
+            state.settings.defaultProfileId,
+            null,
+          ),
         );
       }
 
@@ -441,9 +473,12 @@ export function createMockTransport(): WorkspaceTransport {
         if (state.tabs.length === 0) {
           return addTab(
             state.settings.defaultLayout,
-            state.settings.defaultWorkingDirectory,
-            state.settings.defaultProfileId,
-            null,
+            uniformSlots(
+              state.settings.defaultLayout,
+              state.settings.defaultWorkingDirectory,
+              state.settings.defaultProfileId,
+              null,
+            ),
           );
         }
 

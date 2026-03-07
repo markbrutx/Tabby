@@ -4,10 +4,13 @@ import { RecoveryScreen } from "@/components/RecoveryScreen";
 import { SplitTreeRenderer } from "@/features/workspace/components/SplitTreeRenderer";
 import { TabBar } from "@/features/workspace/components/TabBar";
 import { SettingsModal } from "@/features/workspace/components/SettingsModal";
+import { ShortcutsModal } from "@/features/workspace/components/ShortcutsModal";
 import { SplitPopup } from "@/features/workspace/components/SplitPopup";
+import { WorkspaceSetupWizard } from "@/features/workspace/components/WorkspaceSetupWizard";
 import { selectActiveTab, selectActivePane } from "@/features/workspace/selectors";
 import { useWorkspaceStore } from "@/features/workspace/store/workspaceStore";
 import type { SplitDirection } from "@/features/workspace/domain";
+import type { SetupWizardConfig, WizardTab } from "@/features/workspace/store/workspaceStore";
 import {
   applyResolvedTheme,
   useResolvedTheme,
@@ -22,8 +25,11 @@ function App() {
     profiles,
     error,
     isHydrating,
+    wizardTab,
     initialize,
-    createTab,
+    createTabFromWizard,
+    openSetupWizard,
+    closeSetupWizard,
     closeTab,
     setActiveTab,
     focusPane,
@@ -36,6 +42,7 @@ function App() {
   } = useWorkspaceStore();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [splitPopup, setSplitPopup] = useState<{
     paneId: string;
     direction: SplitDirection;
@@ -72,11 +79,6 @@ function App() {
     };
   }, []);
 
-  const handleCreateTab = useCallback(async () => {
-    if (!settings) return;
-    await createTab(settings.defaultLayout);
-  }, [settings, createTab]);
-
   const handleSplitHorizontal = useCallback(
     (paneId: string) => setSplitPopup({ paneId, direction: "horizontal" }),
     [],
@@ -88,10 +90,12 @@ function App() {
   );
 
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
+  const handleOpenShortcuts = useCallback(() => setShortcutsOpen(true), []);
+  const handleCloseShortcuts = useCallback(() => setShortcutsOpen(false), []);
 
   useWorkspaceShortcuts({
     workspace,
-    onCreateTab: handleCreateTab,
+    onCreateTab: openSetupWizard,
     onCloseTab: closeTab,
     onClosePane: closePane,
     onSelectTab: setActiveTab,
@@ -100,6 +104,7 @@ function App() {
     onSplitHorizontal: handleSplitHorizontal,
     onSplitVertical: handleSplitVertical,
     onOpenSettings: handleOpenSettings,
+    onOpenShortcuts: handleOpenShortcuts,
   });
 
   if (isHydrating) {
@@ -122,7 +127,8 @@ function App() {
 
   const activeTab = selectActiveTab(workspace);
 
-  if (!activeTab) {
+  // No real tabs and no wizard — recovery screen.
+  if (!activeTab && !wizardTab) {
     return (
       <RecoveryScreen
         title="No active workspace"
@@ -134,15 +140,42 @@ function App() {
 
   const activePane = selectActivePane(workspace);
 
+  // Build display tabs: real tabs + phantom wizard tab at the end.
+  const displayTabs = wizardTab
+    ? [...workspace.tabs, { id: wizardTab.id, title: wizardTab.title }]
+    : workspace.tabs;
+
+  // Wizard tab is always active when open; otherwise use real active tab.
+  const displayActiveTabId = wizardTab
+    ? wizardTab.id
+    : workspace.activeTabId;
+
+  const isWizardActive = wizardTab !== null;
+
   return (
     <div className="flex h-screen flex-col bg-[var(--color-bg)] text-[var(--color-text)]">
       <TabBar
-        tabs={workspace.tabs}
-        activeTabId={workspace.activeTabId}
-        onSelect={(tabId) => void setActiveTab(tabId)}
-        onClose={(tabId) => void closeTab(tabId)}
-        onNewTab={() => void createTab(settings.defaultLayout)}
+        tabs={displayTabs}
+        activeTabId={displayActiveTabId}
+        onSelect={(tabId) => {
+          if (wizardTab && tabId !== wizardTab.id) {
+            // Clicking a real tab while wizard is open — close wizard, switch tab.
+            closeSetupWizard();
+            void setActiveTab(tabId);
+          } else if (!wizardTab) {
+            void setActiveTab(tabId);
+          }
+        }}
+        onClose={(tabId) => {
+          if (wizardTab && tabId === wizardTab.id) {
+            closeSetupWizard();
+          } else {
+            void closeTab(tabId);
+          }
+        }}
+        onNewTab={openSetupWizard}
         onOpenSettings={handleOpenSettings}
+        onOpenShortcuts={handleOpenShortcuts}
       />
 
       {error ? (
@@ -159,7 +192,7 @@ function App() {
 
       <div className="min-h-0 flex-1">
         {workspace.tabs.map((tab) => {
-          const isActive = tab.id === workspace.activeTabId;
+          const isActive = tab.id === workspace.activeTabId && !isWizardActive;
 
           return (
             <div key={tab.id} className={`h-full ${isActive ? "block" : "hidden"}`}>
@@ -174,6 +207,18 @@ function App() {
             </div>
           );
         })}
+
+        {isWizardActive ? (
+          <WorkspaceSetupWizard
+            profiles={profiles}
+            settings={settings}
+            isFirstLaunch={workspace.tabs.length === 0 && !settings.hasCompletedOnboarding}
+            onComplete={(config: SetupWizardConfig) => {
+              void createTabFromWizard(config);
+            }}
+            onCancel={workspace.tabs.length > 0 ? closeSetupWizard : undefined}
+          />
+        ) : null}
       </div>
 
       {settingsOpen ? (
@@ -184,6 +229,10 @@ function App() {
           onSave={updateSettings}
           onReset={resetSettings}
         />
+      ) : null}
+
+      {shortcutsOpen ? (
+        <ShortcutsModal onClose={handleCloseShortcuts} />
       ) : null}
 
       {splitPopup && activePane ? (

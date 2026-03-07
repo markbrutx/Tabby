@@ -33,10 +33,6 @@ impl TabManager {
         }
     }
 
-    pub fn is_empty(&self) -> Result<bool, TabbyError> {
-        Ok(self.lock_state()?.tabs.is_empty())
-    }
-
     pub fn snapshot(&self) -> Result<WorkspaceSnapshot, TabbyError> {
         let state = self.lock_state()?;
         Ok(Self::workspace_snapshot(&state))

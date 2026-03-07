@@ -4,6 +4,8 @@ import {
   splitPane,
   closePane,
   collectPaneIds,
+  treeFromCount,
+  computePaneRects,
   findAdjacentPane,
   findNextPane,
   findPreviousPane,
@@ -62,6 +64,55 @@ describe("splitTree", () => {
       expect(result).not.toBeNull();
       expect(result).not.toBeUndefined();
       expect(collectPaneIds(result!)).toEqual(["p2"]);
+    });
+  });
+
+  describe("treeFromCount", () => {
+    function ids(n: number): string[] {
+      return Array.from({ length: n }, (_, i) => `p${i + 1}`);
+    }
+
+    it.each([1, 2, 3, 4, 5, 6, 7, 8, 9])("creates correct tree for count=%i", (count) => {
+      const paneIds = ids(count);
+      const tree = treeFromCount(paneIds);
+      const collected = collectPaneIds(tree);
+      expect(collected).toHaveLength(count);
+      expect(collected).toEqual(paneIds);
+    });
+
+    it("throws for count 0", () => {
+      expect(() => treeFromCount([])).toThrow();
+    });
+
+    it("throws for count > 9", () => {
+      expect(() => treeFromCount(ids(10))).toThrow();
+    });
+  });
+
+  describe("computePaneRects", () => {
+    it("returns single rect for 1 pane", () => {
+      const tree = treeFromCount(["p1"]);
+      const rects = computePaneRects(tree);
+      expect(rects.size).toBe(1);
+      expect(rects.get("p1")).toEqual({ x: 0, y: 0, w: 1, h: 1 });
+    });
+
+    it("returns two rects for 2 panes", () => {
+      const tree = treeFromCount(["p1", "p2"]);
+      const rects = computePaneRects(tree);
+      expect(rects.size).toBe(2);
+      expect(rects.get("p1")).toEqual({ x: 0, y: 0, w: 0.5, h: 1 });
+      expect(rects.get("p2")).toEqual({ x: 0.5, y: 0, w: 0.5, h: 1 });
+    });
+
+    it("returns four quadrant rects for 4 panes", () => {
+      const tree = treeFromCount(["p1", "p2", "p3", "p4"]);
+      const rects = computePaneRects(tree);
+      expect(rects.size).toBe(4);
+      expect(rects.get("p1")).toEqual({ x: 0, y: 0, w: 0.5, h: 0.5 });
+      expect(rects.get("p2")).toEqual({ x: 0.5, y: 0, w: 0.5, h: 0.5 });
+      expect(rects.get("p3")).toEqual({ x: 0, y: 0.5, w: 0.5, h: 0.5 });
+      expect(rects.get("p4")).toEqual({ x: 0.5, y: 0.5, w: 0.5, h: 0.5 });
     });
   });
 

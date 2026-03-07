@@ -21,22 +21,8 @@ pub struct LaunchOverrides(pub Mutex<Option<CliArgs>>);
 #[specta::specta]
 pub fn bootstrap_workspace(
     tab_manager: State<'_, Arc<TabManager>>,
-    coordinator: State<'_, Arc<Coordinator>>,
     settings_manager: State<'_, Arc<SettingsManager>>,
-    launch_overrides: State<'_, LaunchOverrides>,
 ) -> Result<BootstrapSnapshot, TabbyError> {
-    if tab_manager.is_empty()? {
-        let settings = settings_manager.get_settings()?;
-        let request = consume_launch_request(&launch_overrides, &settings)?;
-        let workspace = coordinator.create_tab(&request.into(), &settings)?;
-
-        return Ok(BootstrapSnapshot {
-            workspace,
-            settings,
-            profiles: built_in_profiles(),
-        });
-    }
-
     Ok(BootstrapSnapshot {
         workspace: tab_manager.snapshot()?,
         settings: settings_manager.get_settings()?,
@@ -59,11 +45,9 @@ pub fn create_tab(
 #[specta::specta]
 pub fn close_tab(
     coordinator: State<'_, Arc<Coordinator>>,
-    settings_manager: State<'_, Arc<SettingsManager>>,
     tab_id: String,
 ) -> Result<WorkspaceSnapshot, TabbyError> {
-    let settings = settings_manager.get_settings()?;
-    coordinator.close_tab(&tab_id, &settings)
+    coordinator.close_tab(&tab_id)
 }
 
 #[tauri::command]
@@ -127,13 +111,13 @@ pub fn split_pane(
 #[specta::specta]
 pub fn close_pane(
     coordinator: State<'_, Arc<Coordinator>>,
-    settings_manager: State<'_, Arc<SettingsManager>>,
     pane_id: String,
 ) -> Result<WorkspaceSnapshot, TabbyError> {
-    let settings = settings_manager.get_settings()?;
-    coordinator.close_pane(&pane_id, &settings)
+    coordinator.close_pane(&pane_id)
 }
 
+// TODO(phase-4): re-enable when single-instance CLI routing is wired
+#[allow(dead_code)]
 fn consume_launch_request(
     launch_overrides: &LaunchOverrides,
     settings: &crate::domain::types::AppSettings,

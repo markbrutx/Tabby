@@ -50,11 +50,16 @@ export function useTerminalSession({
 
   // --- Effect 1: PTY output listener ---
   // Always active. Writes to terminal if initialized, buffers otherwise.
+  // Uses `cancelled` flag to handle React.StrictMode double-mount safely:
+  // if cleanup runs before the async listener resolves, the resolved
+  // unlisten is called immediately, preventing duplicate listeners.
   useEffect(() => {
-    let disposeEvent = () => {};
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
 
     void bridge
       .listenToPtyOutput((payload) => {
+        if (cancelled) return;
         if (
           payload.paneId !== pane.id ||
           payload.sessionId !== pane.sessionId
@@ -72,12 +77,17 @@ export function useTerminalSession({
           pendingDataRef.current.push(payload.chunk);
         }
       })
-      .then((unlisten) => {
-        disposeEvent = unlisten;
+      .then((fn) => {
+        if (cancelled) {
+          fn(); // cleanup already ran — immediately unsubscribe
+        } else {
+          unlisten = fn;
+        }
       });
 
     return () => {
-      disposeEvent();
+      cancelled = true;
+      unlisten?.();
     };
   }, [pane.id, pane.sessionId]);
 
@@ -167,15 +177,13 @@ export function useTerminalSession({
       return;
     }
 
-    // Already initialized — just fit and focus the active pane.
+    // Already initialized — just fit and resize. Do NOT call terminal.focus()
+    // here: when the user mousedowns to start a text selection, onFocus fires
+    // which flips `active` → Effect reruns → focus() would steal the mousedown
+    // and break selection. xterm.js handles focus internally via mouse events.
     if (initializedRef.current) {
       if (active) {
         safeFit(fitAddon, container);
-        try {
-          terminal.focus();
-        } catch {
-          // Focus can throw on disposed terminal.
-        }
 
         if (isTauriRuntime()) {
           void bridge.resizePty({
@@ -210,27 +218,34 @@ export function useTerminalSession({
         // WebGL is optional; canvas renderer continues to work.
       }
 
-      initializedRef.current = true;
-
-      // Flush buffered PTY output.
-      const pending = pendingDataRef.current.splice(0);
-      for (const chunk of pending) {
-        try {
-          terminal.write(chunk);
-        } catch {
-          break;
-        }
-      }
-
+      // Fit BEFORE marking initialized so the resize event uses correct dims.
       safeFit(fitAddon, container);
 
       if (isTauriRuntime()) {
+        // Resize the PTY to actual container size. The shell will reprint
+        // its prompt at the correct dimensions via SIGWINCH.
         void bridge.resizePty({
           paneId: pane.id,
           cols: terminal.cols,
           rows: terminal.rows,
         });
+
+        // Drop buffered output — it was rendered at default 80×24 and will
+        // garble in the real viewport. The resize above triggers a redraw.
+        pendingDataRef.current = [];
+      } else {
+        // Dev/mock mode: flush buffer so welcome text is visible.
+        const pending = pendingDataRef.current.splice(0);
+        for (const chunk of pending) {
+          try {
+            terminal.write(chunk);
+          } catch {
+            break;
+          }
+        }
       }
+
+      initializedRef.current = true;
     });
 
     return () => {
