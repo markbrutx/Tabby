@@ -39,6 +39,7 @@ export function useTerminalSession({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rendererReadyRef = useRef(false);
+  const pendingWritesRef = useRef<string[]>([]);
 
   // Activate the renderer: open terminal in DOM, attach WebGL, fit.
   // Called once per terminal lifetime — either from the creation RAF
@@ -62,6 +63,13 @@ export function useTerminalSession({
     }
 
     rendererReadyRef.current = true;
+
+    // Flush any PTY output that arrived while the terminal was hidden.
+    for (const chunk of pendingWritesRef.current) {
+      terminal.write(chunk);
+    }
+    pendingWritesRef.current = [];
+
     safeFit(fitAddon, container);
 
     if (isTauriRuntime()) {
@@ -137,11 +145,17 @@ export function useTerminalSession({
     void bridge
       .listenToPtyOutput((payload) => {
         if (
-          payload.paneId === pane.id &&
-          payload.sessionId === pane.sessionId &&
-          terminalRef.current
+          payload.paneId !== pane.id ||
+          payload.sessionId !== pane.sessionId ||
+          !terminalRef.current
         ) {
+          return;
+        }
+
+        if (rendererReadyRef.current) {
           terminalRef.current.write(payload.chunk);
+        } else {
+          pendingWritesRef.current.push(payload.chunk);
         }
       })
       .then((unlisten) => {
@@ -157,6 +171,7 @@ export function useTerminalSession({
       terminalRef.current = null;
       fitAddonRef.current = null;
       rendererReadyRef.current = false;
+      pendingWritesRef.current = [];
     };
   }, [fontSize, pane.id, pane.sessionId]);
 
