@@ -10,13 +10,13 @@ import {
 interface WorkspaceShortcutsProps {
   workspace: WorkspaceSnapshot | null;
   onCreateTab: () => void | Promise<void>;
-  onCloseTab: (tabId: string) => Promise<void>;
-  onClosePane: (paneId: string) => Promise<void>;
+  onCloseTab: (tabId: string) => void | Promise<void>;
+  onClosePane: (paneId: string) => void | Promise<void>;
   onSelectTab: (tabId: string) => Promise<void>;
   onFocusPane: (tabId: string, paneId: string) => Promise<void>;
   onRestartPane: (paneId: string) => Promise<void>;
-  onSplitHorizontal: (paneId: string) => void;
-  onSplitVertical: (paneId: string) => void;
+  onSplitRight: (paneId: string) => void;
+  onSplitDown: (paneId: string) => void;
   onOpenSettings: () => void;
   onOpenShortcuts: () => void;
 }
@@ -37,8 +37,8 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
         onSelectTab,
         onFocusPane,
         onRestartPane,
-        onSplitHorizontal,
-        onSplitVertical,
+        onSplitRight,
+        onSplitDown,
         onOpenSettings,
         onOpenShortcuts,
       } = propsRef.current;
@@ -89,20 +89,20 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
         return;
       }
 
-      // Cmd+D — Split horizontally
-      if (!event.shiftKey && event.key.toLowerCase() === "d") {
+      // Cmd+D — Split right
+      if (event.key.toLowerCase() === "d") {
         event.preventDefault();
         if (activePane) {
-          onSplitHorizontal(activePane.id);
+          onSplitRight(activePane.id);
         }
         return;
       }
 
-      // Cmd+Shift+D — Split vertically
-      if (event.shiftKey && event.key.toLowerCase() === "d") {
+      // Cmd+E — Split down
+      if (event.key.toLowerCase() === "e") {
         event.preventDefault();
         if (activePane) {
-          onSplitVertical(activePane.id);
+          onSplitDown(activePane.id);
         }
         return;
       }
@@ -145,8 +145,8 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
         }
       }
 
-      // Cmd+Shift+] — Next pane (DFS order)
-      if (event.shiftKey && event.key === "]") {
+      // Cmd+] — Next pane (DFS order)
+      if (event.key === "]") {
         const nextPaneId = findNextPane(activeTab.layout, activePane.id);
         if (nextPaneId) {
           event.preventDefault();
@@ -155,8 +155,8 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
         return;
       }
 
-      // Cmd+Shift+[ — Previous pane (DFS order)
-      if (event.shiftKey && event.key === "[") {
+      // Cmd+[ — Previous pane (DFS order)
+      if (event.key === "[") {
         const nextPaneId = findPreviousPane(activeTab.layout, activePane.id);
         if (nextPaneId) {
           event.preventDefault();

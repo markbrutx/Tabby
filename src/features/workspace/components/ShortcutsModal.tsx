@@ -25,11 +25,11 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     title: "Pane Management",
     shortcuts: [
-      { keys: ["\u2318", "D"], description: "Split horizontally" },
-      { keys: ["\u2318", "\u21e7", "D"], description: "Split vertically" },
-      { keys: ["\u2325", "\u2190\u2191\u2192\u2193"], description: "Navigate between panes" },
-      { keys: ["\u2318", "\u21e7", "]"], description: "Next pane" },
-      { keys: ["\u2318", "\u21e7", "["], description: "Previous pane" },
+      { keys: ["\u2318", "D"], description: "Split right" },
+      { keys: ["\u2318", "E"], description: "Split down" },
+      { keys: ["\u2318", "\u2325", "\u2190\u2191\u2192\u2193"], description: "Navigate between panes" },
+      { keys: ["\u2318", "]"], description: "Next pane" },
+      { keys: ["\u2318", "["], description: "Previous pane" },
       { keys: ["\u2318", "\u21e7", "R"], description: "Restart active pane" },
     ],
   },

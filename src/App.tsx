@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { RecoveryScreen } from "@/components/RecoveryScreen";
+import { ConfirmDialog } from "@/features/workspace/components/ConfirmDialog";
 import { SplitTreeRenderer } from "@/features/workspace/components/SplitTreeRenderer";
 import { TabBar } from "@/features/workspace/components/TabBar";
 import { SettingsModal } from "@/features/workspace/components/SettingsModal";
@@ -17,6 +18,40 @@ import {
 } from "@/features/workspace/theme";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
 import { isTauriRuntime } from "@/lib/runtime";
+
+type ConfirmAction =
+  | { type: "closePane"; paneId: string }
+  | { type: "closeTab"; tabId: string }
+  | { type: "quitApp" };
+
+interface MinimalWorkspace {
+  tabs: Array<{ id: string; panes: unknown[] }>;
+}
+
+function confirmMessage(action: ConfirmAction, workspace: MinimalWorkspace): { title: string; message: string } {
+  switch (action.type) {
+    case "closePane":
+      return {
+        title: "Close pane?",
+        message: "The terminal session will be terminated.",
+      };
+    case "closeTab": {
+      const tab = workspace.tabs.find((t) => t.id === action.tabId);
+      const count = tab ? tab.panes.length : 0;
+      return {
+        title: "Close workspace?",
+        message: `All ${count} session${count !== 1 ? "s" : ""} will be terminated.`,
+      };
+    }
+    case "quitApp": {
+      const tabCount = workspace.tabs.length;
+      return {
+        title: "Quit Tabby?",
+        message: `All sessions across ${tabCount} workspace${tabCount !== 1 ? "s" : ""} will be terminated.`,
+      };
+    }
+  }
+}
 
 function App() {
   const {
@@ -36,6 +71,7 @@ function App() {
     restartPane,
     splitPane,
     closePane,
+    swapPanes,
     updateSettings,
     resetSettings,
     clearError,
@@ -47,6 +83,7 @@ function App() {
     paneId: string;
     direction: SplitDirection;
   } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const resolvedTheme = useResolvedTheme(settings?.theme);
 
   useEffect(() => {
@@ -79,12 +116,34 @@ function App() {
     };
   }, []);
 
-  const handleSplitHorizontal = useCallback(
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen("app-close-requested", () => {
+      setConfirmAction({ type: "quitApp" });
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  const handleSplitRight = useCallback(
     (paneId: string) => setSplitPopup({ paneId, direction: "horizontal" }),
     [],
   );
 
-  const handleSplitVertical = useCallback(
+  const handleSplitDown = useCallback(
     (paneId: string) => setSplitPopup({ paneId, direction: "vertical" }),
     [],
   );
@@ -93,16 +152,57 @@ function App() {
   const handleOpenShortcuts = useCallback(() => setShortcutsOpen(true), []);
   const handleCloseShortcuts = useCallback(() => setShortcutsOpen(false), []);
 
+  const handleClosePaneConfirm = useCallback((paneId: string) => {
+    setConfirmAction({ type: "closePane", paneId });
+  }, []);
+
+  const handleCloseTabConfirm = useCallback((tabId: string) => {
+    setConfirmAction({ type: "closeTab", tabId });
+  }, []);
+
+  const handleConfirm = useCallback(() => {
+    if (!confirmAction) return;
+
+    switch (confirmAction.type) {
+      case "closePane":
+        void closePane(confirmAction.paneId);
+        break;
+      case "closeTab":
+        void closeTab(confirmAction.tabId);
+        break;
+      case "quitApp":
+        if (isTauriRuntime()) {
+          void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+            void getCurrentWindow().destroy();
+          });
+        }
+        break;
+    }
+
+    setConfirmAction(null);
+  }, [confirmAction, closePane, closeTab]);
+
+  const handleCancelConfirm = useCallback(() => {
+    setConfirmAction(null);
+  }, []);
+
+  const handleSwapPanes = useCallback(
+    (paneIdA: string, paneIdB: string) => {
+      void swapPanes(paneIdA, paneIdB);
+    },
+    [swapPanes],
+  );
+
   useWorkspaceShortcuts({
     workspace,
     onCreateTab: openSetupWizard,
-    onCloseTab: closeTab,
-    onClosePane: closePane,
+    onCloseTab: handleCloseTabConfirm,
+    onClosePane: handleClosePaneConfirm,
     onSelectTab: setActiveTab,
     onFocusPane: focusPane,
     onRestartPane: restartPane,
-    onSplitHorizontal: handleSplitHorizontal,
-    onSplitVertical: handleSplitVertical,
+    onSplitRight: handleSplitRight,
+    onSplitDown: handleSplitDown,
     onOpenSettings: handleOpenSettings,
     onOpenShortcuts: handleOpenShortcuts,
   });
@@ -170,7 +270,7 @@ function App() {
           if (wizardTab && tabId === wizardTab.id) {
             closeSetupWizard();
           } else {
-            void closeTab(tabId);
+            handleCloseTabConfirm(tabId);
           }
         }}
         onNewTab={openSetupWizard}
@@ -203,6 +303,8 @@ function App() {
                 visible={isActive}
                 onFocus={focusPane}
                 onRestart={restartPane}
+                onClosePane={handleClosePaneConfirm}
+                onSwapPanes={handleSwapPanes}
               />
             </div>
           );
@@ -252,6 +354,14 @@ function App() {
             setSplitPopup(null);
           }}
           onCancel={() => setSplitPopup(null)}
+        />
+      ) : null}
+
+      {confirmAction ? (
+        <ConfirmDialog
+          {...confirmMessage(confirmAction, workspace)}
+          onConfirm={handleConfirm}
+          onCancel={handleCancelConfirm}
         />
       ) : null}
     </div>

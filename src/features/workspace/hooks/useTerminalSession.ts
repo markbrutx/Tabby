@@ -8,6 +8,11 @@ import {
   type ResolvedTheme,
 } from "@/features/workspace/theme";
 import { bridge } from "@/lib/bridge";
+import {
+  registerPtyOutput,
+  initDispatcher,
+  teardownDispatcher,
+} from "@/lib/bridge/ptyOutputDispatcher";
 import { isTauriRuntime } from "@/lib/runtime";
 
 interface UseTerminalSessionOptions {
@@ -48,46 +53,27 @@ export function useTerminalSession({
   const pendingDataRef = useRef<string[]>([]);
   const initializedRef = useRef(false);
 
-  // --- Effect 1: PTY output listener ---
-  // Always active. Writes to terminal if initialized, buffers otherwise.
-  // Uses `cancelled` flag to handle React.StrictMode double-mount safely:
-  // if cleanup runs before the async listener resolves, the resolved
-  // unlisten is called immediately, preventing duplicate listeners.
+  // --- Effect 1: PTY output listener (via dispatcher) ---
+  // Registers with the centralized dispatcher instead of subscribing
+  // independently. One global subscription fans out to N pane handlers.
   useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
+    void initDispatcher(bridge);
 
-    void bridge
-      .listenToPtyOutput((payload) => {
-        if (cancelled) return;
-        if (
-          payload.paneId !== pane.id ||
-          payload.sessionId !== pane.sessionId
-        ) {
-          return;
+    const unregister = registerPtyOutput(pane.id, pane.sessionId, (chunk) => {
+      if (terminalRef.current && initializedRef.current) {
+        try {
+          terminalRef.current.write(chunk);
+        } catch {
+          // Terminal disposed or renderer gone — drop the chunk.
         }
-
-        if (terminalRef.current && initializedRef.current) {
-          try {
-            terminalRef.current.write(payload.chunk);
-          } catch {
-            // Terminal disposed or renderer gone — drop the chunk.
-          }
-        } else {
-          pendingDataRef.current.push(payload.chunk);
-        }
-      })
-      .then((fn) => {
-        if (cancelled) {
-          fn(); // cleanup already ran — immediately unsubscribe
-        } else {
-          unlisten = fn;
-        }
-      });
+      } else {
+        pendingDataRef.current.push(chunk);
+      }
+    });
 
     return () => {
-      cancelled = true;
-      unlisten?.();
+      unregister();
+      teardownDispatcher();
     };
   }, [pane.id, pane.sessionId]);
 
@@ -123,6 +109,21 @@ export function useTerminalSession({
       void bridge.writePty(pane.id, data);
     });
 
+    // OSC 7 handler — tracks CWD changes reported by the shell.
+    // macOS zsh emits OSC 7 automatically. Format: "file://host/path"
+    const oscDisposable = terminal.parser.registerOscHandler(7, (data) => {
+      try {
+        const url = new URL(data);
+        const cwd = decodeURIComponent(url.pathname);
+        if (cwd) {
+          void bridge.trackPaneCwd(pane.id, cwd);
+        }
+      } catch {
+        // Malformed URL — ignore.
+      }
+      return true;
+    });
+
     const observer = new ResizeObserver(() => {
       if (!initializedRef.current || !terminalRef.current) {
         return;
@@ -150,8 +151,9 @@ export function useTerminalSession({
       initializedRef.current = false;
       // 2. Stop observing before disposal
       observer.disconnect();
-      // 3. Dispose data listener
+      // 3. Dispose data and OSC listeners
       dataDisposable.dispose();
+      oscDisposable.dispose();
       // 4. Dispose WebGL addon explicitly (can throw on lost context)
       if (webglAddonRef.current) {
         try { webglAddonRef.current.dispose(); } catch { /* lost GL context */ }
@@ -251,7 +253,7 @@ export function useTerminalSession({
     return () => {
       cancelAnimationFrame(rafId);
     };
-  }, [active, pane.id, visible]);
+  }, [pane.id, visible]);
 
   // --- Effect 4: Theme ---
   useEffect(() => {
@@ -265,6 +267,23 @@ export function useTerminalSession({
       // Theme update can fail if renderer is in a bad state.
     }
   }, [theme]);
+
+  // --- Effect 5: Focus on keyboard navigation ---
+  // When the user switches panes via Cmd+Alt+Arrow / Cmd+[/], the store
+  // updates `activePaneId` but xterm doesn't receive `.focus()`. This effect
+  // detects the false→true transition and programmatically focuses the terminal.
+  const prevActiveRef = useRef(false);
+  useEffect(() => {
+    const wasActive = prevActiveRef.current;
+    prevActiveRef.current = active;
+
+    if (!wasActive && active && terminalRef.current && initializedRef.current) {
+      if (fitAddonRef.current && containerRef.current) {
+        safeFit(fitAddonRef.current, containerRef.current);
+      }
+      terminalRef.current.focus();
+    }
+  }, [active]);
 
   return {
     containerRef,
