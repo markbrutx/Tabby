@@ -40,6 +40,39 @@ export function useTerminalSession({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rendererReadyRef = useRef(false);
 
+  // Activate the renderer: open terminal in DOM, attach WebGL, fit.
+  // Called once per terminal lifetime — either from the creation RAF
+  // (if the tab is already visible) or from the visibility effect
+  // (when a hidden tab becomes visible for the first time).
+  function activateRenderer(
+    terminal: Terminal,
+    fitAddon: FitAddon,
+    container: HTMLElement,
+  ) {
+    if (rendererReadyRef.current) {
+      return;
+    }
+
+    terminal.open(container);
+
+    try {
+      terminal.loadAddon(new WebglAddon());
+    } catch {
+      // WebGL is optional; xterm falls back to canvas/DOM rendering.
+    }
+
+    rendererReadyRef.current = true;
+    safeFit(fitAddon, container);
+
+    if (isTauriRuntime()) {
+      void bridge.resizePty({
+        paneId: pane.id,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      });
+    }
+  }
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -70,28 +103,15 @@ export function useTerminalSession({
     // Defer open + WebGL to next frame so the container has its final
     // layout dimensions.  xterm.js buffers write() calls until open(),
     // so PTY output arriving before this frame is not lost.
+    // Only activate if the container is visible (has dimensions);
+    // hidden tabs will be activated when they first become visible.
     const rafId = requestAnimationFrame(() => {
-      if (!terminalRef.current) {
+      if (!terminalRef.current || rendererReadyRef.current) {
         return;
       }
 
-      terminal.open(container);
-
-      try {
-        terminal.loadAddon(new WebglAddon());
-      } catch {
-        // WebGL is optional; xterm falls back to canvas/DOM rendering.
-      }
-
-      rendererReadyRef.current = true;
-      safeFit(fitAddon, container);
-
-      if (isTauriRuntime()) {
-        void bridge.resizePty({
-          paneId: pane.id,
-          cols: terminal.cols,
-          rows: terminal.rows,
-        });
+      if (hasContainerSize(container)) {
+        activateRenderer(terminal, fitAddon, container);
       }
     });
 
@@ -148,15 +168,21 @@ export function useTerminalSession({
     terminalRef.current.options.theme = getTerminalTheme(theme);
   }, [theme]);
 
+  // When a hidden tab becomes visible for the first time, activate
+  // its renderer (deferred from creation because the container had
+  // display:none / zero dimensions).  For already-active terminals
+  // this just fits and optionally focuses.
   useEffect(() => {
     const container = containerRef.current;
-    if (
-      !visible ||
-      !terminalRef.current ||
-      !fitAddonRef.current ||
-      !rendererReadyRef.current ||
-      !container
-    ) {
+    if (!visible || !terminalRef.current || !fitAddonRef.current || !container) {
+      return;
+    }
+
+    if (!rendererReadyRef.current) {
+      activateRenderer(terminalRef.current, fitAddonRef.current, container);
+    }
+
+    if (!rendererReadyRef.current) {
       return;
     }
 
