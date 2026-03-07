@@ -58,18 +58,24 @@ export function useTerminalSession({
     });
 
     const fitAddon = new FitAddon();
-    fitAddonRef.current = fitAddon;
     terminal.loadAddon(fitAddon);
 
-    terminal.open(container);
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
 
-    // Defer WebGL addon and initial fit to next frame so the container
-    // has its final layout dimensions. Without this, the WebGL renderer
-    // crashes on `_renderer.value.dimensions` in Tauri's webview.
+    const dataDisposable = terminal.onData((data) => {
+      void bridge.writePty(pane.id, data);
+    });
+
+    // Defer open + WebGL to next frame so the container has its final
+    // layout dimensions.  xterm.js buffers write() calls until open(),
+    // so PTY output arriving before this frame is not lost.
     const rafId = requestAnimationFrame(() => {
       if (!terminalRef.current) {
         return;
       }
+
+      terminal.open(container);
 
       try {
         terminal.loadAddon(new WebglAddon());
@@ -89,13 +95,11 @@ export function useTerminalSession({
       }
     });
 
-    const dataDisposable = terminal.onData((data) => {
-      void bridge.writePty(pane.id, data);
-    });
-
-    terminalRef.current = terminal;
-
     const observer = new ResizeObserver(() => {
+      if (!rendererReadyRef.current) {
+        return;
+      }
+
       safeFit(fitAddon, container);
 
       if (isTauriRuntime() && terminalRef.current) {
@@ -146,7 +150,13 @@ export function useTerminalSession({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!visible || !terminalRef.current || !fitAddonRef.current || !container) {
+    if (
+      !visible ||
+      !terminalRef.current ||
+      !fitAddonRef.current ||
+      !rendererReadyRef.current ||
+      !container
+    ) {
       return;
     }
 
