@@ -7,6 +7,7 @@ interface BrowserPaneProps {
   pane: PaneSnapshot;
   active: boolean;
   visible: boolean;
+  modalOpen?: boolean;
   onUrlChange?: (url: string) => void;
 }
 
@@ -15,10 +16,11 @@ export interface BrowserPaneHandle {
 }
 
 export const BrowserPane = forwardRef<BrowserPaneHandle, BrowserPaneProps>(
-  function BrowserPane({ pane, active, visible, onUrlChange }, ref) {
+  function BrowserPane({ pane, active, visible, modalOpen = false, onUrlChange }, ref) {
+    const effectiveVisible = visible && !modalOpen;
     const { containerRef, currentUrl, navigate } = useBrowserWebview({
       pane,
-      visible,
+      visible: effectiveVisible,
       onUrlChange,
     });
 
@@ -26,12 +28,15 @@ export const BrowserPane = forwardRef<BrowserPaneHandle, BrowserPaneProps>(
 
     useImperativeHandle(ref, () => ({ navigate }), [navigate]);
 
+    // Show dimmed overlay when modal hides the native webview
+    const showOverlay = isTauri && visible && modalOpen;
+
     return (
       <div
         ref={containerRef}
         data-testid={`browser-pane-${pane.id}`}
         data-active={active ? "true" : "false"}
-        className="h-full bg-[var(--color-bg)]"
+        className="relative h-full bg-[var(--color-bg)]"
       >
         {!isTauri && (
           <iframe
@@ -41,6 +46,13 @@ export const BrowserPane = forwardRef<BrowserPaneHandle, BrowserPaneProps>(
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             data-testid="browser-iframe"
           />
+        )}
+        {showOverlay && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg)]/80">
+            <span className="text-xs text-[var(--color-text-muted)]">
+              {currentUrl}
+            </span>
+          </div>
         )}
       </div>
     );

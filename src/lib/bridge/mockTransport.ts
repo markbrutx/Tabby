@@ -103,6 +103,7 @@ function createPane(
   profileId: string,
   startupCommand: string | null,
   index: number,
+  url?: string | null,
 ): PaneSnapshot {
   const resolved = resolveProfile(profileId, startupCommand);
   const isBrowser = profileId === BROWSER_PROFILE_ID;
@@ -118,7 +119,7 @@ function createPane(
     startupCommand: resolved.startupCommand,
     status: "running",
     paneKind,
-    url: isBrowser ? null : undefined,
+    url: isBrowser ? (url ?? null) : null,
   };
 }
 
@@ -126,6 +127,7 @@ interface PaneSlotInput {
   cwd: string;
   profileId: string;
   startupCommand: string | null;
+  url?: string | null;
 }
 
 function createTab(
@@ -135,7 +137,7 @@ function createTab(
   useCountLayout: boolean,
 ): TabSnapshot {
   const panes: PaneSnapshot[] = slots.map((slot, i) =>
-    createPane(slot.cwd, slot.profileId, slot.startupCommand, i),
+    createPane(slot.cwd, slot.profileId, slot.startupCommand, i, slot.url),
   );
 
   const paneIds = panes.map((p) => p.id);
@@ -281,6 +283,7 @@ export function createMockTransport(): WorkspaceTransport {
             cwd: cfg.cwd,
             profileId: cfg.profileId,
             startupCommand: cfg.startupCommand,
+            url: cfg.url,
           }))
         : uniformSlots(
             request.preset,

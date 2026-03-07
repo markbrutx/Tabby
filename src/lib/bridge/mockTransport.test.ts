@@ -235,8 +235,8 @@ describe("mockTransport", () => {
       profileId: null,
       startupCommand: null,
       paneConfigs: [
-        { profileId: "terminal", cwd: "/projects/a", startupCommand: null },
-        { profileId: "claude", cwd: "/projects/b", startupCommand: null },
+        { profileId: "terminal", cwd: "/projects/a", startupCommand: null, url: null },
+        { profileId: "claude", cwd: "/projects/b", startupCommand: null, url: null },
       ],
     });
 
@@ -292,11 +292,11 @@ describe("mockTransport", () => {
       profileId: null,
       startupCommand: null,
       paneConfigs: [
-        { profileId: "terminal", cwd: "/a", startupCommand: null },
-        { profileId: "terminal", cwd: "/a", startupCommand: null },
-        { profileId: "claude", cwd: "/b", startupCommand: null },
-        { profileId: "claude", cwd: "/b", startupCommand: null },
-        { profileId: "claude", cwd: "/b", startupCommand: null },
+        { profileId: "terminal", cwd: "/a", startupCommand: null, url: null },
+        { profileId: "terminal", cwd: "/a", startupCommand: null, url: null },
+        { profileId: "claude", cwd: "/b", startupCommand: null, url: null },
+        { profileId: "claude", cwd: "/b", startupCommand: null, url: null },
+        { profileId: "claude", cwd: "/b", startupCommand: null, url: null },
       ],
     });
 
@@ -425,8 +425,8 @@ describe("mockTransport", () => {
       profileId: null,
       startupCommand: null,
       paneConfigs: [
-        { profileId: "terminal", cwd: "/a", startupCommand: null },
-        { profileId: "browser", cwd: "/b", startupCommand: null },
+        { profileId: "terminal", cwd: "/a", startupCommand: null, url: null },
+        { profileId: "browser", cwd: "/b", startupCommand: null, url: null },
       ],
     });
 

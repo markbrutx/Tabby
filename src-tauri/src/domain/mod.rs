@@ -85,6 +85,7 @@ mod tests {
             profile_id: String::from("terminal"),
             cwd: String::from("/home/user"),
             startup_command: Some(String::from("npm start")),
+            url: None,
         };
         let json = serde_json::to_string(&config).expect("should serialize");
         assert!(json.contains("profileId"));

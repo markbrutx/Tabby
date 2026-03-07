@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { listen } from "@tauri-apps/api/event";
 import type { WorkspaceSnapshot } from "@/features/workspace/domain";
 import { selectActivePane, selectActiveTab } from "@/features/workspace/selectors";
 import {
@@ -6,6 +7,7 @@ import {
   findNextPane,
   findPreviousPane,
 } from "@/features/workspace/splitTree";
+import { isTauriRuntime } from "@/lib/runtime";
 
 interface WorkspaceShortcutsProps {
   workspace: WorkspaceSnapshot | null;
@@ -175,6 +177,103 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
+
+    function reg(event: string, handler: () => void) {
+      void listen(event, handler).then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          unlisteners.push(unlisten);
+        }
+      });
+    }
+
+    reg("shortcut-new-tab", () => {
+      void propsRef.current.onCreateTab();
+    });
+
+    reg("shortcut-close-pane", () => {
+      const { workspace, onClosePane } = propsRef.current;
+      if (!workspace) return;
+      const pane = selectActivePane(workspace);
+      if (pane) void onClosePane(pane.id);
+    });
+
+    reg("shortcut-close-tab", () => {
+      const { workspace, onCloseTab } = propsRef.current;
+      if (!workspace) return;
+      const tab = selectActiveTab(workspace);
+      if (tab) void onCloseTab(tab.id);
+    });
+
+    reg("shortcut-split-right", () => {
+      const { workspace, onSplitRight } = propsRef.current;
+      if (!workspace) return;
+      const pane = selectActivePane(workspace);
+      if (pane) onSplitRight(pane.id);
+    });
+
+    reg("shortcut-split-down", () => {
+      const { workspace, onSplitDown } = propsRef.current;
+      if (!workspace) return;
+      const pane = selectActivePane(workspace);
+      if (pane) onSplitDown(pane.id);
+    });
+
+    reg("shortcut-restart-pane", () => {
+      const { workspace, onRestartPane } = propsRef.current;
+      if (!workspace) return;
+      const pane = selectActivePane(workspace);
+      if (pane) void onRestartPane(pane.id);
+    });
+
+    reg("shortcut-next-pane", () => {
+      const { workspace, onFocusPane } = propsRef.current;
+      if (!workspace) return;
+      const tab = selectActiveTab(workspace);
+      const pane = selectActivePane(workspace);
+      if (!tab || !pane) return;
+      const next = findNextPane(tab.layout, pane.id);
+      if (next) void onFocusPane(tab.id, next);
+    });
+
+    reg("shortcut-prev-pane", () => {
+      const { workspace, onFocusPane } = propsRef.current;
+      if (!workspace) return;
+      const tab = selectActiveTab(workspace);
+      const pane = selectActivePane(workspace);
+      if (!tab || !pane) return;
+      const prev = findPreviousPane(tab.layout, pane.id);
+      if (prev) void onFocusPane(tab.id, prev);
+    });
+
+    reg("shortcut-shortcuts-help", () => {
+      propsRef.current.onOpenShortcuts();
+    });
+
+    for (let i = 1; i <= 9; i++) {
+      const index = i - 1;
+      reg(`shortcut-tab-${i}`, () => {
+        const { workspace, onSelectTab } = propsRef.current;
+        if (!workspace) return;
+        const tab = workspace.tabs[index];
+        if (tab) void onSelectTab(tab.id);
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      for (const unlisten of unlisteners) {
+        unlisten();
+      }
     };
   }, []);
 }

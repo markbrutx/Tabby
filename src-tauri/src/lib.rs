@@ -8,7 +8,7 @@ pub use cli::CliArgs;
 use std::sync::Arc;
 
 use specta_typescript::Typescript;
-use tauri::menu::{AboutMetadataBuilder, MenuBuilder, SubmenuBuilder};
+use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 use tracing::error;
@@ -94,7 +94,7 @@ pub fn run(cli_args: CliArgs) {
                 .about(Some(about_meta))
                 .separator()
                 .item(
-                    &tauri::menu::MenuItemBuilder::with_id(MENU_ITEM_SETTINGS, "Settings…")
+                    &MenuItemBuilder::with_id(MENU_ITEM_SETTINGS, "Settings…")
                         .accelerator("CmdOrCtrl+,")
                         .build(handle)?,
                 )
@@ -106,12 +106,97 @@ pub fn run(cli_args: CliArgs) {
                 .quit()
                 .build()?;
 
-            MenuBuilder::new(handle).item(&app_submenu).build()
+            let edit_submenu = SubmenuBuilder::new(handle, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+
+            let mut ws = SubmenuBuilder::new(handle, "Workspace")
+                .item(
+                    &MenuItemBuilder::with_id("shortcut-new-tab", "New Tab")
+                        .accelerator("CmdOrCtrl+T")
+                        .build(handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("shortcut-close-pane", "Close Pane")
+                        .accelerator("CmdOrCtrl+W")
+                        .build(handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("shortcut-close-tab", "Close Workspace")
+                        .accelerator("CmdOrCtrl+Shift+W")
+                        .build(handle)?,
+                )
+                .separator()
+                .item(
+                    &MenuItemBuilder::with_id("shortcut-split-right", "Split Right")
+                        .accelerator("CmdOrCtrl+D")
+                        .build(handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("shortcut-split-down", "Split Down")
+                        .accelerator("CmdOrCtrl+E")
+                        .build(handle)?,
+                )
+                .separator()
+                .item(
+                    &MenuItemBuilder::with_id("shortcut-restart-pane", "Restart Pane")
+                        .accelerator("CmdOrCtrl+Shift+R")
+                        .build(handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("shortcut-next-pane", "Next Pane")
+                        .accelerator("CmdOrCtrl+]")
+                        .build(handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("shortcut-prev-pane", "Previous Pane")
+                        .accelerator("CmdOrCtrl+[")
+                        .build(handle)?,
+                )
+                .separator()
+                .item(
+                    &MenuItemBuilder::with_id("shortcut-shortcuts-help", "Keyboard Shortcuts")
+                        .accelerator("CmdOrCtrl+/")
+                        .build(handle)?,
+                )
+                .separator();
+
+            for i in 1u8..=9 {
+                ws = ws.item(
+                    &MenuItemBuilder::with_id(
+                        format!("shortcut-tab-{i}"),
+                        format!("Switch to Tab {i}"),
+                    )
+                    .accelerator(format!("CmdOrCtrl+{i}"))
+                    .build(handle)?,
+                );
+            }
+
+            let workspace_submenu = ws.build()?;
+
+            MenuBuilder::new(handle)
+                .item(&app_submenu)
+                .item(&edit_submenu)
+                .item(&workspace_submenu)
+                .build()
         })
         .on_menu_event(|app_handle, event| {
-            if event.id().as_ref() == MENU_ITEM_SETTINGS {
+            let id = event.id().as_ref();
+            if id == MENU_ITEM_SETTINGS {
                 if let Err(emit_err) = app_handle.emit(EVENT_OPEN_SETTINGS, ()) {
                     error!(?emit_err, "Failed to emit menu-open-settings event");
+                }
+                return;
+            }
+            if id.starts_with("shortcut-") {
+                if let Err(emit_err) = app_handle.emit(id, ()) {
+                    error!(?emit_err, "Failed to emit shortcut event");
                 }
             }
         })

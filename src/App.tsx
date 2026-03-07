@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useShallow } from "zustand/react/shallow";
 import { RecoveryScreen } from "@/components/RecoveryScreen";
 import { ConfirmDialog } from "@/features/workspace/components/ConfirmDialog";
 import { SplitTreeRenderer } from "@/features/workspace/components/SplitTreeRenderer";
@@ -75,7 +76,30 @@ function App() {
     updateSettings,
     resetSettings,
     clearError,
-  } = useWorkspaceStore();
+  } = useWorkspaceStore(
+    useShallow((state) => ({
+      workspace: state.workspace,
+      settings: state.settings,
+      profiles: state.profiles,
+      error: state.error,
+      isHydrating: state.isHydrating,
+      wizardTab: state.wizardTab,
+      initialize: state.initialize,
+      createTabFromWizard: state.createTabFromWizard,
+      openSetupWizard: state.openSetupWizard,
+      closeSetupWizard: state.closeSetupWizard,
+      closeTab: state.closeTab,
+      setActiveTab: state.setActiveTab,
+      focusPane: state.focusPane,
+      restartPane: state.restartPane,
+      splitPane: state.splitPane,
+      closePane: state.closePane,
+      swapPanes: state.swapPanes,
+      updateSettings: state.updateSettings,
+      resetSettings: state.resetSettings,
+      clearError: state.clearError,
+    })),
+  );
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -239,6 +263,7 @@ function App() {
   }
 
   const activePane = selectActivePane(workspace);
+  const modalOpen = splitPopup !== null || confirmAction !== null || settingsOpen || shortcutsOpen;
 
   // Build display tabs: real tabs + phantom wizard tab at the end.
   const displayTabs = wizardTab
@@ -301,6 +326,7 @@ function App() {
                 fontSize={settings.fontSize}
                 theme={resolvedTheme}
                 visible={isActive}
+                modalOpen={modalOpen}
                 onFocus={focusPane}
                 onRestart={restartPane}
                 onClosePane={handleClosePaneConfirm}

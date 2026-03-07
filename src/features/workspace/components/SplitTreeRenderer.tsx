@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Panel,
   PanelGroup,
@@ -11,6 +11,7 @@ import type { PaneSnapshot, SplitNode, TabSnapshot } from "@/features/workspace/
 import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain";
 import type { ResolvedTheme } from "@/features/workspace/theme";
 import { BrowserPane, type BrowserPaneHandle } from "./BrowserPane";
+import { BrowserToolbar } from "./BrowserToolbar";
 import { PaneHeader } from "./PaneHeader";
 import { TerminalPane } from "./TerminalPane";
 
@@ -23,6 +24,7 @@ interface SplitTreeCtx {
   fontSize: number;
   theme: ResolvedTheme;
   visible: boolean;
+  modalOpen: boolean;
   onFocus: (tabId: string, paneId: string) => Promise<void>;
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
@@ -30,9 +32,6 @@ interface SplitTreeCtx {
   dragSourceRef: React.MutableRefObject<string | null>;
   dragOverPaneId: string | null;
   onDragOverChange: (paneId: string | null) => void;
-  browserUrls: Record<string, string>;
-  onBrowserUrlChange: (paneId: string, url: string) => void;
-  browserPaneRefs: React.MutableRefObject<Record<string, BrowserPaneHandle | null>>;
 }
 
 const TreeContext = createContext<SplitTreeCtx | null>(null);
@@ -52,6 +51,7 @@ interface SplitTreeRendererProps {
   fontSize: number;
   theme: ResolvedTheme;
   visible: boolean;
+  modalOpen?: boolean;
   onFocus: (tabId: string, paneId: string) => Promise<void>;
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
@@ -73,19 +73,65 @@ function findPaneById(tab: TabSnapshot, paneId: string): PaneSnapshot | undefine
 function PaneLeaf({ paneId }: { paneId: string }) {
   const ctx = useTreeContext();
   const {
-    tab, fontSize, theme, visible,
+    tab, fontSize, theme, visible, modalOpen,
     onFocus, onRestart, onClosePane, onSwapPanes,
     dragSourceRef, dragOverPaneId, onDragOverChange,
-    browserUrls, onBrowserUrlChange, browserPaneRefs,
   } = ctx;
 
   const pane = findPaneById(tab, paneId);
+  const browserPaneRef = useRef<BrowserPaneHandle | null>(null);
+  const isBrowser = pane?.paneKind === "browser";
+  const [browserUrl, setBrowserUrl] = useState(pane?.url ?? DEFAULT_BROWSER_URL);
+
+  useEffect(() => {
+    if (isBrowser) {
+      setBrowserUrl(pane?.url ?? DEFAULT_BROWSER_URL);
+    }
+  }, [isBrowser, pane?.id, pane?.url]);
+
   if (!pane) return null;
 
   const isActive = tab.activePaneId === pane.id;
   const isDragOver = dragOverPaneId === pane.id;
   const isDragSource = dragSourceRef.current === pane.id;
-  const isBrowser = pane.paneKind === "browser";
+
+  const dragProps = {
+    draggable: true as const,
+    isDragOver,
+    onDragStart: (e: React.DragEvent) => {
+      dragSourceRef.current = pane.id;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", pane.id);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+    },
+    onDragEnter: (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragSourceRef.current && dragSourceRef.current !== pane.id) {
+        onDragOverChange(pane.id);
+      }
+    },
+    onDragLeave: () => {
+      if (dragOverPaneId === pane.id) {
+        onDragOverChange(null);
+      }
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      const sourceId = dragSourceRef.current;
+      if (sourceId && sourceId !== pane.id) {
+        onSwapPanes(sourceId, pane.id);
+      }
+      dragSourceRef.current = null;
+      onDragOverChange(null);
+    },
+    onDragEnd: () => {
+      dragSourceRef.current = null;
+      onDragOverChange(null);
+    },
+  };
 
   return (
     <ErrorBoundary
@@ -109,70 +155,43 @@ function PaneLeaf({ paneId }: { paneId: string }) {
       )}
     >
       <div className={`flex h-full flex-col ${isDragSource ? "opacity-50" : ""}`}>
-        <PaneHeader
-          profileLabel={pane.profileLabel}
-          cwd={pane.cwd}
-          isActive={isActive}
-          paneCount={tab.panes.length}
-          onClose={() => onClosePane(pane.id)}
-          draggable
-          isDragOver={isDragOver}
-          isBrowser={isBrowser}
-          browserUrl={isBrowser ? (browserUrls[pane.id] ?? pane.url ?? DEFAULT_BROWSER_URL) : undefined}
-          onBrowserNavigate={isBrowser ? (url) => {
-            browserPaneRefs.current[pane.id]?.navigate(url);
-          } : undefined}
-          onBrowserReload={isBrowser ? () => {
-            const currentUrl = browserUrls[pane.id] ?? pane.url ?? DEFAULT_BROWSER_URL;
-            browserPaneRefs.current[pane.id]?.navigate(currentUrl);
-          } : undefined}
-          onDragStart={(e) => {
-            dragSourceRef.current = pane.id;
-            e.dataTransfer.effectAllowed = "move";
-            e.dataTransfer.setData("text/plain", pane.id);
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "move";
-          }}
-          onDragEnter={(e) => {
-            e.preventDefault();
-            if (dragSourceRef.current && dragSourceRef.current !== pane.id) {
-              onDragOverChange(pane.id);
-            }
-          }}
-          onDragLeave={() => {
-            if (dragOverPaneId === pane.id) {
-              onDragOverChange(null);
-            }
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            const sourceId = dragSourceRef.current;
-            if (sourceId && sourceId !== pane.id) {
-              onSwapPanes(sourceId, pane.id);
-            }
-            dragSourceRef.current = null;
-            onDragOverChange(null);
-          }}
-          onDragEnd={() => {
-            dragSourceRef.current = null;
-            onDragOverChange(null);
-          }}
-        />
+        {isBrowser ? (
+          <BrowserToolbar
+            url={browserUrl}
+            isActive={isActive}
+            paneCount={tab.panes.length}
+            onNavigate={(url) => {
+              setBrowserUrl(url);
+              browserPaneRef.current?.navigate(url);
+            }}
+            onReload={() => {
+              browserPaneRef.current?.navigate(browserUrl);
+            }}
+            onClose={() => onClosePane(pane.id)}
+            {...dragProps}
+          />
+        ) : (
+          <PaneHeader
+            profileLabel={pane.profileLabel}
+            cwd={pane.cwd}
+            isActive={isActive}
+            paneCount={tab.panes.length}
+            onClose={() => onClosePane(pane.id)}
+            {...dragProps}
+          />
+        )}
         <div
           className="min-h-0 flex-1"
           onMouseDown={() => void onFocus(tab.id, pane.id)}
         >
           {isBrowser ? (
             <BrowserPane
-              ref={(handle) => {
-                browserPaneRefs.current[pane.id] = handle;
-              }}
+              ref={browserPaneRef}
               pane={pane}
               active={isActive}
               visible={visible}
-              onUrlChange={(url) => onBrowserUrlChange(pane.id, url)}
+              modalOpen={modalOpen}
+              onUrlChange={setBrowserUrl}
             />
           ) : (
             <TerminalPane
@@ -228,6 +247,7 @@ export function SplitTreeRenderer({
   fontSize,
   theme,
   visible,
+  modalOpen = false,
   onFocus,
   onRestart,
   onClosePane,
@@ -235,42 +255,29 @@ export function SplitTreeRenderer({
 }: SplitTreeRendererProps) {
   const dragSourceRef = useRef<string | null>(null);
   const [dragOverPaneId, setDragOverPaneId] = useState<string | null>(null);
-  const [browserUrls, setBrowserUrls] = useState<Record<string, string>>({});
-  const browserPaneRefs = useRef<Record<string, BrowserPaneHandle | null>>({});
 
   const handleDragOverChange = useCallback((paneId: string | null) => {
     setDragOverPaneId(paneId);
   }, []);
 
-  const handleBrowserUrlChange = useCallback((paneId: string, url: string) => {
-    setBrowserUrls((prev) => ({ ...prev, [paneId]: url }));
-  }, []);
-
-  const handleClosePane = useCallback((paneId: string) => {
-    setBrowserUrls((prev) => {
-      const { [paneId]: _, ...rest } = prev;
-      return rest;
-    });
-    delete browserPaneRefs.current[paneId];
-    onClosePane(paneId);
-  }, [onClosePane]);
-
-  const ctx: SplitTreeCtx = {
+  const ctx: SplitTreeCtx = useMemo(() => ({
     tab,
     fontSize,
     theme,
     visible,
+    modalOpen,
     onFocus,
     onRestart,
-    onClosePane: handleClosePane,
+    onClosePane,
     onSwapPanes,
     dragSourceRef,
     dragOverPaneId,
     onDragOverChange: handleDragOverChange,
-    browserUrls,
-    onBrowserUrlChange: handleBrowserUrlChange,
-    browserPaneRefs,
-  };
+  }), [
+    tab, fontSize, theme, visible, modalOpen,
+    onFocus, onRestart, onClosePane, onSwapPanes,
+    dragSourceRef, dragOverPaneId, handleDragOverChange,
+  ]);
 
   return (
     <TreeContext.Provider value={ctx}>

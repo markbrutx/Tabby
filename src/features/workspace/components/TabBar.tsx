@@ -25,7 +25,10 @@ export function TabBar({
   onOpenShortcuts,
 }: TabBarProps) {
   return (
-    <div className="flex h-8 shrink-0 select-none items-center gap-0 overflow-x-auto bg-[var(--color-surface)] text-xs">
+    <div
+      className="flex h-10 shrink-0 select-none items-center gap-0 overflow-x-auto bg-[var(--color-surface)] pl-[72px] text-xs"
+      data-tauri-drag-region
+    >
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
 
@@ -73,7 +76,7 @@ export function TabBar({
       >
         <Plus size={14} />
       </button>
-      <div className="flex-1" />
+      <div className="flex-1" data-tauri-drag-region />
       <button
         data-testid="shortcuts-button"
         className="flex h-full items-center px-3 text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"

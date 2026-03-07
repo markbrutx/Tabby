@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createStore } from "zustand/vanilla";
 import {
+  BROWSER_PROFILE_ID,
   CUSTOM_PROFILE_ID,
   type LayoutPreset,
   type PaneProfile,
@@ -22,6 +23,7 @@ export interface PaneGroupConfig {
   profileId: string;
   workingDirectory: string;
   customCommand?: string;
+  url?: string;
   count: number;
 }
 
@@ -106,63 +108,89 @@ async function runSettingsMutation(
 }
 
 function createWorkspaceStoreState(transport: WorkspaceTransport) {
-  return (set: SetFn, get: () => WorkspaceStore): WorkspaceStore => ({
-    workspace: null,
-    settings: null,
-    profiles: [],
-    error: null,
-    isHydrating: true,
-    isWorking: false,
-    wizardTab: null,
+  return (set: SetFn, get: () => WorkspaceStore): WorkspaceStore => {
+    let paneLifecycleUnlisten: (() => void) | null = null;
+    let paneLifecycleInitPromise: Promise<void> | null = null;
 
-    async initialize() {
-      set({ isHydrating: true, error: null });
+    const handlePaneLifecycle = (event: {
+      paneId: string;
+      sessionId: string | null;
+      status: WorkspaceSnapshot["tabs"][number]["panes"][number]["status"];
+    }) => {
+      set((state) => {
+        const workspace = state.workspace;
+        if (!workspace) {
+          return {};
+        }
 
-      try {
-        const payload = await transport.bootstrapWorkspace();
-        const shouldShowWizard =
-          payload.workspace.tabs.length === 0;
-        set({
-          workspace: payload.workspace,
-          settings: payload.settings,
-          profiles: payload.profiles,
-          error: null,
-          isHydrating: false,
-          wizardTab: shouldShowWizard
-            ? makeWizardTab(payload.workspace)
-            : null,
-        });
-
-        void transport.listenToPaneLifecycle((event) => {
-          set((state) => {
-            const workspace = state.workspace;
-            if (!workspace) {
-              return {};
+        const tabs = workspace.tabs.map((tab) => ({
+          ...tab,
+          panes: tab.panes.map((pane) => {
+            if (pane.id !== event.paneId) {
+              return pane;
             }
+            if (event.sessionId && pane.sessionId !== event.sessionId) {
+              return pane;
+            }
+            return { ...pane, status: event.status };
+          }),
+        }));
 
-            const tabs = workspace.tabs.map((tab) => ({
-              ...tab,
-              panes: tab.panes.map((pane) => {
-                if (pane.id !== event.paneId) {
-                  return pane;
-                }
-                if (event.sessionId && pane.sessionId !== event.sessionId) {
-                  return pane;
-                }
-                return { ...pane, status: event.status };
-              }),
-            }));
+        return { workspace: { ...workspace, tabs } };
+      });
+    };
 
-            return { workspace: { ...workspace, tabs } };
-          });
-        });
-      } catch (error) {
-        set({
-          error: asErrorMessage(error),
-          isHydrating: false,
-        });
+    const ensurePaneLifecycleListener = async () => {
+      if (paneLifecycleUnlisten || paneLifecycleInitPromise) {
+        await paneLifecycleInitPromise;
+        return;
       }
-    },
+
+      paneLifecycleInitPromise = transport
+        .listenToPaneLifecycle(handlePaneLifecycle)
+        .then((unlisten) => {
+          paneLifecycleUnlisten = unlisten;
+        })
+        .finally(() => {
+          paneLifecycleInitPromise = null;
+        });
+
+      await paneLifecycleInitPromise;
+    };
+
+    return {
+      workspace: null,
+      settings: null,
+      profiles: [],
+      error: null,
+      isHydrating: true,
+      isWorking: false,
+      wizardTab: null,
+
+      async initialize() {
+        set({ isHydrating: true, error: null });
+
+        try {
+          const payload = await transport.bootstrapWorkspace();
+          await ensurePaneLifecycleListener();
+          const shouldShowWizard = payload.workspace.tabs.length === 0;
+          set({
+            workspace: payload.workspace,
+            settings: payload.settings,
+            profiles: payload.profiles,
+            error: null,
+            isHydrating: false,
+            wizardTab: shouldShowWizard
+              ? makeWizardTab(payload.workspace)
+              : null,
+          });
+        } catch (error) {
+          set({
+            error: asErrorMessage(error),
+            isHydrating: false,
+          });
+        }
+      },
 
     async createTab(preset, overrides = {}) {
       const settings = get().settings;
@@ -190,13 +218,15 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
       set({ isWorking: true });
 
       try {
-        const paneConfigs = config.groups.flatMap((group) =>
-          Array.from({ length: group.count }, () => ({
+        const paneConfigs = config.groups.flatMap((group) => {
+          const isBrowser = group.profileId === BROWSER_PROFILE_ID;
+          return Array.from({ length: group.count }, () => ({
             profileId: group.profileId,
-            cwd: group.workingDirectory,
+            cwd: isBrowser ? (group.workingDirectory || "~") : group.workingDirectory,
             startupCommand: group.customCommand ?? null,
-          })),
-        );
+            url: isBrowser ? (group.url || null) : null,
+          }));
+        });
 
         const workspace = await transport.createTab({
           preset: "1x1",
@@ -296,7 +326,8 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
     clearError() {
       set({ error: null });
     },
-  });
+    };
+  };
 }
 
 export function createWorkspaceStore(transport: WorkspaceTransport = bridge) {

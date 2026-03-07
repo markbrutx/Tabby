@@ -56,6 +56,7 @@ pub struct PaneConfig {
     pub profile_id: String,
     pub cwd: String,
     pub startup_command: Option<String>,
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]

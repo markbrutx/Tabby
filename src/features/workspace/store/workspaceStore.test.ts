@@ -40,6 +40,8 @@ const workspace: WorkspaceSnapshot = {
           profileLabel: "Terminal",
           startupCommand: null,
           status: "running",
+          paneKind: "terminal",
+          url: null,
         },
       ],
     },
@@ -137,9 +139,9 @@ describe("createWorkspaceStore", () => {
       profileId: null,
       startupCommand: null,
       paneConfigs: [
-        { profileId: "terminal", cwd: "/a", startupCommand: null },
-        { profileId: "terminal", cwd: "/a", startupCommand: null },
-        { profileId: "claude", cwd: "/b", startupCommand: null },
+        { profileId: "terminal", cwd: "/a", startupCommand: null, url: null },
+        { profileId: "terminal", cwd: "/a", startupCommand: null, url: null },
+        { profileId: "claude", cwd: "/b", startupCommand: null, url: null },
       ],
     });
   });
@@ -161,7 +163,7 @@ describe("createWorkspaceStore", () => {
       profileId: null,
       startupCommand: null,
       paneConfigs: [
-        { profileId: "custom", cwd: "/c", startupCommand: "npm dev" },
+        { profileId: "custom", cwd: "/c", startupCommand: "npm dev", url: null },
       ],
     });
   });
@@ -315,5 +317,15 @@ describe("createWorkspaceStore", () => {
     expect(transport.focusPane).toHaveBeenCalledWith("tab-1", "pane-1");
     expect(transport.closeTab).toHaveBeenCalledWith("tab-1");
     expect(store.getState().workspace?.activeTabId).toBe("tab-2");
+  });
+
+  it("reuses the existing lifecycle subscription across repeated initialize calls", async () => {
+    const transport = createTransportMock();
+    const store = createWorkspaceStore(transport);
+
+    await store.getState().initialize();
+    await store.getState().initialize();
+
+    expect(transport.listenToPaneLifecycle).toHaveBeenCalledTimes(1);
   });
 });

@@ -16,7 +16,7 @@ interface UseBrowserWebviewResult {
   navigate: (url: string) => void;
 }
 
-function normalizeUrl(raw: string): string {
+export function normalizeUrl(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return DEFAULT_BROWSER_URL;
 
@@ -27,6 +27,33 @@ function normalizeUrl(raw: string): string {
   return trimmed;
 }
 
+function hasRenderableBounds(bounds: BrowserBounds): boolean {
+  return bounds.width > 0 && bounds.height > 0;
+}
+
+function boundsFromElement(container: HTMLDivElement): BrowserBounds {
+  const rect = container.getBoundingClientRect();
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function sameBounds(
+  current: BrowserBounds | null,
+  next: BrowserBounds,
+): boolean {
+  return (
+    current?.x === next.x &&
+    current?.y === next.y &&
+    current?.width === next.width &&
+    current?.height === next.height
+  );
+}
+
+
 export function useBrowserWebview({
   pane,
   visible,
@@ -35,52 +62,65 @@ export function useBrowserWebview({
   const containerRef = useRef<HTMLDivElement>(null);
   const [currentUrl, setCurrentUrl] = useState(pane.url ?? DEFAULT_BROWSER_URL);
   const createdRef = useRef(false);
+  const currentUrlRef = useRef(currentUrl);
+  const lastBoundsRef = useRef<BrowserBounds | null>(null);
   const isTauri = isTauriRuntime();
 
   // Stable ref for onUrlChange to avoid re-registering the listener on every render
   const onUrlChangeRef = useRef(onUrlChange);
-  useEffect(() => { onUrlChangeRef.current = onUrlChange; });
+  onUrlChangeRef.current = onUrlChange;
+  currentUrlRef.current = currentUrl;
+  useEffect(() => {
+    setCurrentUrl(pane.url ?? DEFAULT_BROWSER_URL);
+  }, [pane.id, pane.url]);
 
-  // Effect 1: Create / Destroy native webview
+  // Effect 1: Destroy native webview on unmount / pane switch
   useEffect(() => {
     if (!isTauri) return;
+
+    return () => {
+      if (createdRef.current) {
+        createdRef.current = false;
+        lastBoundsRef.current = null;
+        void bridge.closeBrowserWebview(pane.id).catch(() => undefined);
+      }
+    };
+  }, [pane.id, isTauri]);
+
+  // Effect 2: Lazily create the native webview the first time the pane is shown.
+  useEffect(() => {
+    if (!isTauri || createdRef.current || !visible) return;
 
     const container = containerRef.current;
     if (!container) return;
 
     let cancelled = false;
 
-    // Use rAF to ensure layout paint has completed before reading bounds
     const rafId = requestAnimationFrame(() => {
-      if (cancelled) return;
+      if (cancelled || createdRef.current) return;
 
-      const rect = container.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return;
-
-      const bounds: BrowserBounds = {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-      };
+      const bounds = boundsFromElement(container);
+      if (!hasRenderableBounds(bounds)) return;
 
       createdRef.current = true;
-      void bridge.createBrowserWebview(pane.id, normalizeUrl(currentUrl), bounds);
+      lastBoundsRef.current = bounds;
+      void bridge.createBrowserWebview(
+        pane.id,
+        normalizeUrl(currentUrlRef.current),
+        bounds,
+      ).catch(() => {
+        createdRef.current = false;
+        lastBoundsRef.current = null;
+      });
     });
 
     return () => {
       cancelled = true;
       cancelAnimationFrame(rafId);
-      if (createdRef.current) {
-        createdRef.current = false;
-        void bridge.closeBrowserWebview(pane.id);
-      }
     };
-    // Only create/destroy on mount/unmount — do NOT depend on currentUrl
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pane.id, isTauri]);
+  }, [pane.id, visible, isTauri]);
 
-  // Effect 2: Resize sync via ResizeObserver
+  // Effect 3: Resize sync via ResizeObserver
   useEffect(() => {
     if (!isTauri) return;
 
@@ -95,14 +135,13 @@ export function useBrowserWebview({
       rafId = requestAnimationFrame(() => {
         rafId = null;
         if (unmounted || !createdRef.current) return;
-        const rect = container.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return;
-        void bridge.setBrowserWebviewBounds(pane.id, {
-          x: rect.x,
-          y: rect.y,
-          width: rect.width,
-          height: rect.height,
-        });
+        const bounds = boundsFromElement(container);
+        if (!hasRenderableBounds(bounds) || sameBounds(lastBoundsRef.current, bounds)) {
+          return;
+        }
+
+        lastBoundsRef.current = bounds;
+        void bridge.setBrowserWebviewBounds(pane.id, bounds).catch(() => undefined);
       });
     });
 
@@ -115,13 +154,13 @@ export function useBrowserWebview({
     };
   }, [pane.id, isTauri]);
 
-  // Effect 3: Visibility sync
+  // Effect 4: Visibility sync
   useEffect(() => {
     if (!isTauri || !createdRef.current) return;
-    void bridge.setBrowserWebviewVisible(pane.id, visible);
+    void bridge.setBrowserWebviewVisible(pane.id, visible).catch(() => undefined);
   }, [pane.id, visible, isTauri]);
 
-  // Effect 4: URL change events from native webview
+  // Effect 5: URL change events from native webview
   useEffect(() => {
     if (!isTauri) return;
 
@@ -154,7 +193,7 @@ export function useBrowserWebview({
       setCurrentUrl(normalized);
 
       if (isTauri && createdRef.current) {
-        void bridge.navigateBrowser(pane.id, normalized);
+        void bridge.navigateBrowser(pane.id, normalized).catch(() => undefined);
       }
     },
     [pane.id, isTauri],

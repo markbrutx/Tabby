@@ -2,7 +2,7 @@ import { FolderOpen, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { CUSTOM_PROFILE_ID, type PaneProfile } from "@/features/workspace/domain";
+import { BROWSER_PROFILE_ID, CUSTOM_PROFILE_ID, type PaneProfile } from "@/features/workspace/domain";
 import type { PaneGroupConfig } from "@/features/workspace/store/workspaceStore";
 import { pickDirectory } from "@/lib/pickDirectory";
 
@@ -107,33 +107,45 @@ export function PaneGroupRow({
         </div>
       </div>
 
-      <div className="flex gap-2">
+      {group.profileId === BROWSER_PROFILE_ID ? (
         <Input
-          data-testid={`group-dir-${index}`}
-          value={group.workingDirectory}
-          onChange={(e) => onChange({ workingDirectory: e.target.value })}
-          placeholder="Working directory"
+          data-testid={`group-url-${index}`}
+          value={group.url ?? ""}
+          onChange={(e) => onChange({ url: e.target.value })}
+          placeholder="https://google.com"
           className="text-sm"
         />
-        <Button
-          variant="secondary"
-          size="sm"
-          className="shrink-0"
-          onClick={() => void handlePickDirectory()}
-        >
-          <FolderOpen size={14} />
-        </Button>
-      </div>
+      ) : (
+        <>
+          <div className="flex gap-2">
+            <Input
+              data-testid={`group-dir-${index}`}
+              value={group.workingDirectory}
+              onChange={(e) => onChange({ workingDirectory: e.target.value })}
+              placeholder="Working directory"
+              className="text-sm"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              className="shrink-0"
+              onClick={() => void handlePickDirectory()}
+            >
+              <FolderOpen size={14} />
+            </Button>
+          </div>
 
-      {group.profileId === CUSTOM_PROFILE_ID ? (
-        <Input
-          data-testid={`group-command-${index}`}
-          value={group.customCommand ?? ""}
-          onChange={(e) => onChange({ customCommand: e.target.value })}
-          placeholder="Custom command (e.g. npm run dev)"
-          className="text-sm"
-        />
-      ) : null}
+          {group.profileId === CUSTOM_PROFILE_ID ? (
+            <Input
+              data-testid={`group-command-${index}`}
+              value={group.customCommand ?? ""}
+              onChange={(e) => onChange({ customCommand: e.target.value })}
+              placeholder="Custom command (e.g. npm run dev)"
+              className="text-sm"
+            />
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

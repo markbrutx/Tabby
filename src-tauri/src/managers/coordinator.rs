@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tracing::{info, warn};
 
+use crate::commands::browser::webview_label;
 use crate::domain::commands::{NewTabRequest, SplitPaneRequest};
 use crate::domain::error::TabbyError;
 use crate::domain::events::{PaneLifecycleEvent, WorkspaceChangedEvent, PANE_LIFECYCLE_EVENT_NAME};
@@ -116,25 +117,9 @@ impl Coordinator {
         let is_browser = resolved.id == BROWSER_PROFILE_ID;
 
         let seed = if is_browser {
-            self.create_browser_seed(new_pane_id.clone(), cwd)
+            self.create_browser_seed(new_pane_id.clone(), cwd, None)
         } else {
-            let session_id = self.spawn_pty(&new_pane_id, cwd, &resolved)?;
-            self.emit_lifecycle(
-                &new_pane_id,
-                Some(&session_id),
-                PaneRuntimeStatus::Running,
-                None,
-            );
-            PaneSeed {
-                pane_id: new_pane_id.clone(),
-                session_id,
-                cwd: String::from(cwd),
-                profile_id: resolved.id,
-                profile_label: resolved.label,
-                startup_command: resolved.startup_command,
-                pane_kind: PaneKind::Terminal,
-                url: None,
-            }
+            self.create_terminal_seed(new_pane_id.clone(), cwd, &resolved)?
         };
 
         let snapshot = self
@@ -248,6 +233,9 @@ impl Coordinator {
 
         // Switching to terminal profile
         let new_session_id = self.spawn_pty(pane_id, &located.pane.cwd, &resolved)?;
+        if was_browser {
+            self.close_browser_webviews_quiet(&[String::from(pane_id)]);
+        }
         if !was_browser {
             self.kill_session_quiet(&old_session_id);
         }
@@ -360,25 +348,9 @@ impl Coordinator {
         for _ in 0..pane_count {
             let pane_id = create_pane_id();
             if is_browser {
-                seeds.push(self.create_browser_seed(pane_id, cwd));
+                seeds.push(self.create_browser_seed(pane_id, cwd, None));
             } else {
-                let session_id = self.spawn_pty(&pane_id, cwd, &resolved)?;
-                self.emit_lifecycle(
-                    &pane_id,
-                    Some(&session_id),
-                    PaneRuntimeStatus::Running,
-                    None,
-                );
-                seeds.push(PaneSeed {
-                    pane_id,
-                    session_id,
-                    cwd: String::from(cwd),
-                    profile_id: resolved.id.clone(),
-                    profile_label: resolved.label.clone(),
-                    startup_command: resolved.startup_command.clone(),
-                    pane_kind: PaneKind::Terminal,
-                    url: None,
-                });
+                seeds.push(self.create_terminal_seed(pane_id, cwd, &resolved)?);
             }
         }
         Ok(seeds)
@@ -408,25 +380,9 @@ impl Coordinator {
             let is_browser = resolved.id == BROWSER_PROFILE_ID;
 
             if is_browser {
-                seeds.push(self.create_browser_seed(pane_id, cwd));
+                seeds.push(self.create_browser_seed(pane_id, cwd, config.url.clone()));
             } else {
-                let session_id = self.spawn_pty(&pane_id, cwd, &resolved)?;
-                self.emit_lifecycle(
-                    &pane_id,
-                    Some(&session_id),
-                    PaneRuntimeStatus::Running,
-                    None,
-                );
-                seeds.push(PaneSeed {
-                    pane_id,
-                    session_id,
-                    cwd: String::from(cwd),
-                    profile_id: resolved.id.clone(),
-                    profile_label: resolved.label.clone(),
-                    startup_command: resolved.startup_command.clone(),
-                    pane_kind: PaneKind::Terminal,
-                    url: None,
-                });
+                seeds.push(self.create_terminal_seed(pane_id, cwd, &resolved)?);
             }
         }
         Ok(seeds)
@@ -449,7 +405,27 @@ impl Coordinator {
         resolve_profile(profile_id, startup_command)
     }
 
-    fn create_browser_seed(&self, pane_id: String, cwd: &str) -> PaneSeed {
+    fn create_terminal_seed(
+        &self,
+        pane_id: String,
+        cwd: &str,
+        resolved: &ResolvedProfile,
+    ) -> Result<PaneSeed, TabbyError> {
+        let session_id = self.spawn_pty(&pane_id, cwd, resolved)?;
+        self.emit_lifecycle(&pane_id, Some(&session_id), PaneRuntimeStatus::Running, None);
+        Ok(PaneSeed {
+            pane_id,
+            session_id,
+            cwd: String::from(cwd),
+            profile_id: resolved.id.clone(),
+            profile_label: resolved.label.clone(),
+            startup_command: resolved.startup_command.clone(),
+            pane_kind: PaneKind::Terminal,
+            url: None,
+        })
+    }
+
+    fn create_browser_seed(&self, pane_id: String, cwd: &str, url: Option<String>) -> PaneSeed {
         let sentinel_id = format!("browser-{}", uuid::Uuid::new_v4());
         PaneSeed {
             pane_id,
@@ -459,7 +435,7 @@ impl Coordinator {
             profile_label: String::from("Browser"),
             startup_command: None,
             pane_kind: PaneKind::Browser,
-            url: None,
+            url,
         }
     }
 
@@ -512,10 +488,13 @@ impl Coordinator {
     }
 
     fn close_browser_webviews_quiet(&self, pane_ids: &[String]) {
+        let windows = self.app.webview_windows();
         for pane_id in pane_ids {
-            let label = format!("browser-{pane_id}");
-            if let Some(ww) = self.app.webview_windows().get(&label) {
-                if let Err(err) = ww.close() {
+            let label = webview_label(pane_id);
+            let found = windows.values().find_map(|w| w.get_webview(&label));
+
+            if let Some(wv) = found {
+                if let Err(err) = wv.close() {
                     warn!(?err, label, "Failed to close browser webview on cleanup");
                 }
             }

@@ -26,9 +26,7 @@ pub struct PaneSnapshot {
     pub profile_label: String,
     pub startup_command: Option<String>,
     pub status: PaneRuntimeStatus,
-    #[serde(default)]
     pub pane_kind: PaneKind,
-    #[serde(default)]
     pub url: Option<String>,
 }
 

@@ -4,18 +4,52 @@ use tracing::{info, warn};
 use crate::domain::error::TabbyError;
 use crate::domain::events::{BrowserUrlChangedEvent, BROWSER_URL_CHANGED};
 
-fn webview_label(pane_id: &str) -> String {
+pub(crate) fn webview_label(pane_id: &str) -> String {
     format!("browser-{pane_id}")
 }
 
 fn find_webview(window: &tauri::Window, pane_id: &str) -> Result<Webview, TabbyError> {
     let label = webview_label(pane_id);
     window
-        .app_handle()
-        .webview_windows()
-        .get(&label)
-        .map(|ww| ww.as_ref().clone())
+        .get_webview(&label)
         .ok_or_else(|| TabbyError::NotFound(format!("Browser webview not found: {label}")))
+}
+
+fn logical_child_position(
+    x: f64,
+    y: f64,
+    scale_factor: f64,
+    inner_position: tauri::PhysicalPosition<i32>,
+    outer_position: tauri::PhysicalPosition<i32>,
+) -> tauri::LogicalPosition<f64> {
+    let inset_x = f64::from(inner_position.x - outer_position.x) / scale_factor;
+    let inset_y = f64::from(inner_position.y - outer_position.y) / scale_factor;
+
+    tauri::LogicalPosition::new(x + inset_x, y + inset_y)
+}
+
+fn child_webview_position(
+    window: &tauri::Window,
+    x: f64,
+    y: f64,
+) -> Result<tauri::Position, TabbyError> {
+    let scale_factor = window
+        .scale_factor()
+        .map_err(|err| TabbyError::Io(format!("Failed to read scale factor: {err}")))?;
+    let inner_position = window
+        .inner_position()
+        .map_err(|err| TabbyError::Io(format!("Failed to read inner position: {err}")))?;
+    let outer_position = window
+        .outer_position()
+        .map_err(|err| TabbyError::Io(format!("Failed to read outer position: {err}")))?;
+
+    Ok(tauri::Position::Logical(logical_child_position(
+        x,
+        y,
+        scale_factor,
+        inner_position,
+        outer_position,
+    )))
 }
 
 #[tauri::command]
@@ -53,7 +87,7 @@ pub fn create_browser_webview(
         },
     );
 
-    let position = tauri::Position::Logical(tauri::LogicalPosition::new(x, y));
+    let position = child_webview_position(&window, x, y)?;
     let size = tauri::Size::Logical(tauri::LogicalSize::new(width, height));
 
     window
@@ -90,9 +124,9 @@ pub fn navigate_browser(
 pub fn close_browser_webview(window: tauri::Window, pane_id: String) -> Result<(), TabbyError> {
     let label = webview_label(&pane_id);
 
-    match window.app_handle().webview_windows().get(&label) {
-        Some(ww) => {
-            if let Err(err) = ww.close() {
+    match window.get_webview(&label) {
+        Some(wv) => {
+            if let Err(err) = wv.close() {
                 warn!(?err, label, "Failed to close browser webview");
             }
             info!(label, "Browser webview closed");
@@ -117,8 +151,10 @@ pub fn set_browser_webview_bounds(
 ) -> Result<(), TabbyError> {
     let webview = find_webview(&window, &pane_id)?;
 
+    let position = child_webview_position(&window, x, y)?;
+
     webview
-        .set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)))
+        .set_position(position)
         .map_err(|err| TabbyError::Io(format!("Failed to set position: {err}")))?;
 
     webview
@@ -126,6 +162,31 @@ pub fn set_browser_webview_bounds(
         .map_err(|err| TabbyError::Io(format!("Failed to set size: {err}")))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{logical_child_position, webview_label};
+
+    #[test]
+    fn webview_label_format() {
+        assert_eq!(webview_label("pane-abc-123"), "browser-pane-abc-123");
+        assert_eq!(webview_label(""), "browser-");
+    }
+
+    #[test]
+    fn adjusts_child_position_for_window_chrome() {
+        let position = logical_child_position(
+            24.0,
+            32.0,
+            2.0,
+            tauri::PhysicalPosition::new(300, 228),
+            tauri::PhysicalPosition::new(280, 180),
+        );
+
+        assert_eq!(position.x, 34.0);
+        assert_eq!(position.y, 56.0);
+    }
 }
 
 #[tauri::command]
@@ -137,9 +198,9 @@ pub fn set_browser_webview_visible(
 ) -> Result<(), TabbyError> {
     let label = webview_label(&pane_id);
 
-    match window.app_handle().webview_windows().get(&label) {
-        Some(ww) => {
-            let result = if visible { ww.show() } else { ww.hide() };
+    match window.get_webview(&label) {
+        Some(wv) => {
+            let result = if visible { wv.show() } else { wv.hide() };
             result.map_err(|err| TabbyError::Io(format!("Failed to set visibility: {err}")))?;
         }
         None => {
