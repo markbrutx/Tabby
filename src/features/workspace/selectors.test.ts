@@ -1,11 +1,25 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceSnapshot } from "@/features/workspace/domain";
+import type { SplitNode, WorkspaceSnapshot } from "@/features/workspace/domain";
 import {
   selectActivePane,
   selectActiveTab,
-  selectVisiblePanes,
-  selectWorkspaceSummary,
 } from "@/features/workspace/selectors";
+
+const layout1x2: SplitNode = {
+  type: "split",
+  direction: "horizontal",
+  ratio: 500,
+  first: { type: "pane", paneId: "pane-1" },
+  second: { type: "pane", paneId: "pane-2" },
+};
+
+const layout2pane: SplitNode = {
+  type: "split",
+  direction: "horizontal",
+  ratio: 500,
+  first: { type: "pane", paneId: "pane-3" },
+  second: { type: "pane", paneId: "pane-4" },
+};
 
 const workspace: WorkspaceSnapshot = {
   activeTabId: "tab-2",
@@ -13,7 +27,7 @@ const workspace: WorkspaceSnapshot = {
     {
       id: "tab-1",
       title: "Workspace 1",
-      preset: "1x2",
+      layout: layout1x2,
       activePaneId: "pane-2",
       panes: [
         {
@@ -41,7 +55,7 @@ const workspace: WorkspaceSnapshot = {
     {
       id: "tab-2",
       title: "Workspace 2",
-      preset: "2x2",
+      layout: layout2pane,
       activePaneId: "pane-4",
       panes: [
         {
@@ -75,22 +89,4 @@ describe("workspace selectors", () => {
     expect(selectActivePane(workspace)?.id).toBe("pane-4");
   });
 
-  it("returns only the panes visible in the active tab", () => {
-    expect(selectVisiblePanes(workspace).map((pane) => pane.id)).toEqual([
-      "pane-3",
-      "pane-4",
-    ]);
-  });
-
-  it("builds a compact summary for the workspace header", () => {
-    expect(selectWorkspaceSummary(workspace)).toEqual({
-      activeTabId: "tab-2",
-      activeTabTitle: "Workspace 2",
-      activePaneId: "pane-4",
-      activePaneTitle: "Pane 2",
-      activePaneStatus: "running",
-      paneCount: 4,
-      tabCount: 2,
-    });
-  });
 });

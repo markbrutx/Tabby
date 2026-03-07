@@ -4,6 +4,9 @@ use uuid::Uuid;
 
 use crate::domain::error::TabbyError;
 
+pub const CUSTOM_PROFILE_ID: &str = "custom";
+pub const TERMINAL_PROFILE_ID: &str = "terminal";
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 pub enum ThemeMode {
     #[serde(rename = "system")]
@@ -18,11 +21,11 @@ pub enum ThemeMode {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 pub enum LayoutPreset {
     #[serde(rename = "1x1")]
+    #[default]
     OneByOne,
     #[serde(rename = "1x2")]
     OneByTwo,
     #[serde(rename = "2x2")]
-    #[default]
     TwoByTwo,
     #[serde(rename = "2x3")]
     TwoByThree,
@@ -31,29 +34,37 @@ pub enum LayoutPreset {
 }
 
 impl LayoutPreset {
-    pub fn dimensions(self) -> (u16, u16) {
-        match self {
-            Self::OneByOne => (1, 1),
-            Self::OneByTwo => (1, 2),
-            Self::TwoByTwo => (2, 2),
-            Self::TwoByThree => (2, 3),
-            Self::ThreeByThree => (3, 3),
-        }
-    }
-
     pub fn pane_count(self) -> u16 {
-        let (rows, columns) = self.dimensions();
-        rows * columns
+        match self {
+            Self::OneByOne => 1,
+            Self::OneByTwo => 2,
+            Self::TwoByTwo => 4,
+            Self::TwoByThree => 6,
+            Self::ThreeByThree => 9,
+        }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct GridDefinition {
-    pub preset: LayoutPreset,
-    pub rows: u16,
-    pub columns: u16,
-    pub pane_count: u16,
+pub enum SplitDirection {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum SplitNode {
+    Pane {
+        #[serde(rename = "paneId")]
+        pane_id: String,
+    },
+    Split {
+        direction: SplitDirection,
+        ratio: u16,
+        first: Box<SplitNode>,
+        second: Box<SplitNode>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
@@ -99,7 +110,7 @@ pub struct PaneSeed {
 pub fn built_in_profiles() -> Vec<PaneProfile> {
     vec![
         PaneProfile {
-            id: String::from("terminal"),
+            id: String::from(TERMINAL_PROFILE_ID),
             label: String::from("Terminal"),
             description: String::from("Pure login shell"),
             startup_command: None,
@@ -117,7 +128,7 @@ pub fn built_in_profiles() -> Vec<PaneProfile> {
             startup_command: Some(String::from("codex")),
         },
         PaneProfile {
-            id: String::from("custom"),
+            id: String::from(CUSTOM_PROFILE_ID),
             label: String::from("Custom"),
             description: String::from("Run an arbitrary shell command"),
             startup_command: None,
@@ -134,7 +145,7 @@ pub fn resolve_profile(
         .find(|candidate| candidate.id == profile_id)
         .ok_or_else(|| TabbyError::Validation(format!("Unknown profile: {profile_id}")))?;
 
-    if profile.id == "custom" {
+    if profile.id == CUSTOM_PROFILE_ID {
         let command = startup_command
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
@@ -158,14 +169,14 @@ pub fn resolve_profile(
 
 pub fn default_settings(default_working_directory: String) -> AppSettings {
     AppSettings {
-        default_layout: LayoutPreset::TwoByTwo,
-        default_profile_id: String::from("terminal"),
+        default_layout: LayoutPreset::OneByOne,
+        default_profile_id: String::from(TERMINAL_PROFILE_ID),
         default_working_directory,
         default_custom_command: String::new(),
         font_size: 13,
         theme: ThemeMode::System,
         launch_fullscreen: true,
-        has_completed_onboarding: false,
+        has_completed_onboarding: true,
     }
 }
 

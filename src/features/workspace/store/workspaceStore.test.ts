@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
   BootstrapSnapshot,
+  SplitNode,
   WorkspaceSettings,
   WorkspaceSnapshot,
 } from "@/features/workspace/domain";
 import { createWorkspaceStore } from "@/features/workspace/store/workspaceStore";
 import type { WorkspaceTransport } from "@/lib/bridge";
 
+const singleLayout: SplitNode = { type: "pane", paneId: "pane-1" };
+
 const settings: WorkspaceSettings = {
-  defaultLayout: "2x2",
+  defaultLayout: "1x1",
   defaultProfileId: "terminal",
   defaultWorkingDirectory: "/Users/mark/workspaces/tabby",
   defaultCustomCommand: "",
@@ -24,7 +27,7 @@ const workspace: WorkspaceSnapshot = {
     {
       id: "tab-1",
       title: "Workspace 1",
-      preset: "1x1",
+      layout: singleLayout,
       activePaneId: "pane-1",
       panes: [
         {
@@ -65,6 +68,8 @@ function createTransportMock(overrides: Partial<WorkspaceTransport> = {}): Works
     updatePaneProfile: vi.fn().mockResolvedValue(workspace),
     updatePaneCwd: vi.fn().mockResolvedValue(workspace),
     restartPane: vi.fn().mockResolvedValue(workspace),
+    splitPane: vi.fn().mockResolvedValue(workspace),
+    closePane: vi.fn().mockResolvedValue(workspace),
     writePty: vi.fn().mockResolvedValue(undefined),
     resizePty: vi.fn().mockResolvedValue(undefined),
     getAppSettings: vi.fn().mockResolvedValue(settings),
@@ -93,10 +98,10 @@ describe("createWorkspaceStore", () => {
     const store = createWorkspaceStore(transport);
 
     await store.getState().initialize();
-    await store.getState().createTab("2x2");
+    await store.getState().createTab("1x1");
 
     expect(transport.createTab).toHaveBeenCalledWith({
-      preset: "2x2",
+      preset: "1x1",
       cwd: settings.defaultWorkingDirectory,
       profileId: settings.defaultProfileId,
       startupCommand: null,
@@ -104,6 +109,8 @@ describe("createWorkspaceStore", () => {
   });
 
   it("applies focus and close transitions using transport responses", async () => {
+    const singleLayout2: SplitNode = { type: "pane", paneId: "pane-2" };
+
     const focusedWorkspace: WorkspaceSnapshot = {
       ...workspace,
       tabs: [
@@ -122,7 +129,7 @@ describe("createWorkspaceStore", () => {
           {
             id: "tab-2",
             title: "Workspace 2",
-            preset: "1x1",
+            layout: singleLayout2,
             activePaneId: "pane-2",
             panes: [
               {

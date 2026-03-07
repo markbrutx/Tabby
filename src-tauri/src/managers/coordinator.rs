@@ -3,12 +3,14 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tracing::{info, warn};
 
-use crate::domain::commands::NewTabRequest;
+use crate::domain::commands::{NewTabRequest, SplitPaneRequest};
 use crate::domain::error::TabbyError;
 use crate::domain::events::{PaneLifecycleEvent, WorkspaceChangedEvent};
 use crate::domain::snapshot::{PaneRuntimeStatus, WorkspaceSnapshot};
-use crate::domain::types::{create_pane_id, resolve_profile, AppSettings, PaneSeed};
-use crate::managers::grid::GridManager;
+use crate::domain::split_tree::tree_from_preset;
+use crate::domain::types::{
+    create_pane_id, resolve_profile, AppSettings, PaneSeed, ResolvedProfile, CUSTOM_PROFILE_ID,
+};
 use crate::managers::pty::{PtyManager, SpawnRequest};
 use crate::managers::tab::TabManager;
 
@@ -19,7 +21,6 @@ const WORKSPACE_CHANGED_EVENT: &str = "workspace-changed";
 pub struct Coordinator {
     app: AppHandle,
     tab_manager: Arc<TabManager>,
-    grid_manager: Arc<GridManager>,
     pty_manager: Arc<PtyManager>,
 }
 
@@ -27,13 +28,11 @@ impl Coordinator {
     pub fn new(
         app: AppHandle,
         tab_manager: Arc<TabManager>,
-        grid_manager: Arc<GridManager>,
         pty_manager: Arc<PtyManager>,
     ) -> Self {
         Self {
             app,
             tab_manager,
-            grid_manager,
             pty_manager,
         }
     }
@@ -48,25 +47,18 @@ impl Coordinator {
             .profile_id
             .as_deref()
             .unwrap_or(&settings.default_profile_id);
-        let startup_command = request
-            .startup_command
-            .clone()
-            .filter(|v| !v.trim().is_empty())
-            .or_else(|| {
-                if profile_id == "custom" && !settings.default_custom_command.trim().is_empty() {
-                    Some(settings.default_custom_command.clone())
-                } else {
-                    None
-                }
-            });
-        let resolved = resolve_profile(profile_id, startup_command)?;
+        let resolved = Self::resolve_effective_profile(
+            profile_id,
+            request.startup_command.clone(),
+            &settings.default_custom_command,
+        )?;
         let cwd = request
             .cwd
             .as_deref()
             .filter(|v| !v.trim().is_empty())
             .unwrap_or(&settings.default_working_directory);
 
-        let pane_count = usize::from(self.grid_manager.definition(preset).pane_count);
+        let pane_count = usize::from(preset.pane_count());
         let mut seeds = Vec::with_capacity(pane_count);
 
         for _ in 0..pane_count {
@@ -85,7 +77,9 @@ impl Coordinator {
             });
         }
 
-        let snapshot = self.tab_manager.create_tab(preset, seeds)?;
+        let pane_ids: Vec<String> = seeds.iter().map(|s| s.pane_id.clone()).collect();
+        let layout = tree_from_preset(preset, &pane_ids);
+        let snapshot = self.tab_manager.create_tab(layout, seeds)?;
         self.emit_workspace_changed(&snapshot);
 
         info!(
@@ -106,6 +100,94 @@ impl Coordinator {
         self.pty_manager.kill_many(&session_ids);
 
         info!(tab_id, killed_sessions = session_ids.len(), "Tab closed");
+
+        if snapshot.tabs.is_empty() {
+            let fresh = self.create_tab(
+                &NewTabRequest {
+                    preset: settings.default_layout,
+                    cwd: Some(settings.default_working_directory.clone()),
+                    profile_id: Some(settings.default_profile_id.clone()),
+                    startup_command: Some(settings.default_custom_command.clone()),
+                },
+                settings,
+            )?;
+            return Ok(fresh);
+        }
+
+        self.emit_workspace_changed(&snapshot);
+        Ok(snapshot)
+    }
+
+    pub fn split_pane(
+        &self,
+        request: &SplitPaneRequest,
+        settings: &AppSettings,
+    ) -> Result<WorkspaceSnapshot, TabbyError> {
+        let located = self.tab_manager.locate_pane(&request.pane_id)?;
+
+        let profile_id = request
+            .profile_id
+            .as_deref()
+            .unwrap_or(&located.pane.profile_id);
+        let cwd = request
+            .cwd
+            .as_deref()
+            .unwrap_or(&located.pane.cwd);
+        let explicit_command = request
+            .startup_command
+            .clone()
+            .or_else(|| located.pane.startup_command.clone());
+        let resolved = Self::resolve_effective_profile(
+            profile_id,
+            explicit_command,
+            &settings.default_custom_command,
+        )?;
+
+        let new_pane_id = create_pane_id();
+        let session_id = self.spawn_pty(&new_pane_id, cwd, &resolved)?;
+
+        self.emit_lifecycle(
+            &new_pane_id,
+            Some(&session_id),
+            PaneRuntimeStatus::Running,
+            None,
+        );
+
+        let seed = PaneSeed {
+            pane_id: new_pane_id.clone(),
+            session_id,
+            cwd: String::from(cwd),
+            profile_id: resolved.id,
+            profile_label: resolved.label,
+            startup_command: resolved.startup_command,
+        };
+
+        let snapshot =
+            self.tab_manager
+                .split_pane(&request.pane_id, request.direction, seed)?;
+        self.emit_workspace_changed(&snapshot);
+
+        info!(
+            pane_id = %request.pane_id,
+            new_pane_id = %new_pane_id,
+            direction = ?request.direction,
+            "Pane split"
+        );
+
+        Ok(snapshot)
+    }
+
+    pub fn close_pane(
+        &self,
+        pane_id: &str,
+        settings: &AppSettings,
+    ) -> Result<WorkspaceSnapshot, TabbyError> {
+        let (snapshot, session_id, removed_tab_id) =
+            self.tab_manager.close_pane(pane_id)?;
+
+        self.kill_session_quiet(&session_id);
+
+        info!(pane_id, session_id, ?removed_tab_id, "Pane closed");
 
         if snapshot.tabs.is_empty() {
             let fresh = self.create_tab(
@@ -147,9 +229,7 @@ impl Coordinator {
         let snapshot = self.tab_manager.replace_pane(
             pane_id,
             new_session_id.clone(),
-            resolved.id,
-            resolved.label,
-            resolved.startup_command,
+            resolved,
             located.pane.cwd,
         )?;
 
@@ -176,9 +256,7 @@ impl Coordinator {
         let snapshot = self.tab_manager.replace_pane(
             pane_id,
             new_session_id.clone(),
-            resolved.id,
-            resolved.label,
-            resolved.startup_command,
+            resolved,
             located.pane.cwd,
         )?;
 
@@ -214,9 +292,7 @@ impl Coordinator {
         let snapshot = self.tab_manager.replace_pane(
             pane_id,
             new_session_id.clone(),
-            resolved.id,
-            resolved.label,
-            resolved.startup_command,
+            resolved,
             next_cwd,
         )?;
 
@@ -240,6 +316,25 @@ impl Coordinator {
     ) -> Result<(), TabbyError> {
         let session_id = self.tab_manager.session_id_for_pane(pane_id)?;
         self.pty_manager.resize(&session_id, cols, rows)
+    }
+
+    fn resolve_effective_profile(
+        profile_id: &str,
+        explicit_command: Option<String>,
+        fallback_custom_command: &str,
+    ) -> Result<ResolvedProfile, TabbyError> {
+        let startup_command = explicit_command
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| {
+                if profile_id == CUSTOM_PROFILE_ID
+                    && !fallback_custom_command.trim().is_empty()
+                {
+                    Some(String::from(fallback_custom_command))
+                } else {
+                    None
+                }
+            });
+        resolve_profile(profile_id, startup_command)
     }
 
     fn spawn_pty(

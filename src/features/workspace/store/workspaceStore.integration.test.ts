@@ -9,7 +9,7 @@ describe("workspaceStore + mockTransport integration", () => {
     return { store, transport };
   }
 
-  it("initializes with a default 2x2 tab", async () => {
+  it("initializes with a default 1x1 tab", async () => {
     const { store } = setup();
     await store.getState().initialize();
 
@@ -17,9 +17,9 @@ describe("workspaceStore + mockTransport integration", () => {
     expect(isHydrating).toBe(false);
     expect(workspace).not.toBeNull();
     expect(workspace!.tabs).toHaveLength(1);
-    expect(workspace!.tabs[0].panes).toHaveLength(4);
-    expect(workspace!.tabs[0].preset).toBe("2x2");
-    expect(settings?.defaultLayout).toBe("2x2");
+    expect(workspace!.tabs[0].panes).toHaveLength(1);
+    expect(workspace!.tabs[0].layout.type).toBe("pane");
+    expect(settings?.defaultLayout).toBe("1x1");
     expect(profiles).toHaveLength(4);
   });
 
@@ -75,13 +75,14 @@ describe("workspaceStore + mockTransport integration", () => {
   it("focuses pane within active tab", async () => {
     const { store } = setup();
     await store.getState().initialize();
+    await store.getState().createTab("1x2");
 
-    const tab = store.getState().workspace!.tabs[0];
+    const tab = store.getState().workspace!.tabs[1];
     const secondPane = tab.panes[1];
 
     await store.getState().focusPane(tab.id, secondPane.id);
 
-    const updatedTab = store.getState().workspace!.tabs[0];
+    const updatedTab = store.getState().workspace!.tabs[1];
     expect(updatedTab.activePaneId).toBe(secondPane.id);
   });
 
@@ -163,16 +164,6 @@ describe("workspaceStore + mockTransport integration", () => {
     expect(pane.startupCommand).toBe("npm run dev");
   });
 
-  it("toggles settings drawer state", () => {
-    const { store } = setup();
-
-    expect(store.getState().settingsOpen).toBe(false);
-    store.getState().setSettingsOpen(true);
-    expect(store.getState().settingsOpen).toBe(true);
-    store.getState().setSettingsOpen(false);
-    expect(store.getState().settingsOpen).toBe(false);
-  });
-
   it("clears error state", async () => {
     const { store } = setup();
     await store.getState().initialize();
@@ -195,5 +186,43 @@ describe("workspaceStore + mockTransport integration", () => {
     await store.getState().closeTab(tab2Id);
 
     expect(store.getState().workspace!.tabs).toHaveLength(3);
+  });
+
+  it("splits a pane horizontally", async () => {
+    const { store } = setup();
+    await store.getState().initialize();
+
+    const paneId = store.getState().workspace!.tabs[0].panes[0].id;
+    await store.getState().splitPane({
+      paneId,
+      direction: "horizontal",
+      profileId: null,
+      startupCommand: null,
+      cwd: null,
+    });
+
+    const tab = store.getState().workspace!.tabs[0];
+    expect(tab.panes).toHaveLength(2);
+    expect(tab.layout.type).toBe("split");
+  });
+
+  it("closes a pane (not the last one)", async () => {
+    const { store } = setup();
+    await store.getState().initialize();
+
+    const paneId = store.getState().workspace!.tabs[0].panes[0].id;
+    await store.getState().splitPane({
+      paneId,
+      direction: "horizontal",
+      profileId: null,
+      startupCommand: null,
+      cwd: null,
+    });
+
+    const firstPaneId = store.getState().workspace!.tabs[0].panes[0].id;
+    await store.getState().closePane(firstPaneId);
+
+    const tab = store.getState().workspace!.tabs[0];
+    expect(tab.panes).toHaveLength(1);
   });
 });

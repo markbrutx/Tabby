@@ -43,6 +43,7 @@ export function useTerminalSession({
 }: UseTerminalSessionOptions) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const webglAddonRef = useRef<WebglAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pendingDataRef = useRef<string[]>([]);
   const initializedRef = useRef(false);
@@ -105,6 +106,7 @@ export function useTerminalSession({
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+    webglAddonRef.current = null;
     initializedRef.current = false;
 
     const dataDisposable = terminal.onData((data) => {
@@ -134,12 +136,21 @@ export function useTerminalSession({
     observer.observe(container);
 
     return () => {
+      // 1. Mark uninitialized FIRST — blocks all callbacks
+      initializedRef.current = false;
+      // 2. Stop observing before disposal
       observer.disconnect();
+      // 3. Dispose data listener
       dataDisposable.dispose();
-      terminal.dispose();
+      // 4. Dispose WebGL addon explicitly (can throw on lost context)
+      if (webglAddonRef.current) {
+        try { webglAddonRef.current.dispose(); } catch { /* lost GL context */ }
+        webglAddonRef.current = null;
+      }
+      // 5. Dispose terminal
+      try { terminal.dispose(); } catch { /* already disposed */ }
       terminalRef.current = null;
       fitAddonRef.current = null;
-      initializedRef.current = false;
       pendingDataRef.current = [];
     };
   }, [fontSize, pane.id, pane.sessionId]);
@@ -192,7 +203,9 @@ export function useTerminalSession({
       }
 
       try {
-        terminal.loadAddon(new WebglAddon());
+        const webgl = new WebglAddon();
+        terminal.loadAddon(webgl);
+        webglAddonRef.current = webgl;
       } catch {
         // WebGL is optional; canvas renderer continues to work.
       }

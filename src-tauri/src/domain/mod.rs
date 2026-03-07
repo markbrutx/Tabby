@@ -2,6 +2,7 @@ pub mod commands;
 pub mod error;
 pub mod events;
 pub mod snapshot;
+pub mod split_tree;
 pub mod types;
 
 #[cfg(test)]
@@ -9,6 +10,7 @@ mod tests {
     use crate::cli::CliArgs;
     use crate::domain::commands::LaunchRequest;
     use crate::domain::snapshot::{PaneRuntimeStatus, TabSnapshot};
+    use crate::domain::split_tree::tree_from_preset;
     use crate::domain::types::{default_settings, LayoutPreset, PaneSeed};
 
     fn pane_seed(id: &str) -> PaneSeed {
@@ -28,18 +30,22 @@ mod tests {
         let request = LaunchRequest::from_cli_args(CliArgs::default(), &settings)
             .expect("launch request should be created");
 
-        assert_eq!(request.preset, LayoutPreset::TwoByTwo);
+        assert_eq!(request.preset, LayoutPreset::OneByOne);
         assert_eq!(request.cwd.as_deref(), Some("/Users/mark"));
         assert_eq!(request.profile_id.as_deref(), Some("terminal"));
     }
 
     #[test]
     fn tab_snapshot_maps_runtime_status_for_all_seeded_panes() {
+        let seeds = vec![pane_seed("a"), pane_seed("b")];
+        let pane_ids: Vec<String> = seeds.iter().map(|s| s.pane_id.clone()).collect();
+        let layout = tree_from_preset(LayoutPreset::OneByTwo, &pane_ids);
+
         let snapshot = TabSnapshot::from_seeds(
             String::from("tab-1"),
             String::from("Workspace 1"),
-            LayoutPreset::OneByTwo,
-            vec![pane_seed("a"), pane_seed("b")],
+            layout,
+            seeds,
             PaneRuntimeStatus::Starting,
         )
         .expect("tab snapshot should be built");

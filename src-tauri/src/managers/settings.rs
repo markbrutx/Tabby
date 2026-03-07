@@ -37,16 +37,24 @@ impl SettingsManager {
 
     pub fn update_settings(&self, settings: AppSettings) -> Result<AppSettings, TabbyError> {
         self.validate_settings(&settings)?;
+        self.write_settings(&settings)
+    }
 
+    pub fn reset_settings(&self) -> Result<AppSettings, TabbyError> {
+        let defaults = self.default_settings();
+        self.write_settings(&defaults)
+    }
+
+    fn write_settings(&self, settings: &AppSettings) -> Result<AppSettings, TabbyError> {
         let store = self
             .app
             .store(STORE_PATH)
             .map_err(|error| TabbyError::Store(error.to_string()))?;
-        let value = serde_json::to_value(&settings)
+        let value = serde_json::to_value(settings)
             .map_err(|error| TabbyError::Serialization(error.to_string()))?;
 
         store.set(SETTINGS_KEY, value);
-        Ok(settings)
+        Ok(settings.clone())
     }
 
     fn default_settings(&self) -> AppSettings {

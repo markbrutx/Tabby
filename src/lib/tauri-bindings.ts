@@ -21,6 +21,14 @@ async updateAppSettings(settings: AppSettings) : Promise<Result<AppSettings, Tab
     else return { status: "error", error: e  as any };
 }
 },
+async resetAppSettings() : Promise<Result<AppSettings, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reset_app_settings") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async bootstrapWorkspace() : Promise<Result<BootstrapSnapshot, TabbyError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("bootstrap_workspace") };
@@ -85,6 +93,22 @@ async updatePaneCwd(request: UpdatePaneCwdRequest) : Promise<Result<WorkspaceSna
     else return { status: "error", error: e  as any };
 }
 },
+async splitPane(request: SplitPaneRequest) : Promise<Result<WorkspaceSnapshot, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("split_pane", { request }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async closePane(paneId: string) : Promise<Result<WorkspaceSnapshot, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("close_pane", { paneId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async writePty(paneId: string, data: string) : Promise<Result<null, TabbyError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("write_pty", { paneId, data }) };
@@ -115,7 +139,6 @@ async resizePty(request: PtyResizeRequest) : Promise<Result<null, TabbyError>> {
 
 export type AppSettings = { defaultLayout: LayoutPreset; defaultProfileId: string; defaultWorkingDirectory: string; defaultCustomCommand: string; fontSize: number; theme: ThemeMode; launchFullscreen: boolean; hasCompletedOnboarding?: boolean }
 export type BootstrapSnapshot = { workspace: WorkspaceSnapshot; settings: AppSettings; profiles: PaneProfile[] }
-export type GridDefinition = { preset: LayoutPreset; rows: number; columns: number; paneCount: number }
 export type LayoutPreset = "1x1" | "1x2" | "2x2" | "2x3" | "3x3"
 export type NewTabRequest = { preset: LayoutPreset; cwd: string | null; profileId: string | null; startupCommand: string | null }
 export type PaneLifecycleEvent = { paneId: string; sessionId: string | null; status: PaneRuntimeStatus; errorMessage: string | null }
@@ -124,7 +147,10 @@ export type PaneRuntimeStatus = "starting" | "running" | "restarting" | "exited"
 export type PaneSnapshot = { id: string; sessionId: string; title: string; cwd: string; profileId: string; profileLabel: string; startupCommand: string | null; status: PaneRuntimeStatus }
 export type PtyOutputEvent = { paneId: string; sessionId: string; chunk: string }
 export type PtyResizeRequest = { paneId: string; cols: number; rows: number }
-export type TabSnapshot = { id: string; title: string; preset: LayoutPreset; panes: PaneSnapshot[]; activePaneId: string }
+export type SplitDirection = "horizontal" | "vertical"
+export type SplitNode = { type: "pane"; paneId: string } | { type: "split"; direction: SplitDirection; ratio: number; first: SplitNode; second: SplitNode }
+export type SplitPaneRequest = { paneId: string; direction: SplitDirection; profileId: string | null; startupCommand: string | null; cwd: string | null }
+export type TabSnapshot = { id: string; title: string; layout: SplitNode; panes: PaneSnapshot[]; activePaneId: string }
 export type TabbyError = { Validation: string } | { State: string } | { NotFound: string } | { Pty: string } | { Io: string } | { Store: string } | { Serialization: string }
 export type ThemeMode = "system" | "dawn" | "midnight"
 export type UpdatePaneCwdRequest = { paneId: string; cwd: string }

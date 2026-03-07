@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::domain::error::TabbyError;
-use crate::domain::types::{AppSettings, LayoutPreset, PaneProfile, PaneSeed};
+use crate::domain::types::{AppSettings, PaneProfile, PaneSeed, SplitNode};
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
@@ -33,7 +33,7 @@ pub struct PaneSnapshot {
 pub struct TabSnapshot {
     pub id: String,
     pub title: String,
-    pub preset: LayoutPreset,
+    pub layout: SplitNode,
     pub panes: Vec<PaneSnapshot>,
     pub active_pane_id: String,
 }
@@ -42,7 +42,7 @@ impl TabSnapshot {
     pub fn from_seeds(
         id: String,
         title: String,
-        preset: LayoutPreset,
+        layout: SplitNode,
         pane_seeds: Vec<PaneSeed>,
         status: PaneRuntimeStatus,
     ) -> Result<Self, TabbyError> {
@@ -75,7 +75,7 @@ impl TabSnapshot {
         Ok(Self {
             id,
             title,
-            preset,
+            layout,
             panes,
             active_pane_id,
         })

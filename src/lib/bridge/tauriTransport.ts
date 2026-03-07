@@ -4,6 +4,7 @@ import type {
   NewTabRequest,
   PtyOutputEvent,
   PtyResizeRequest,
+  SplitPaneRequest,
   UpdatePaneCwdRequest,
   UpdatePaneProfileRequest,
   WorkspaceSettings,
@@ -73,6 +74,16 @@ export function createTauriTransport(): WorkspaceTransport {
       return unwrapResult(await commands.restartPane(paneId));
     },
 
+    async splitPane(request: SplitPaneRequest): Promise<WorkspaceSnapshot> {
+      ensureTauri();
+      return unwrapResult(await commands.splitPane(request));
+    },
+
+    async closePane(paneId: string): Promise<WorkspaceSnapshot> {
+      ensureTauri();
+      return unwrapResult(await commands.closePane(paneId));
+    },
+
     async writePty(paneId: string, data: string): Promise<void> {
       ensureTauri();
       unwrapResult(await commands.writePty(paneId, data));
@@ -91,6 +102,11 @@ export function createTauriTransport(): WorkspaceTransport {
     async updateAppSettings(settings: WorkspaceSettings): Promise<WorkspaceSettings> {
       ensureTauri();
       return unwrapResult(await commands.updateAppSettings(settings));
+    },
+
+    async resetAppSettings(): Promise<WorkspaceSettings> {
+      ensureTauri();
+      return unwrapResult(await commands.resetAppSettings());
     },
 
     async listenToPtyOutput(

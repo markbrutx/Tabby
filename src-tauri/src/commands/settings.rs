@@ -7,6 +7,14 @@ use crate::domain::error::TabbyError;
 use crate::domain::types::AppSettings;
 use crate::managers::settings::SettingsManager;
 
+fn apply_fullscreen(app: &AppHandle, launch_fullscreen: bool) {
+    if let Some(window) = app.get_webview_window("main") {
+        if let Err(error) = window.set_fullscreen(launch_fullscreen) {
+            warn!(?error, "Failed to apply fullscreen preference");
+        }
+    }
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn get_app_settings(
@@ -23,12 +31,17 @@ pub fn update_app_settings(
     settings: AppSettings,
 ) -> Result<AppSettings, TabbyError> {
     let updated = settings_manager.update_settings(settings)?;
-
-    if let Some(window) = app.get_webview_window("main") {
-        if let Err(error) = window.set_fullscreen(updated.launch_fullscreen) {
-            warn!(?error, "Failed to apply fullscreen preference");
-        }
-    }
-
+    apply_fullscreen(&app, updated.launch_fullscreen);
     Ok(updated)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn reset_app_settings(
+    app: AppHandle,
+    settings_manager: State<'_, Arc<SettingsManager>>,
+) -> Result<AppSettings, TabbyError> {
+    let reset = settings_manager.reset_settings()?;
+    apply_fullscreen(&app, reset.launch_fullscreen);
+    Ok(reset)
 }

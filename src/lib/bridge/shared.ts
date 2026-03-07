@@ -3,6 +3,7 @@ import type {
   NewTabRequest,
   PtyOutputEvent,
   PtyResizeRequest,
+  SplitPaneRequest,
   UpdatePaneCwdRequest,
   UpdatePaneProfileRequest,
   WorkspaceSettings,
@@ -22,10 +23,13 @@ export interface WorkspaceTransport {
   ) => Promise<WorkspaceSnapshot>;
   updatePaneCwd: (request: UpdatePaneCwdRequest) => Promise<WorkspaceSnapshot>;
   restartPane: (paneId: string) => Promise<WorkspaceSnapshot>;
+  splitPane: (request: SplitPaneRequest) => Promise<WorkspaceSnapshot>;
+  closePane: (paneId: string) => Promise<WorkspaceSnapshot>;
   writePty: (paneId: string, data: string) => Promise<void>;
   resizePty: (request: PtyResizeRequest) => Promise<void>;
   getAppSettings: () => Promise<WorkspaceSettings>;
   updateAppSettings: (settings: WorkspaceSettings) => Promise<WorkspaceSettings>;
+  resetAppSettings: () => Promise<WorkspaceSettings>;
   listenToPtyOutput: (
     handler: (payload: PtyOutputEvent) => void,
   ) => Promise<UnlistenFn>;

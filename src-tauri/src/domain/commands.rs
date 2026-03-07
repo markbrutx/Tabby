@@ -3,7 +3,7 @@ use specta::Type;
 
 use crate::cli::CliArgs;
 use crate::domain::error::TabbyError;
-use crate::domain::types::{AppSettings, LayoutPreset};
+use crate::domain::types::{AppSettings, LayoutPreset, SplitDirection};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +66,16 @@ impl From<LaunchRequest> for NewTabRequest {
             startup_command: value.startup_command,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SplitPaneRequest {
+    pub pane_id: String,
+    pub direction: SplitDirection,
+    pub profile_id: Option<String>,
+    pub startup_command: Option<String>,
+    pub cwd: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]

@@ -3,6 +3,8 @@ import { createStore } from "zustand/vanilla";
 import {
   CUSTOM_PROFILE_ID,
   type LayoutPreset,
+  type PaneProfile,
+  type SplitPaneRequest,
   type UpdatePaneCwdRequest,
   type UpdatePaneProfileRequest,
   type WorkspaceSettings,
@@ -19,11 +21,10 @@ interface CreateTabOverrides {
 interface WorkspaceStore {
   workspace: WorkspaceSnapshot | null;
   settings: WorkspaceSettings | null;
-  profiles: { id: string; label: string; description: string; startupCommand: string | null }[];
+  profiles: PaneProfile[];
   error: string | null;
   isHydrating: boolean;
   isWorking: boolean;
-  settingsOpen: boolean;
   initialize: () => Promise<void>;
   createTab: (preset: LayoutPreset, overrides?: CreateTabOverrides) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
@@ -32,17 +33,21 @@ interface WorkspaceStore {
   updatePaneProfile: (request: UpdatePaneProfileRequest) => Promise<void>;
   updatePaneCwd: (request: UpdatePaneCwdRequest) => Promise<void>;
   restartPane: (paneId: string) => Promise<void>;
+  splitPane: (request: SplitPaneRequest) => Promise<void>;
+  closePane: (paneId: string) => Promise<void>;
   updateSettings: (settings: WorkspaceSettings) => Promise<void>;
-  setSettingsOpen: (value: boolean) => void;
+  resetSettings: () => Promise<void>;
   clearError: () => void;
 }
 
+type SetFn = (
+  partial:
+    | Partial<WorkspaceStore>
+    | ((state: WorkspaceStore) => Partial<WorkspaceStore>),
+) => void;
+
 async function runWorkspaceMutation(
-  set: (
-    partial:
-      | Partial<WorkspaceStore>
-      | ((state: WorkspaceStore) => Partial<WorkspaceStore>),
-  ) => void,
+  set: SetFn,
   mutation: () => Promise<WorkspaceSnapshot>,
 ) {
   set({ isWorking: true });
@@ -55,18 +60,28 @@ async function runWorkspaceMutation(
   }
 }
 
+async function runSettingsMutation(
+  set: SetFn,
+  mutation: () => Promise<WorkspaceSettings>,
+) {
+  set({ isWorking: true });
+
+  try {
+    const settings = await mutation();
+    set({ settings, error: null, isWorking: false });
+  } catch (error) {
+    set({ error: asErrorMessage(error), isWorking: false });
+  }
+}
+
 function createWorkspaceStoreState(transport: WorkspaceTransport) {
-  return (set: (partial:
-      | Partial<WorkspaceStore>
-      | ((state: WorkspaceStore) => Partial<WorkspaceStore>),
-    ) => void, get: () => WorkspaceStore): WorkspaceStore => ({
+  return (set: SetFn, get: () => WorkspaceStore): WorkspaceStore => ({
     workspace: null,
     settings: null,
     profiles: [],
     error: null,
     isHydrating: true,
     isWorking: false,
-    settingsOpen: false,
 
     async initialize() {
       set({ isHydrating: true, error: null });
@@ -134,19 +149,20 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
       await runWorkspaceMutation(set, () => transport.restartPane(paneId));
     },
 
-    async updateSettings(settings) {
-      set({ isWorking: true });
-
-      try {
-        const nextSettings = await transport.updateAppSettings(settings);
-        set({ settings: nextSettings, error: null, isWorking: false });
-      } catch (error) {
-        set({ error: asErrorMessage(error), isWorking: false });
-      }
+    async splitPane(request) {
+      await runWorkspaceMutation(set, () => transport.splitPane(request));
     },
 
-    setSettingsOpen(value) {
-      set({ settingsOpen: value });
+    async closePane(paneId) {
+      await runWorkspaceMutation(set, () => transport.closePane(paneId));
+    },
+
+    async updateSettings(settings) {
+      await runSettingsMutation(set, () => transport.updateAppSettings(settings));
+    },
+
+    async resetSettings() {
+      await runSettingsMutation(set, () => transport.resetAppSettings());
     },
 
     clearError() {

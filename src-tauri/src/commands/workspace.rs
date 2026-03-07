@@ -4,7 +4,8 @@ use tauri::State;
 
 use crate::cli::CliArgs;
 use crate::domain::commands::{
-    LaunchRequest, NewTabRequest, UpdatePaneCwdRequest, UpdatePaneProfileRequest,
+    LaunchRequest, NewTabRequest, SplitPaneRequest, UpdatePaneCwdRequest,
+    UpdatePaneProfileRequest,
 };
 use crate::domain::error::TabbyError;
 use crate::domain::snapshot::{BootstrapSnapshot, WorkspaceSnapshot};
@@ -109,6 +110,28 @@ pub fn update_pane_cwd(
     request: UpdatePaneCwdRequest,
 ) -> Result<WorkspaceSnapshot, TabbyError> {
     coordinator.update_pane_cwd(&request.pane_id, &request.cwd)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn split_pane(
+    coordinator: State<'_, Arc<Coordinator>>,
+    settings_manager: State<'_, Arc<SettingsManager>>,
+    request: SplitPaneRequest,
+) -> Result<WorkspaceSnapshot, TabbyError> {
+    let settings = settings_manager.get_settings()?;
+    coordinator.split_pane(&request, &settings)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn close_pane(
+    coordinator: State<'_, Arc<Coordinator>>,
+    settings_manager: State<'_, Arc<SettingsManager>>,
+    pane_id: String,
+) -> Result<WorkspaceSnapshot, TabbyError> {
+    let settings = settings_manager.get_settings()?;
+    coordinator.close_pane(&pane_id, &settings)
 }
 
 fn consume_launch_request(

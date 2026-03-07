@@ -8,16 +8,19 @@ pub use cli::CliArgs;
 use std::sync::Arc;
 
 use specta_typescript::Typescript;
-use tauri::Manager;
+use tauri::menu::{AboutMetadataBuilder, MenuBuilder, SubmenuBuilder};
+use tauri::{Emitter, Manager};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
+const MENU_ITEM_SETTINGS: &str = "open-settings";
+const EVENT_OPEN_SETTINGS: &str = "menu-open-settings";
+
 use crate::commands::workspace::LaunchOverrides;
 use crate::domain::events::{PaneLifecycleEvent, PtyOutputEvent, WorkspaceChangedEvent};
-use crate::domain::types::GridDefinition;
+use crate::domain::types::SplitNode;
 use crate::managers::coordinator::Coordinator;
-use crate::managers::grid::GridManager;
 use crate::managers::pty::PtyManager;
 use crate::managers::settings::SettingsManager;
 use crate::managers::tab::TabManager;
@@ -34,6 +37,7 @@ fn specta_builder() -> SpectaBuilder<tauri::Wry> {
         .commands(collect_commands![
             commands::settings::get_app_settings,
             commands::settings::update_app_settings,
+            commands::settings::reset_app_settings,
             commands::workspace::bootstrap_workspace,
             commands::workspace::create_tab,
             commands::workspace::close_tab,
@@ -42,10 +46,12 @@ fn specta_builder() -> SpectaBuilder<tauri::Wry> {
             commands::workspace::restart_pane,
             commands::workspace::update_pane_profile,
             commands::workspace::update_pane_cwd,
+            commands::workspace::split_pane,
+            commands::workspace::close_pane,
             commands::pty::write_pty,
             commands::pty::resize_pty,
         ])
-        .typ::<GridDefinition>()
+        .typ::<SplitNode>()
         .typ::<PtyOutputEvent>()
         .typ::<PaneLifecycleEvent>()
         .typ::<WorkspaceChangedEvent>()
@@ -67,16 +73,45 @@ pub fn run(cli_args: CliArgs) {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .menu(|handle| {
+            let about_meta = AboutMetadataBuilder::new()
+                .name(Some("Tabby"))
+                .version(Some(env!("CARGO_PKG_VERSION")))
+                .build();
+
+            let app_submenu = SubmenuBuilder::new(handle, "Tabby")
+                .about(Some(about_meta))
+                .separator()
+                .item(
+                    &tauri::menu::MenuItemBuilder::with_id(MENU_ITEM_SETTINGS, "Settings…")
+                        .accelerator("CmdOrCtrl+,")
+                        .build(handle)?,
+                )
+                .separator()
+                .hide()
+                .hide_others()
+                .show_all()
+                .separator()
+                .quit()
+                .build()?;
+
+            MenuBuilder::new(handle).item(&app_submenu).build()
+        })
+        .on_menu_event(|app_handle, event| {
+            if event.id().as_ref() == MENU_ITEM_SETTINGS {
+                if let Err(emit_err) = app_handle.emit(EVENT_OPEN_SETTINGS, ()) {
+                    error!(?emit_err, "Failed to emit menu-open-settings event");
+                }
+            }
+        })
         .setup(move |app| {
             let app_handle = app.handle().clone();
             let settings_manager = Arc::new(SettingsManager::new(app_handle.clone()));
-            let grid_manager = Arc::new(GridManager::new());
             let tab_manager = Arc::new(TabManager::new());
             let pty_manager = Arc::new(PtyManager::new(app_handle.clone()));
             let coordinator = Arc::new(Coordinator::new(
                 app_handle,
                 tab_manager.clone(),
-                grid_manager.clone(),
                 pty_manager.clone(),
             ));
             let settings = settings_manager
@@ -84,7 +119,6 @@ pub fn run(cli_args: CliArgs) {
                 .map_err(|error| -> Box<dyn std::error::Error> { Box::new(error) })?;
 
             app.manage(settings_manager);
-            app.manage(grid_manager);
             app.manage(tab_manager);
             app.manage(pty_manager);
             app.manage(coordinator);

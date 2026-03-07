@@ -8,7 +8,7 @@ describe("mockTransport", () => {
 
     expect(result.workspace.tabs).toHaveLength(1);
     expect(result.workspace.activeTabId).toBe(result.workspace.tabs[0].id);
-    expect(result.settings.defaultLayout).toBe("2x2");
+    expect(result.settings.defaultLayout).toBe("1x1");
     expect(result.profiles).toHaveLength(4);
   });
 
@@ -26,7 +26,7 @@ describe("mockTransport", () => {
     expect(snapshot.tabs).toHaveLength(2);
     const newTab = snapshot.tabs[1];
     expect(newTab.panes).toHaveLength(2);
-    expect(newTab.preset).toBe("1x2");
+    expect(newTab.layout.type).toBe("split");
     expect(snapshot.activeTabId).toBe(newTab.id);
   });
 
@@ -74,21 +74,6 @@ describe("mockTransport", () => {
 
     const afterSwitch = await transport.setActiveTab(firstTabId);
     expect(afterSwitch.activeTabId).toBe(firstTabId);
-  });
-
-  it("focuses a pane within a tab", async () => {
-    const transport = createMockTransport();
-    const bootstrap = await transport.bootstrapWorkspace();
-    const tab = bootstrap.workspace.tabs[0];
-    const secondPaneId = tab.panes[1]?.id;
-
-    if (!secondPaneId) {
-      return;
-    }
-
-    const afterFocus = await transport.focusPane(tab.id, secondPaneId);
-    const focusedTab = afterFocus.tabs.find((t) => t.id === tab.id);
-    expect(focusedTab?.activePaneId).toBe(secondPaneId);
   });
 
   it("updates pane profile", async () => {
@@ -198,5 +183,42 @@ describe("mockTransport", () => {
     const updatedPane = afterUpdate.tabs[0].panes[0];
     expect(updatedPane.profileId).toBe("custom");
     expect(updatedPane.startupCommand).toBe("npm run dev");
+  });
+
+  it("splits a pane and adds new pane to tab", async () => {
+    const transport = createMockTransport();
+    const bootstrap = await transport.bootstrapWorkspace();
+    const paneId = bootstrap.workspace.tabs[0].panes[0].id;
+
+    const afterSplit = await transport.splitPane({
+      paneId,
+      direction: "horizontal",
+      profileId: null,
+      startupCommand: null,
+      cwd: null,
+    });
+
+    expect(afterSplit.tabs[0].panes).toHaveLength(2);
+    expect(afterSplit.tabs[0].layout.type).toBe("split");
+  });
+
+  it("closes a pane and collapses layout", async () => {
+    const transport = createMockTransport();
+    const bootstrap = await transport.bootstrapWorkspace();
+    const paneId = bootstrap.workspace.tabs[0].panes[0].id;
+
+    await transport.splitPane({
+      paneId,
+      direction: "horizontal",
+      profileId: null,
+      startupCommand: null,
+      cwd: null,
+    });
+
+    const firstPaneId = bootstrap.workspace.tabs[0].panes[0].id;
+    const afterClose = await transport.closePane(firstPaneId);
+
+    expect(afterClose.tabs[0].panes).toHaveLength(1);
+    expect(afterClose.tabs[0].layout.type).toBe("pane");
   });
 });

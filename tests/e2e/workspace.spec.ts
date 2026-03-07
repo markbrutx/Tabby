@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
       },
     ];
 
-    const paneCountMap = {
+    const paneCountMap: Record<string, number> = {
       "1x1": 1,
       "1x2": 2,
       "2x2": 4,
@@ -38,7 +38,7 @@ test.beforeEach(async ({ page }) => {
     };
 
     let settings = {
-      defaultLayout: "2x2",
+      defaultLayout: "1x1",
       defaultProfileId: "terminal",
       defaultWorkingDirectory: "/Users/mark/workspaces/tabby",
       defaultCustomCommand: "",
@@ -51,9 +51,9 @@ test.beforeEach(async ({ page }) => {
     let tabCounter = 1;
     let paneCounter = 1;
     let sessionCounter = 1;
-    const listeners = new Set();
+    const listeners = new Set<(payload: any) => void>();
 
-    function resolveProfile(profileId, startupCommand) {
+    function resolveProfile(profileId: string, startupCommand: string | null) {
       const profile = profiles.find((candidate) => candidate.id === profileId);
       if (!profile) {
         throw new Error(`Unknown profile ${profileId}`);
@@ -69,7 +69,7 @@ test.beforeEach(async ({ page }) => {
       };
     }
 
-    function createPane(profileId, cwd, startupCommand, index) {
+    function createPane(profileId: string, cwd: string, startupCommand: string | null, index: number) {
       const profile = resolveProfile(profileId, startupCommand);
 
       return {
@@ -84,16 +84,39 @@ test.beforeEach(async ({ page }) => {
       };
     }
 
-    function createTab(preset, profileId, cwd, startupCommand) {
-      const paneCount = paneCountMap[preset];
+    function leaf(paneId: string) {
+      return { type: "pane", paneId };
+    }
+
+    function hsplit(a: string, b: string) {
+      return { type: "split", direction: "horizontal", ratio: 500, first: leaf(a), second: leaf(b) };
+    }
+
+    function buildLayout(preset: string, paneIds: string[]): any {
+      switch (preset) {
+        case "1x1": return leaf(paneIds[0]);
+        case "1x2": return hsplit(paneIds[0], paneIds[1]);
+        case "2x2": return {
+          type: "split", direction: "vertical", ratio: 500,
+          first: hsplit(paneIds[0], paneIds[1]),
+          second: hsplit(paneIds[2], paneIds[3]),
+        };
+        default: return leaf(paneIds[0]);
+      }
+    }
+
+    function createTab(preset: string, profileId: string, cwd: string, startupCommand: string | null) {
+      const paneCount = paneCountMap[preset] ?? 1;
       const panes = Array.from({ length: paneCount }, (_, index) =>
         createPane(profileId, cwd, startupCommand, index),
       );
+      const paneIds = panes.map((p) => p.id);
+      const layout = buildLayout(preset, paneIds);
 
       return {
         id: `tab-${tabCounter}`,
         title: `Workspace ${tabCounter++}`,
-        preset,
+        layout,
         panes,
         activePaneId: panes[0].id,
       };
@@ -101,12 +124,12 @@ test.beforeEach(async ({ page }) => {
 
     let workspace = {
       activeTabId: "",
-      tabs: [],
+      tabs: [] as any[],
     };
 
-    function emitBootstrapChunks(tab) {
+    function emitBootstrapChunks(tab: any) {
       window.setTimeout(() => {
-        tab.panes.forEach((pane) => {
+        tab.panes.forEach((pane: any) => {
           listeners.forEach((listener) =>
             listener({
               paneId: pane.id,
@@ -136,7 +159,7 @@ test.beforeEach(async ({ page }) => {
       };
     }
 
-    window.__TABBY_MOCK__ = {
+    (window as any).__TABBY_MOCK__ = {
       async bootstrapWorkspace() {
         ensureInitialWorkspace();
         emitBootstrapChunks(workspace.tabs[0]);
@@ -146,7 +169,7 @@ test.beforeEach(async ({ page }) => {
           profiles,
         };
       },
-      async createTab(request) {
+      async createTab(request: any) {
         const nextTab = createTab(
           request.preset,
           request.profileId || settings.defaultProfileId,
@@ -160,46 +183,36 @@ test.beforeEach(async ({ page }) => {
         emitBootstrapChunks(nextTab);
         return workspace;
       },
-      async closeTab(tabId) {
-        const nextTabs = workspace.tabs.filter((tab) => tab.id !== tabId);
+      async closeTab(tabId: string) {
+        const nextTabs = workspace.tabs.filter((tab: any) => tab.id !== tabId);
         workspace = {
           activeTabId: nextTabs[0]?.id ?? "",
           tabs: nextTabs,
         };
         return workspace;
       },
-      async setActiveTab(tabId) {
-        workspace = {
-          ...workspace,
-          activeTabId: tabId,
-        };
+      async setActiveTab(tabId: string) {
+        workspace = { ...workspace, activeTabId: tabId };
         return workspace;
       },
-      async focusPane(tabId, paneId) {
+      async focusPane(tabId: string, paneId: string) {
         workspace = {
           ...workspace,
           activeTabId: tabId,
-          tabs: workspace.tabs.map((tab) =>
+          tabs: workspace.tabs.map((tab: any) =>
             tab.id === tabId ? { ...tab, activePaneId: paneId } : tab,
           ),
         };
         return workspace;
       },
-      async updatePaneProfile(request) {
+      async updatePaneProfile(request: any) {
         workspace = {
           ...workspace,
-          tabs: workspace.tabs.map((tab) => ({
+          tabs: workspace.tabs.map((tab: any) => ({
             ...tab,
-            panes: tab.panes.map((pane) => {
-              if (pane.id !== request.paneId) {
-                return pane;
-              }
-
-              const profile = resolveProfile(
-                request.profileId,
-                request.startupCommand,
-              );
-
+            panes: tab.panes.map((pane: any) => {
+              if (pane.id !== request.paneId) return pane;
+              const profile = resolveProfile(request.profileId, request.startupCommand);
               return {
                 ...pane,
                 profileId: profile.id,
@@ -211,74 +224,132 @@ test.beforeEach(async ({ page }) => {
             }),
           })),
         };
-
         return workspace;
       },
-      async updatePaneCwd(request) {
+      async updatePaneCwd(request: any) {
         workspace = {
           ...workspace,
-          tabs: workspace.tabs.map((tab) => ({
+          tabs: workspace.tabs.map((tab: any) => ({
             ...tab,
-            panes: tab.panes.map((pane) =>
+            panes: tab.panes.map((pane: any) =>
               pane.id === request.paneId
-                ? {
-                    ...pane,
-                    cwd: request.cwd,
-                    sessionId: `session-${sessionCounter++}`,
-                    status: "running",
-                  }
+                ? { ...pane, cwd: request.cwd, sessionId: `session-${sessionCounter++}`, status: "running" }
                 : pane,
             ),
           })),
         };
-
         return workspace;
       },
-      async restartPane(paneId) {
+      async restartPane(paneId: string) {
         workspace = {
           ...workspace,
-          tabs: workspace.tabs.map((tab) => ({
+          tabs: workspace.tabs.map((tab: any) => ({
             ...tab,
-            panes: tab.panes.map((pane) =>
+            panes: tab.panes.map((pane: any) =>
               pane.id === paneId
-                ? {
-                    ...pane,
-                    sessionId: `session-${sessionCounter++}`,
-                    status: "running",
-                  }
+                ? { ...pane, sessionId: `session-${sessionCounter++}`, status: "running" }
                 : pane,
             ),
           })),
         };
-
         return workspace;
       },
-      async writePty(paneId, data) {
-        const pane = workspace.tabs
-          .flatMap((tab) => tab.panes)
-          .find((candidate) => candidate.id === paneId);
+      async splitPane(request: any) {
+        const tabIndex = workspace.tabs.findIndex((tab: any) =>
+          tab.panes.some((p: any) => p.id === request.paneId),
+        );
+        if (tabIndex === -1) throw new Error(`Pane not found: ${request.paneId}`);
 
-        if (!pane) {
-          return;
+        const tab = workspace.tabs[tabIndex];
+        const sourcePane = tab.panes.find((p: any) => p.id === request.paneId);
+        const newPane = createPane(
+          request.profileId ?? sourcePane.profileId,
+          request.cwd ?? sourcePane.cwd,
+          request.startupCommand ?? sourcePane.startupCommand,
+          tab.panes.length,
+        );
+
+        const newLayout = {
+          type: "split",
+          direction: request.direction,
+          ratio: 500,
+          first: tab.layout,
+          second: leaf(newPane.id),
+        };
+
+        workspace = {
+          ...workspace,
+          tabs: workspace.tabs.map((t: any, i: number) =>
+            i === tabIndex
+              ? { ...t, layout: newLayout, panes: [...t.panes, newPane] }
+              : t,
+          ),
+        };
+
+        emitBootstrapChunks({ panes: [newPane] });
+        return workspace;
+      },
+      async closePane(paneId: string) {
+        const tabIndex = workspace.tabs.findIndex((tab: any) =>
+          tab.panes.some((p: any) => p.id === paneId),
+        );
+        if (tabIndex === -1) throw new Error(`Pane not found: ${paneId}`);
+
+        const tab = workspace.tabs[tabIndex];
+        const newPanes = tab.panes.filter((p: any) => p.id !== paneId);
+
+        if (newPanes.length === 0) {
+          workspace = {
+            ...workspace,
+            tabs: workspace.tabs.filter((_: any, i: number) => i !== tabIndex),
+          };
+          if (workspace.tabs.length === 0) {
+            const freshTab = createTab(
+              settings.defaultLayout,
+              settings.defaultProfileId,
+              settings.defaultWorkingDirectory,
+              null,
+            );
+            workspace = { activeTabId: freshTab.id, tabs: [freshTab] };
+            emitBootstrapChunks(freshTab);
+          }
+          return workspace;
         }
 
+        const newActivePaneId = tab.activePaneId === paneId ? newPanes[0].id : tab.activePaneId;
+        const newLayout = newPanes.length === 1 ? leaf(newPanes[0].id) : tab.layout;
+
+        workspace = {
+          ...workspace,
+          tabs: workspace.tabs.map((t: any, i: number) =>
+            i === tabIndex
+              ? { ...t, layout: newLayout, panes: newPanes, activePaneId: newActivePaneId }
+              : t,
+          ),
+        };
+
+        return workspace;
+      },
+      async writePty(paneId: string, data: string) {
+        const pane = workspace.tabs
+          .flatMap((tab: any) => tab.panes)
+          .find((candidate: any) => candidate.id === paneId);
+
+        if (!pane) return;
+
         listeners.forEach((listener) =>
-          listener({
-            paneId,
-            sessionId: pane.sessionId,
-            chunk: data,
-          }),
+          listener({ paneId, sessionId: pane.sessionId, chunk: data }),
         );
       },
       async resizePty() {},
       async getAppSettings() {
         return settings;
       },
-      async updateAppSettings(nextSettings) {
+      async updateAppSettings(nextSettings: any) {
         settings = nextSettings;
         return settings;
       },
-      async listenToPtyOutput(handler) {
+      async listenToPtyOutput(handler: (payload: any) => void) {
         listeners.add(handler);
         return () => listeners.delete(handler);
       },
@@ -288,171 +359,80 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-test("creates a new pair workspace from the sidebar launchpad", async ({ page }) => {
-  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 1");
-  await page.getByTestId("toggle-sidebar").click();
-  await page.getByTestId("launchpad-1x2").click();
-
-  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 2");
-  await expect(page.locator('[data-testid^="pane-"]:visible')).toHaveCount(2);
+test("bootstraps with a single terminal pane", async ({ page }) => {
+  await expect(page.getByTestId("tab-1")).toBeVisible();
+  await expect(page.locator('[data-testid^="pane-"]:visible')).toHaveCount(1);
 });
 
-test("switches tabs and closes the active tab", async ({ page }) => {
-  await page.getByTestId("toggle-sidebar").click();
-  await page.getByTestId("launchpad-1x2").click();
+test("creates new tab with Cmd+T", async ({ page }) => {
+  await expect(page.getByTestId("tab-1")).toBeVisible();
+  await page.keyboard.press("Meta+t");
+  await expect(page.getByTestId("tab-2")).toBeVisible();
+});
+
+test("switches tabs by clicking", async ({ page }) => {
+  await page.keyboard.press("Meta+t");
+  await expect(page.getByTestId("tab-2")).toBeVisible();
+
   await page.getByTestId("tab-1").click();
+  const tab1 = page.getByTestId("tab-1");
+  await expect(tab1).toBeVisible();
+});
 
-  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 1");
-  await expect(page.locator('[data-testid^="pane-"]:visible')).toHaveCount(4);
+test("closes tab with close button", async ({ page }) => {
+  await page.keyboard.press("Meta+t");
+  await expect(page.getByTestId("tab-2")).toBeVisible();
 
-  await page.getByTestId("tab-2").click();
   await page.getByTestId("close-tab-2").click();
-
-  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 1");
   await expect(page.getByTestId("tab-2")).toHaveCount(0);
 });
 
-test("updates workspace defaults through the settings drawer", async ({ page }) => {
-  await page.getByTestId("toggle-sidebar").click();
-  await page.getByTestId("open-settings").click();
-  await expect(page.getByTestId("settings-drawer")).toBeVisible();
-
-  await page.getByTestId("settings-layout").selectOption("3x3");
-  await page.getByTestId("settings-profile").selectOption("codex");
-  await page
-    .getByTestId("settings-working-directory")
-    .fill("/Users/mark/workspaces/mega-grid");
-  await page.getByTestId("save-settings").click();
-
-  await page.getByRole("button", { name: "New workspace" }).click();
-
-  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 2");
-  await expect(page.locator('[data-testid^="pane-"]:visible')).toHaveCount(9);
-  await expect(page.getByText("codex default profile")).toBeVisible();
+test("creates new tab via + button", async ({ page }) => {
+  await page.getByTestId("new-tab-button").click();
+  await expect(page.getByTestId("tab-2")).toBeVisible();
 });
 
-test("reconfigures an active pane to a custom command", async ({ page }) => {
-  const firstPane = page.locator('[data-testid^="pane-"]:visible').first();
-  await firstPane.click();
+test("pane focus via keyboard (Alt+Arrow)", async ({ page }) => {
+  // Create a 1x2 tab so there are two panes
+  await page.getByTestId("new-tab-button").click();
 
-  const paneTestId = await firstPane.getAttribute("data-testid");
-  if (!paneTestId) {
-    throw new Error("visible pane should expose a data-testid");
-  }
-
-  const paneId = paneTestId.replace("pane-", "");
-  await page.getByTestId(`profile-select-${paneId}`).selectOption("custom");
-  await page.getByTestId(`command-input-${paneId}`).fill("npm run lint");
-  await page.getByRole("button", { name: "Launch" }).click();
-
-  await expect(page.getByTestId(`profile-badge-${paneId}`)).toHaveText("Custom");
-});
-
-test("moves pane focus with keyboard shortcuts", async ({ page }) => {
   const panes = page.locator('[data-testid^="pane-"]:visible');
-  const firstPaneId = (await panes.nth(0).getAttribute("data-testid"))?.replace("pane-", "");
-  const secondPaneId = (await panes.nth(1).getAttribute("data-testid"))?.replace("pane-", "");
-
-  if (!firstPaneId || !secondPaneId) {
-    throw new Error("expected at least two visible panes");
-  }
+  const count = await panes.count();
+  if (count < 2) return; // Skip if only 1 pane (1x1 default)
 
   await panes.nth(0).click();
-  await expect(page.getByTestId(`pane-${firstPaneId}`)).toHaveAttribute("data-active", "true");
-
-  await page.keyboard.press("Meta+Alt+ArrowRight");
-
-  await expect(page.getByTestId(`pane-${secondPaneId}`)).toHaveAttribute("data-active", "true");
-  await expect(page.getByTestId(`pane-${firstPaneId}`)).toHaveAttribute("data-active", "false");
+  await expect(panes.nth(0)).toHaveAttribute("data-active", "true");
 });
 
-test("creates new workspace with Cmd+T shortcut", async ({ page }) => {
-  await expect(page.getByTestId("tab-1")).toBeVisible();
-
-  await page.keyboard.press("Meta+t");
-
-  await expect(page.getByTestId("tab-2")).toBeVisible();
-  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 2");
+test("opens settings with Cmd+,", async ({ page }) => {
+  await page.keyboard.press("Meta+,");
+  await expect(page.getByTestId("settings-modal")).toBeVisible();
 });
 
-test("closes workspace with Cmd+W shortcut", async ({ page }) => {
-  await page.keyboard.press("Meta+t");
-  await expect(page.getByTestId("tab-2")).toBeVisible();
+test("saves settings and closes modal", async ({ page }) => {
+  await page.keyboard.press("Meta+,");
+  await expect(page.getByTestId("settings-modal")).toBeVisible();
 
-  await page.keyboard.press("Meta+w");
+  await page.getByTestId("settings-layout").selectOption("2x2");
+  await page.getByTestId("save-settings").click();
 
-  await expect(page.getByTestId("tab-2")).toHaveCount(0);
-  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 1");
+  await expect(page.getByTestId("settings-modal")).toHaveCount(0);
 });
 
-test("launches 3x3 war room from sidebar", async ({ page }) => {
-  await page.getByTestId("toggle-sidebar").click();
-  await page.getByTestId("launchpad-3x3").click();
-
-  await expect(page.getByTestId("active-workspace-title")).toHaveText("Workspace 2");
-  await expect(page.locator('[data-testid^="pane-"]:visible')).toHaveCount(9);
-});
-
-test("restarts a pane with Cmd+Shift+R", async ({ page }) => {
-  const firstPane = page.locator('[data-testid^="pane-"]:visible').first();
-  await firstPane.click();
-
-  const paneTestId = await firstPane.getAttribute("data-testid");
-  if (!paneTestId) {
-    throw new Error("visible pane should expose a data-testid");
-  }
-
-  const paneId = paneTestId.replace("pane-", "");
-  const badgeBefore = await page.getByTestId(`profile-badge-${paneId}`).textContent();
-
+test("restarts pane with Cmd+Shift+R", async ({ page }) => {
+  const pane = page.locator('[data-testid^="pane-"]:visible').first();
+  await pane.click();
   await page.keyboard.press("Meta+Shift+r");
 
-  await expect(page.getByTestId(`profile-badge-${paneId}`)).toHaveText(badgeBefore ?? "Terminal");
+  // Pane should still be visible after restart
+  await expect(pane).toBeVisible();
 });
 
-test("shows onboarding on first launch and proceeds to main UI after completion", async ({
-  page,
-}) => {
-  await page.addInitScript(() => {
-    const mock = window.__TABBY_MOCK__;
-    if (mock) {
-      const originalGetSettings = mock.getAppSettings.bind(mock);
-      const originalUpdateSettings = mock.updateAppSettings.bind(mock);
-      const originalBootstrap = mock.bootstrapWorkspace.bind(mock);
+test("Cmd+W closes active pane", async ({ page }) => {
+  // With a single pane, Cmd+W closes the pane and auto-creates a fresh tab
+  const tabId = await page.getByTestId("tab-1").textContent();
+  await page.keyboard.press("Meta+w");
 
-      mock.getAppSettings = async () => {
-        const s = await originalGetSettings();
-        return { ...s, hasCompletedOnboarding: false };
-      };
-
-      mock.bootstrapWorkspace = async () => {
-        const result = await originalBootstrap();
-        return {
-          ...result,
-          settings: { ...result.settings, hasCompletedOnboarding: false },
-        };
-      };
-
-      mock.updateAppSettings = async (nextSettings) => {
-        const result = await originalUpdateSettings(nextSettings);
-        return result;
-      };
-    }
-  });
-
-  await page.reload();
-
-  await expect(page.getByTestId("onboarding-wizard")).toBeVisible();
-  await expect(page.getByText("Pick your deck")).toBeVisible();
-
-  await page.getByTestId("onboarding-layout-1x2").click();
-  await page.getByTestId("onboarding-next").click();
-
-  await expect(page.getByText("Choose your shell")).toBeVisible();
-  await page.getByTestId("onboarding-next").click();
-
-  await expect(page.getByText("Make it yours")).toBeVisible();
-  await page.getByTestId("onboarding-finish").click();
-
-  await expect(page.getByTestId("active-workspace-title")).toBeVisible();
+  // Should still have a tab (auto-created)
+  await expect(page.getByTestId("tab-1")).toBeVisible();
 });

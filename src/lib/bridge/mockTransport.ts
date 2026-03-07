@@ -7,13 +7,33 @@ import {
   type PaneSnapshot,
   type PtyOutputEvent,
   type PtyResizeRequest,
+  type SplitDirection,
+  type SplitNode,
+  type SplitPaneRequest,
   type TabSnapshot,
   type UpdatePaneCwdRequest,
   type UpdatePaneProfileRequest,
   type WorkspaceSettings,
   type WorkspaceSnapshot,
 } from "@/features/workspace/domain";
+import {
+  splitPane as treeSplitPane,
+  closePane as treeClosePane,
+  treeFromPreset,
+  paneCountForPreset,
+} from "@/features/workspace/splitTree";
 import type { UnlistenFn, WorkspaceTransport } from "./shared";
+
+const MOCK_DEFAULT_SETTINGS: WorkspaceSettings = {
+  defaultLayout: "1x1",
+  defaultProfileId: "terminal",
+  defaultWorkingDirectory: "~",
+  defaultCustomCommand: "",
+  fontSize: 13,
+  theme: "midnight",
+  launchFullscreen: false,
+  hasCompletedOnboarding: true,
+};
 
 let idCounter = 0;
 function nextId(prefix: string): string {
@@ -47,14 +67,6 @@ const BUILT_IN_PROFILES: PaneProfile[] = [
     startupCommand: null,
   },
 ];
-
-const GRID_MAP: Record<LayoutPreset, { rows: number; columns: number }> = {
-  "1x1": { rows: 1, columns: 1 },
-  "1x2": { rows: 1, columns: 2 },
-  "2x2": { rows: 2, columns: 2 },
-  "2x3": { rows: 2, columns: 3 },
-  "3x3": { rows: 3, columns: 3 },
-};
 
 function resolveProfile(
   profileId: string,
@@ -99,18 +111,20 @@ function createTab(
   startupCommand: string | null,
   tabIndex: number,
 ): TabSnapshot {
-  const grid = GRID_MAP[preset];
-  const paneCount = grid.rows * grid.columns;
+  const paneCount = paneCountForPreset(preset);
   const panes: PaneSnapshot[] = [];
 
   for (let i = 0; i < paneCount; i++) {
     panes.push(createPane(cwd, profileId, startupCommand, i));
   }
 
+  const paneIds = panes.map((p) => p.id);
+  const layout = treeFromPreset(preset, paneIds);
+
   return {
     id: nextId("tab"),
     title: `Workspace ${tabIndex}`,
-    preset,
+    layout,
     panes,
     activePaneId: panes[0]?.id ?? "",
   };
@@ -163,16 +177,7 @@ export function createMockTransport(): WorkspaceTransport {
   const state: MockState = {
     tabs: [],
     activeTabId: "",
-    settings: {
-      defaultLayout: "2x2",
-      defaultProfileId: "terminal",
-      defaultWorkingDirectory: "~",
-      defaultCustomCommand: "",
-      fontSize: 13,
-      theme: "midnight",
-      launchFullscreen: false,
-      hasCompletedOnboarding: false,
-    },
+    settings: { ...MOCK_DEFAULT_SETTINGS },
     nextTabIndex: 1,
     outputListeners: [],
   };
@@ -384,6 +389,85 @@ export function createMockTransport(): WorkspaceTransport {
       return snapshot(state);
     },
 
+    async splitPane(request: SplitPaneRequest): Promise<WorkspaceSnapshot> {
+      const { tabIndex } = findPane(state, request.paneId);
+      const tab = state.tabs[tabIndex];
+      const sourcePaneIndex = tab.panes.findIndex((p) => p.id === request.paneId);
+      const sourcePane = tab.panes[sourcePaneIndex];
+
+      const profileId = request.profileId ?? sourcePane.profileId;
+      const cwd = request.cwd ?? sourcePane.cwd;
+      const startupCommand = request.startupCommand ?? sourcePane.startupCommand;
+      const newPane = createPane(cwd, profileId, startupCommand, tab.panes.length);
+
+      const newLayout = treeSplitPane(tab.layout, request.paneId, request.direction, newPane.id);
+      if (!newLayout) {
+        throw new Error(`Cannot split pane: ${request.paneId}`);
+      }
+
+      state.tabs = state.tabs.map((t, i) =>
+        i === tabIndex
+          ? { ...t, layout: newLayout, panes: [...t.panes, newPane] }
+          : t,
+      );
+
+      setTimeout(() => {
+        emitMockOutput(
+          state,
+          newPane.id,
+          newPane.sessionId,
+          `\x1b[36m${newPane.profileLabel}\x1b[0m session started in \x1b[33m${newPane.cwd}\x1b[0m\r\n` +
+          `\x1b[32m➜\x1b[0m  `,
+        );
+      }, 80);
+
+      return snapshot(state);
+    },
+
+    async closePane(paneId: string): Promise<WorkspaceSnapshot> {
+      const { tabIndex } = findPane(state, paneId);
+      const tab = state.tabs[tabIndex];
+
+      const result = treeClosePane(tab.layout, paneId);
+
+      if (result === undefined) {
+        throw new Error(`Pane not found in layout: ${paneId}`);
+      }
+
+      if (result === null) {
+        // Last pane — remove tab
+        state.tabs = state.tabs.filter((_, i) => i !== tabIndex);
+
+        if (state.tabs.length === 0) {
+          return addTab(
+            state.settings.defaultLayout,
+            state.settings.defaultWorkingDirectory,
+            state.settings.defaultProfileId,
+            null,
+          );
+        }
+
+        if (state.activeTabId === tab.id) {
+          state.activeTabId = state.tabs[Math.max(0, tabIndex - 1)].id;
+        }
+
+        return snapshot(state);
+      }
+
+      const newPanes = tab.panes.filter((p) => p.id !== paneId);
+      const newActivePaneId = tab.activePaneId === paneId
+        ? (newPanes[0]?.id ?? "")
+        : tab.activePaneId;
+
+      state.tabs = state.tabs.map((t, i) =>
+        i === tabIndex
+          ? { ...t, layout: result, panes: newPanes, activePaneId: newActivePaneId }
+          : t,
+      );
+
+      return snapshot(state);
+    },
+
     async writePty(paneId: string, data: string): Promise<void> {
       const { tabIndex, paneIndex } = findPane(state, paneId);
       const pane = state.tabs[tabIndex].panes[paneIndex];
@@ -409,6 +493,11 @@ export function createMockTransport(): WorkspaceTransport {
       settings: WorkspaceSettings,
     ): Promise<WorkspaceSettings> {
       state.settings = { ...settings };
+      return { ...state.settings };
+    },
+
+    async resetAppSettings(): Promise<WorkspaceSettings> {
+      state.settings = { ...MOCK_DEFAULT_SETTINGS };
       return { ...state.settings };
     },
 

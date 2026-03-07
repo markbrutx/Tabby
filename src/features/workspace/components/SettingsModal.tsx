@@ -1,7 +1,6 @@
 import { FolderOpen, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { DrawerOverlay } from "@/components/ui/DrawerOverlay";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import {
@@ -10,28 +9,54 @@ import {
   type PaneProfile,
   type WorkspaceSettings,
 } from "@/features/workspace/domain";
-import { LAYOUT_PRESET_CARDS, THEME_OPTIONS } from "@/features/workspace/presets";
 import { pickDirectory } from "@/lib/pickDirectory";
 
-interface SettingsDrawerProps {
+const LAYOUT_OPTIONS: { value: LayoutPreset; label: string }[] = [
+  { value: "1x1", label: "1x1 (single)" },
+  { value: "1x2", label: "1x2 (side-by-side)" },
+  { value: "2x2", label: "2x2 (quad)" },
+  { value: "2x3", label: "2x3 (six)" },
+  { value: "3x3", label: "3x3 (nine)" },
+];
+
+const THEME_OPTIONS = [
+  { value: "system", label: "System" },
+  { value: "dawn", label: "Dawn (light)" },
+  { value: "midnight", label: "Midnight (dark)" },
+];
+
+interface SettingsModalProps {
   settings: WorkspaceSettings;
   profiles: PaneProfile[];
   onClose: () => void;
   onSave: (settings: WorkspaceSettings) => Promise<void>;
+  onReset: () => Promise<void>;
 }
 
-export function SettingsDrawer({
+export function SettingsModal({
   settings,
   profiles,
   onClose,
   onSave,
-}: SettingsDrawerProps) {
+  onReset,
+}: SettingsModalProps) {
   const [draft, setDraft] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setDraft(settings);
   }, [settings]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   async function handlePickDirectory() {
     const selected = await pickDirectory(draft.defaultWorkingDirectory);
@@ -50,29 +75,39 @@ export function SettingsDrawer({
     onClose();
   }
 
+  async function handleReset() {
+    setIsSaving(true);
+    await onReset();
+    setIsSaving(false);
+    onClose();
+  }
+
   return (
-    <DrawerOverlay side="right" maxWidth={480} onClose={onClose}>
-      <div data-testid="settings-drawer" className="flex flex-1 flex-col">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-[var(--color-text-muted)]">
-              Workspace Settings
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold">Default launch profile</h2>
-            <p className="mt-2 text-sm text-[var(--color-text-soft)]">
-              These defaults are used for the first tab and every new workspace you
-              launch from the sidebar.
-            </p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      role="dialog"
+    >
+      <div
+        data-testid="settings-modal"
+        className="w-full max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-2xl"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Settings</h2>
+          <button
+            className="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+            onClick={onClose}
+          >
             <X size={16} />
-          </Button>
+          </button>
         </div>
 
-        <div className="mt-6 space-y-5 overflow-y-auto pr-1">
+        <div className="mt-5 space-y-4">
           <label className="block">
-            <span className="mb-2 block text-sm text-[var(--color-text-soft)]">
-              Default layout
+            <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
+              Default layout (Cmd+T)
             </span>
             <Select
               data-testid="settings-layout"
@@ -84,16 +119,16 @@ export function SettingsDrawer({
                 }))
               }
             >
-              {LAYOUT_PRESET_CARDS.map((card) => (
-                <option key={card.preset} value={card.preset}>
-                  {card.preset}
+              {LAYOUT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </Select>
           </label>
 
           <label className="block">
-            <span className="mb-2 block text-sm text-[var(--color-text-soft)]">
+            <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
               Default profile
             </span>
             <Select
@@ -116,7 +151,7 @@ export function SettingsDrawer({
 
           {draft.defaultProfileId === CUSTOM_PROFILE_ID ? (
             <label className="block">
-              <span className="mb-2 block text-sm text-[var(--color-text-soft)]">
+              <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
                 Default custom command
               </span>
               <Input
@@ -134,8 +169,8 @@ export function SettingsDrawer({
           ) : null}
 
           <div className="block">
-            <span className="mb-2 block text-sm text-[var(--color-text-soft)]">
-              Default working directory
+            <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
+              Working directory
             </span>
             <div className="flex gap-2">
               <Input
@@ -147,39 +182,41 @@ export function SettingsDrawer({
                     defaultWorkingDirectory: event.target.value,
                   }))
                 }
-                placeholder="~/projects/tabby"
+                placeholder="~/projects"
               />
               <Button variant="secondary" onClick={() => void handlePickDirectory()}>
-                <FolderOpen size={16} />
+                <FolderOpen size={14} />
               </Button>
             </div>
           </div>
 
           <label className="block">
-            <span className="mb-2 block text-sm text-[var(--color-text-soft)]">
-              Terminal font size
+            <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
+              Font size
             </span>
-            <Input
-              data-testid="settings-font-size"
-              type="range"
-              min={11}
-              max={20}
-              step={1}
-              value={draft.fontSize}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  fontSize: Number(event.target.value),
-                }))
-              }
-            />
-            <span className="mt-2 block text-xs text-[var(--color-text-muted)]">
-              {draft.fontSize}px
-            </span>
+            <div className="flex items-center gap-3">
+              <Input
+                data-testid="settings-font-size"
+                type="range"
+                min={11}
+                max={20}
+                step={1}
+                value={draft.fontSize}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    fontSize: Number(event.target.value),
+                  }))
+                }
+              />
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {draft.fontSize}px
+              </span>
+            </div>
           </label>
 
           <label className="block">
-            <span className="mb-2 block text-sm text-[var(--color-text-soft)]">
+            <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
               Theme
             </span>
             <Select
@@ -200,13 +237,8 @@ export function SettingsDrawer({
             </Select>
           </label>
 
-          <label className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] px-4 py-3">
-            <div>
-              <span className="block text-sm font-medium">Launch fullscreen</span>
-              <span className="block text-xs text-[var(--color-text-muted)]">
-                Matches the macOS-first behavior from the spec.
-              </span>
-            </div>
+          <label className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-3 py-2">
+            <span className="text-sm">Launch fullscreen</span>
             <input
               data-testid="settings-fullscreen"
               type="checkbox"
@@ -217,12 +249,21 @@ export function SettingsDrawer({
                   launchFullscreen: event.target.checked,
                 }))
               }
-              className="h-5 w-5 accent-[var(--color-accent-strong)]"
+              className="h-4 w-4 accent-[var(--color-accent)]"
             />
           </label>
         </div>
 
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-5 flex items-center gap-2">
+          <Button
+            variant="danger"
+            size="sm"
+            disabled={isSaving}
+            onClick={() => void handleReset()}
+          >
+            Reset to defaults
+          </Button>
+          <div className="flex-1" />
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -231,10 +272,10 @@ export function SettingsDrawer({
             disabled={isSaving}
             onClick={() => void handleSave()}
           >
-            Save defaults
+            Save
           </Button>
         </div>
       </div>
-    </DrawerOverlay>
+    </div>
   );
 }
