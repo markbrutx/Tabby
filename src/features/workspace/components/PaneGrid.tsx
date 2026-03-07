@@ -4,6 +4,9 @@ import {
   PanelGroup,
   PanelResizeHandle,
 } from "react-resizable-panels";
+import { RefreshCw } from "lucide-react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { Button } from "@/components/ui/Button";
 import type { PaneProfile, TabSnapshot } from "@/features/workspace/domain";
 import type { ResolvedTheme } from "@/features/workspace/theme";
 import { createGridDefinition } from "@/features/workspace/layouts";
@@ -58,18 +61,39 @@ export function PaneGrid({
               {row.map((pane, columnIndex) => (
                 <Fragment key={pane.id}>
                   <Panel defaultSize={100 / row.length}>
-                    <TerminalPane
-                      pane={pane}
-                      profiles={profiles}
-                      fontSize={fontSize}
-                      theme={theme}
-                      active={tab.activePaneId === pane.id}
-                      visible={visible}
-                      onFocus={(paneId) => onFocus(tab.id, paneId)}
-                      onUpdateProfile={onUpdateProfile}
-                      onUpdateCwd={onUpdateCwd}
-                      onRestart={onRestart}
-                    />
+                    <ErrorBoundary
+                      fallback={(_error, reset) => (
+                        <div className="surface-panel flex h-full min-h-[220px] flex-col items-center justify-center gap-4 rounded-[24px] text-center">
+                          <p className="text-sm text-[var(--color-text-muted)]">
+                            Pane crashed — click to restart
+                          </p>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              reset();
+                              void onRestart(pane.id);
+                            }}
+                          >
+                            <RefreshCw size={14} />
+                            Restart pane
+                          </Button>
+                        </div>
+                      )}
+                    >
+                      <TerminalPane
+                        pane={pane}
+                        profiles={profiles}
+                        fontSize={fontSize}
+                        theme={theme}
+                        active={tab.activePaneId === pane.id}
+                        visible={visible}
+                        onFocus={(paneId) => onFocus(tab.id, paneId)}
+                        onUpdateProfile={onUpdateProfile}
+                        onUpdateCwd={onUpdateCwd}
+                        onRestart={onRestart}
+                      />
+                    </ErrorBoundary>
                   </Panel>
                   {columnIndex < row.length - 1 ? (
                     <PanelResizeHandle className="resize-handle w-2 rounded-full" />

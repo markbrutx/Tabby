@@ -23,8 +23,14 @@ function hasContainerSize(container: HTMLElement): boolean {
 }
 
 function safeFit(fitAddon: FitAddon, container: HTMLElement) {
-  if (hasContainerSize(container)) {
+  if (!hasContainerSize(container)) {
+    return;
+  }
+
+  try {
     fitAddon.fit();
+  } catch {
+    // FitAddon can throw if the renderer is in a bad state.
   }
 }
 
@@ -38,49 +44,45 @@ export function useTerminalSession({
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const rendererReadyRef = useRef(false);
-  const pendingWritesRef = useRef<string[]>([]);
+  const pendingDataRef = useRef<string[]>([]);
+  const initializedRef = useRef(false);
 
-  // Activate the renderer: open terminal in DOM, attach WebGL, fit.
-  // Called once per terminal lifetime — either from the creation RAF
-  // (if the tab is already visible) or from the visibility effect
-  // (when a hidden tab becomes visible for the first time).
-  function activateRenderer(
-    terminal: Terminal,
-    fitAddon: FitAddon,
-    container: HTMLElement,
-  ) {
-    if (rendererReadyRef.current) {
-      return;
-    }
+  // --- Effect 1: PTY output listener ---
+  // Always active. Writes to terminal if initialized, buffers otherwise.
+  useEffect(() => {
+    let disposeEvent = () => {};
 
-    terminal.open(container);
+    void bridge
+      .listenToPtyOutput((payload) => {
+        if (
+          payload.paneId !== pane.id ||
+          payload.sessionId !== pane.sessionId
+        ) {
+          return;
+        }
 
-    try {
-      terminal.loadAddon(new WebglAddon());
-    } catch {
-      // WebGL is optional; xterm falls back to canvas/DOM rendering.
-    }
-
-    rendererReadyRef.current = true;
-
-    // Flush any PTY output that arrived while the terminal was hidden.
-    for (const chunk of pendingWritesRef.current) {
-      terminal.write(chunk);
-    }
-    pendingWritesRef.current = [];
-
-    safeFit(fitAddon, container);
-
-    if (isTauriRuntime()) {
-      void bridge.resizePty({
-        paneId: pane.id,
-        cols: terminal.cols,
-        rows: terminal.rows,
+        if (terminalRef.current && initializedRef.current) {
+          try {
+            terminalRef.current.write(payload.chunk);
+          } catch {
+            // Terminal disposed or renderer gone — drop the chunk.
+          }
+        } else {
+          pendingDataRef.current.push(payload.chunk);
+        }
+      })
+      .then((unlisten) => {
+        disposeEvent = unlisten;
       });
-    }
-  }
 
+    return () => {
+      disposeEvent();
+    };
+  }, [pane.id, pane.sessionId]);
+
+  // --- Effect 2: Terminal lifecycle ---
+  // Creates & disposes Terminal on session/font changes.
+  // Does NOT call open() — that is deferred to Effect 3 (visibility).
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -103,34 +105,114 @@ export function useTerminalSession({
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+    initializedRef.current = false;
 
     const dataDisposable = terminal.onData((data) => {
       void bridge.writePty(pane.id, data);
     });
 
-    // Defer open + WebGL to next frame so the container has its final
-    // layout dimensions.  xterm.js buffers write() calls until open(),
-    // so PTY output arriving before this frame is not lost.
-    // Only activate if the container is visible (has dimensions);
-    // hidden tabs will be activated when they first become visible.
-    const rafId = requestAnimationFrame(() => {
-      if (!terminalRef.current || rendererReadyRef.current) {
-        return;
-      }
-
-      if (hasContainerSize(container)) {
-        activateRenderer(terminal, fitAddon, container);
-      }
-    });
-
     const observer = new ResizeObserver(() => {
-      if (!rendererReadyRef.current) {
+      if (!initializedRef.current || !terminalRef.current) {
         return;
       }
 
       safeFit(fitAddon, container);
 
-      if (isTauriRuntime() && terminalRef.current) {
+      if (isTauriRuntime()) {
+        try {
+          void bridge.resizePty({
+            paneId: pane.id,
+            cols: terminal.cols,
+            rows: terminal.rows,
+          });
+        } catch {
+          // Terminal may be disposed during resize.
+        }
+      }
+    });
+
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+      dataDisposable.dispose();
+      terminal.dispose();
+      terminalRef.current = null;
+      fitAddonRef.current = null;
+      initializedRef.current = false;
+      pendingDataRef.current = [];
+    };
+  }, [fontSize, pane.id, pane.sessionId]);
+
+  // --- Effect 3: Renderer activation (visibility-gated) ---
+  // Opens the terminal in the DOM only when the container is visible.
+  // Hidden tabs skip this entirely — no open(), no WebGL, no renderer.
+  useEffect(() => {
+    const container = containerRef.current;
+    const terminal = terminalRef.current;
+    const fitAddon = fitAddonRef.current;
+
+    if (!visible || !terminal || !fitAddon || !container) {
+      return;
+    }
+
+    // Already initialized — just fit and focus.
+    if (initializedRef.current) {
+      safeFit(fitAddon, container);
+
+      if (active) {
+        try {
+          terminal.focus();
+        } catch {
+          // Focus can throw on disposed terminal.
+        }
+
+        if (isTauriRuntime()) {
+          void bridge.resizePty({
+            paneId: pane.id,
+            cols: terminal.cols,
+            rows: terminal.rows,
+          });
+        }
+      }
+
+      return;
+    }
+
+    // First time visible — activate renderer.
+    const rafId = requestAnimationFrame(() => {
+      if (!terminalRef.current || initializedRef.current) {
+        return;
+      }
+
+      try {
+        terminal.open(container);
+      } catch {
+        // open() can fail on detached or zero-size containers.
+        return;
+      }
+
+      try {
+        terminal.loadAddon(new WebglAddon());
+      } catch {
+        // WebGL is optional; canvas renderer continues to work.
+      }
+
+      initializedRef.current = true;
+
+      // Flush buffered PTY output.
+      const pending = pendingDataRef.current.splice(0);
+      for (const chunk of pending) {
+        try {
+          terminal.write(chunk);
+        } catch {
+          break;
+        }
+      }
+
+      safeFit(fitAddon, container);
+
+      if (isTauriRuntime()) {
         void bridge.resizePty({
           paneId: pane.id,
           cols: terminal.cols,
@@ -139,81 +221,23 @@ export function useTerminalSession({
       }
     });
 
-    observer.observe(container);
-
-    let disposeEvent = () => {};
-    void bridge
-      .listenToPtyOutput((payload) => {
-        if (
-          payload.paneId !== pane.id ||
-          payload.sessionId !== pane.sessionId ||
-          !terminalRef.current
-        ) {
-          return;
-        }
-
-        if (rendererReadyRef.current) {
-          terminalRef.current.write(payload.chunk);
-        } else {
-          pendingWritesRef.current.push(payload.chunk);
-        }
-      })
-      .then((unlisten) => {
-        disposeEvent = unlisten;
-      });
-
     return () => {
       cancelAnimationFrame(rafId);
-      observer.disconnect();
-      disposeEvent();
-      dataDisposable.dispose();
-      terminal.dispose();
-      terminalRef.current = null;
-      fitAddonRef.current = null;
-      rendererReadyRef.current = false;
-      pendingWritesRef.current = [];
     };
-  }, [fontSize, pane.id, pane.sessionId]);
-
-  useEffect(() => {
-    if (!terminalRef.current || !rendererReadyRef.current) {
-      return;
-    }
-
-    terminalRef.current.options.theme = getTerminalTheme(theme);
-  }, [theme]);
-
-  // When a hidden tab becomes visible for the first time, activate
-  // its renderer (deferred from creation because the container had
-  // display:none / zero dimensions).  For already-active terminals
-  // this just fits and optionally focuses.
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!visible || !terminalRef.current || !fitAddonRef.current || !container) {
-      return;
-    }
-
-    if (!rendererReadyRef.current) {
-      activateRenderer(terminalRef.current, fitAddonRef.current, container);
-    }
-
-    if (!rendererReadyRef.current) {
-      return;
-    }
-
-    safeFit(fitAddonRef.current, container);
-
-    if (active) {
-      terminalRef.current.focus();
-      if (isTauriRuntime()) {
-        void bridge.resizePty({
-          paneId: pane.id,
-          cols: terminalRef.current.cols,
-          rows: terminalRef.current.rows,
-        });
-      }
-    }
   }, [active, pane.id, visible]);
+
+  // --- Effect 4: Theme ---
+  useEffect(() => {
+    if (!terminalRef.current || !initializedRef.current) {
+      return;
+    }
+
+    try {
+      terminalRef.current.options.theme = getTerminalTheme(theme);
+    } catch {
+      // Theme update can fail if renderer is in a bad state.
+    }
+  }, [theme]);
 
   return {
     containerRef,
