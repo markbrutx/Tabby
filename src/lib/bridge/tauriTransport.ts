@@ -1,7 +1,9 @@
 import { listen } from "@tauri-apps/api/event";
 import type {
   BootstrapSnapshot,
+  BrowserUrlChangedEvent,
   NewTabRequest,
+  PaneLifecycleEvent,
   PtyOutputEvent,
   PtyResizeRequest,
   SplitPaneRequest,
@@ -12,9 +14,16 @@ import type {
 } from "@/features/workspace/domain";
 import { commands, type Result } from "@/lib/tauri-bindings";
 import { isTauriRuntime } from "@/lib/runtime";
-import { asErrorMessage, type UnlistenFn, type WorkspaceTransport } from "./shared";
+import {
+  asErrorMessage,
+  type BrowserBounds,
+  type UnlistenFn,
+  type WorkspaceTransport,
+} from "./shared";
 
 const PTY_OUTPUT_EVENT_NAME = "pty-output";
+const PANE_LIFECYCLE_EVENT_NAME = "pane-lifecycle";
+const BROWSER_URL_CHANGED_EVENT = "browser-url-changed";
 
 function ensureTauri() {
   if (!isTauriRuntime()) {
@@ -117,6 +126,89 @@ export function createTauriTransport(): WorkspaceTransport {
       }
 
       return listen<PtyOutputEvent>(PTY_OUTPUT_EVENT_NAME, (event) => {
+        handler(event.payload);
+      });
+    },
+
+    async trackPaneCwd(paneId: string, cwd: string): Promise<void> {
+      ensureTauri();
+      unwrapResult(await commands.trackPaneCwd(paneId, cwd));
+    },
+
+    async swapPanes(paneIdA: string, paneIdB: string): Promise<WorkspaceSnapshot> {
+      ensureTauri();
+      return unwrapResult(await commands.swapPanes(paneIdA, paneIdB));
+    },
+
+    async listenToPaneLifecycle(
+      handler: (payload: PaneLifecycleEvent) => void,
+    ): Promise<UnlistenFn> {
+      if (!isTauriRuntime()) {
+        return () => undefined;
+      }
+
+      return listen<PaneLifecycleEvent>(PANE_LIFECYCLE_EVENT_NAME, (event) => {
+        handler(event.payload);
+      });
+    },
+
+    async createBrowserWebview(
+      paneId: string,
+      url: string,
+      bounds: BrowserBounds,
+    ): Promise<void> {
+      ensureTauri();
+      unwrapResult(
+        await commands.createBrowserWebview(
+          paneId,
+          url,
+          bounds.x,
+          bounds.y,
+          bounds.width,
+          bounds.height,
+        ),
+      );
+    },
+
+    async navigateBrowser(paneId: string, url: string): Promise<void> {
+      ensureTauri();
+      unwrapResult(await commands.navigateBrowser(paneId, url));
+    },
+
+    async closeBrowserWebview(paneId: string): Promise<void> {
+      ensureTauri();
+      unwrapResult(await commands.closeBrowserWebview(paneId));
+    },
+
+    async setBrowserWebviewBounds(
+      paneId: string,
+      bounds: BrowserBounds,
+    ): Promise<void> {
+      ensureTauri();
+      unwrapResult(
+        await commands.setBrowserWebviewBounds(
+          paneId,
+          bounds.x,
+          bounds.y,
+          bounds.width,
+          bounds.height,
+        ),
+      );
+    },
+
+    async setBrowserWebviewVisible(paneId: string, visible: boolean): Promise<void> {
+      ensureTauri();
+      unwrapResult(await commands.setBrowserWebviewVisible(paneId, visible));
+    },
+
+    async listenToBrowserUrlChanged(
+      handler: (event: BrowserUrlChangedEvent) => void,
+    ): Promise<UnlistenFn> {
+      if (!isTauriRuntime()) {
+        return () => undefined;
+      }
+
+      return listen<BrowserUrlChangedEvent>(BROWSER_URL_CHANGED_EVENT, (event) => {
         handler(event.payload);
       });
     },

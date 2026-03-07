@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use crate::domain::error::TabbyError;
 use crate::domain::snapshot::{PaneRuntimeStatus, PaneSnapshot, TabSnapshot, WorkspaceSnapshot};
 use crate::domain::split_tree;
-use crate::domain::types::{create_tab_id, PaneSeed, SplitDirection, SplitNode};
+use crate::domain::types::{create_tab_id, PaneKind, PaneSeed, SplitDirection, SplitNode};
 
 #[derive(Debug, Default)]
 struct WorkspaceState {
@@ -73,9 +73,7 @@ impl TabManager {
             .tabs
             .iter_mut()
             .find(|tab| tab.panes.iter().any(|p| p.id == target_pane_id))
-            .ok_or_else(|| {
-                TabbyError::NotFound(format!("Pane {target_pane_id}"))
-            })?;
+            .ok_or_else(|| TabbyError::NotFound(format!("Pane {target_pane_id}")))?;
 
         let new_layout =
             split_tree::split_pane(&tab.layout, target_pane_id, direction, &new_seed.pane_id)
@@ -94,6 +92,8 @@ impl TabManager {
             profile_label: new_seed.profile_label,
             startup_command: new_seed.startup_command,
             status: PaneRuntimeStatus::Running,
+            pane_kind: new_seed.pane_kind,
+            url: new_seed.url,
         };
 
         tab.layout = new_layout;
@@ -121,17 +121,14 @@ impl TabManager {
                     .find(|p| p.id == target_pane_id)
                     .map(|p| (ti, p.session_id.clone()))
             })
-            .ok_or_else(|| {
-                TabbyError::NotFound(format!("Pane {target_pane_id}"))
-            })?;
+            .ok_or_else(|| TabbyError::NotFound(format!("Pane {target_pane_id}")))?;
 
-        let close_result =
-            split_tree::close_pane(&state.tabs[tab_index].layout, target_pane_id)
-                .ok_or_else(|| {
-                    TabbyError::State(format!(
-                        "Failed to close pane {target_pane_id} in layout tree"
-                    ))
-                })?;
+        let close_result = split_tree::close_pane(&state.tabs[tab_index].layout, target_pane_id)
+            .ok_or_else(|| {
+                TabbyError::State(format!(
+                    "Failed to close pane {target_pane_id} in layout tree"
+                ))
+            })?;
 
         match close_result {
             Some(new_layout) => {
@@ -140,11 +137,8 @@ impl TabManager {
                 tab.panes.retain(|p| p.id != target_pane_id);
 
                 if tab.active_pane_id == target_pane_id {
-                    tab.active_pane_id = tab
-                        .panes
-                        .first()
-                        .map(|p| p.id.clone())
-                        .unwrap_or_default();
+                    tab.active_pane_id =
+                        tab.panes.first().map(|p| p.id.clone()).unwrap_or_default();
                 }
 
                 Ok((Self::workspace_snapshot(&state), session_id, None))
@@ -156,9 +150,7 @@ impl TabManager {
                 state.active_tab_id = if state.tabs.is_empty() {
                     None
                 } else if state.active_tab_id.as_deref() == Some(&removed_tab_id) {
-                    Some(
-                        state.tabs[tab_index.saturating_sub(1)].id.clone(),
-                    )
+                    Some(state.tabs[tab_index.saturating_sub(1)].id.clone())
                 } else {
                     state.active_tab_id.clone()
                 };
@@ -172,10 +164,7 @@ impl TabManager {
         }
     }
 
-    pub fn close_tab(
-        &self,
-        tab_id: &str,
-    ) -> Result<(WorkspaceSnapshot, Vec<String>), TabbyError> {
+    pub fn close_tab(&self, tab_id: &str) -> Result<(WorkspaceSnapshot, Vec<String>), TabbyError> {
         let mut state = self.lock_state()?;
         let index = state
             .tabs
@@ -212,11 +201,7 @@ impl TabManager {
         Ok(Self::workspace_snapshot(&state))
     }
 
-    pub fn focus_pane(
-        &self,
-        tab_id: &str,
-        pane_id: &str,
-    ) -> Result<WorkspaceSnapshot, TabbyError> {
+    pub fn focus_pane(&self, tab_id: &str, pane_id: &str) -> Result<WorkspaceSnapshot, TabbyError> {
         let mut state = self.lock_state()?;
         let tab = state
             .tabs
@@ -242,9 +227,7 @@ impl TabManager {
                 tab.panes
                     .iter()
                     .find(|pane| pane.id == pane_id)
-                    .map(|pane| LocatedPane {
-                        pane: pane.clone(),
-                    })
+                    .map(|pane| LocatedPane { pane: pane.clone() })
             })
             .ok_or_else(|| TabbyError::NotFound(format!("Pane {pane_id}")))
     }
@@ -255,6 +238,18 @@ impl TabManager {
         session_id: String,
         resolved: crate::domain::types::ResolvedProfile,
         cwd: String,
+    ) -> Result<WorkspaceSnapshot, TabbyError> {
+        self.replace_pane_full(pane_id, session_id, resolved, cwd, PaneKind::Terminal, None)
+    }
+
+    pub fn replace_pane_full(
+        &self,
+        pane_id: &str,
+        session_id: String,
+        resolved: crate::domain::types::ResolvedProfile,
+        cwd: String,
+        pane_kind: PaneKind,
+        url: Option<String>,
     ) -> Result<WorkspaceSnapshot, TabbyError> {
         let mut state = self.lock_state()?;
 
@@ -270,12 +265,93 @@ impl TabManager {
         pane.profile_label = resolved.label;
         pane.startup_command = resolved.startup_command;
         pane.cwd = cwd;
+        pane.pane_kind = pane_kind;
+        pane.url = url;
 
         Ok(Self::workspace_snapshot(&state))
     }
 
-    pub fn session_id_for_pane(&self, pane_id: &str) -> Result<String, TabbyError> {
-        Ok(self.locate_pane(pane_id)?.pane.session_id)
+    pub fn terminal_session_ids_for_tab(&self, tab_id: &str) -> Result<Vec<String>, TabbyError> {
+        let state = self.lock_state()?;
+        let tab = state
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .ok_or_else(|| TabbyError::NotFound(format!("Tab {tab_id}")))?;
+
+        Ok(tab
+            .panes
+            .iter()
+            .filter(|p| p.pane_kind == PaneKind::Terminal)
+            .map(|p| p.session_id.clone())
+            .collect())
+    }
+
+    pub fn browser_pane_ids_for_tab(&self, tab_id: &str) -> Vec<String> {
+        let state = match self.lock_state() {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
+        state
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .map(|tab| {
+                tab.panes
+                    .iter()
+                    .filter(|p| p.pane_kind == PaneKind::Browser)
+                    .map(|p| p.id.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn swap_panes(
+        &self,
+        pane_id_a: &str,
+        pane_id_b: &str,
+    ) -> Result<WorkspaceSnapshot, TabbyError> {
+        let mut state = self.lock_state()?;
+
+        let tab = state
+            .tabs
+            .iter_mut()
+            .find(|tab| {
+                tab.panes.iter().any(|p| p.id == pane_id_a)
+                    && tab.panes.iter().any(|p| p.id == pane_id_b)
+            })
+            .ok_or_else(|| {
+                TabbyError::NotFound(format!(
+                    "Panes {pane_id_a} and {pane_id_b} must be in the same tab"
+                ))
+            })?;
+
+        let new_layout =
+            split_tree::swap_panes(&tab.layout, pane_id_a, pane_id_b).ok_or_else(|| {
+                TabbyError::State(format!(
+                    "Failed to swap panes {pane_id_a} and {pane_id_b} in layout tree"
+                ))
+            })?;
+
+        tab.layout = new_layout;
+
+        Ok(Self::workspace_snapshot(&state))
+    }
+
+    /// Silently updates the tracked CWD for a pane without restarting the PTY.
+    /// Called when the frontend detects an OSC 7 escape sequence.
+    pub fn update_tracked_cwd(&self, pane_id: &str, cwd: &str) -> Result<(), TabbyError> {
+        let mut state = self.lock_state()?;
+
+        let pane = state
+            .tabs
+            .iter_mut()
+            .flat_map(|tab| tab.panes.iter_mut())
+            .find(|pane| pane.id == pane_id)
+            .ok_or_else(|| TabbyError::NotFound(format!("Pane {pane_id}")))?;
+
+        pane.cwd = String::from(cwd);
+        Ok(())
     }
 
     fn workspace_snapshot(state: &WorkspaceState) -> WorkspaceSnapshot {
@@ -303,6 +379,8 @@ mod tests {
             profile_id: String::from("terminal"),
             profile_label: String::from("Terminal"),
             startup_command: None,
+            pane_kind: crate::domain::types::PaneKind::Terminal,
+            url: None,
         }
     }
 
@@ -370,14 +448,74 @@ mod tests {
             .create_tab(tree_from_preset(LayoutPreset::OneByTwo, &ids), seeds)
             .expect("tab created");
 
-        let (snapshot, session_id, removed_tab) = manager
-            .close_pane("pane-a")
-            .expect("close should succeed");
+        let (snapshot, session_id, removed_tab) =
+            manager.close_pane("pane-a").expect("close should succeed");
 
         assert_eq!(session_id, "session-a");
         assert!(removed_tab.is_none());
         assert_eq!(snapshot.tabs[0].panes.len(), 1);
         assert_eq!(snapshot.tabs[0].panes[0].id, "pane-b");
+    }
+
+    #[test]
+    fn update_tracked_cwd_changes_snapshot() {
+        let manager = TabManager::new();
+        let seeds = vec![pane_seed("a")];
+        let ids: Vec<String> = seeds.iter().map(|s| s.pane_id.clone()).collect();
+        manager
+            .create_tab(tree_from_preset(LayoutPreset::OneByOne, &ids), seeds)
+            .expect("tab created");
+
+        manager
+            .update_tracked_cwd("pane-a", "/new/cwd")
+            .expect("cwd update should succeed");
+
+        let located = manager.locate_pane("pane-a").expect("pane found");
+        assert_eq!(located.pane.cwd, "/new/cwd");
+        assert_eq!(located.pane.session_id, "session-a");
+    }
+
+    #[test]
+    fn swap_panes_swaps_layout_positions() {
+        let manager = TabManager::new();
+        let seeds = vec![pane_seed("a"), pane_seed("b")];
+        let ids: Vec<String> = seeds.iter().map(|s| s.pane_id.clone()).collect();
+        manager
+            .create_tab(tree_from_preset(LayoutPreset::OneByTwo, &ids), seeds)
+            .expect("tab created");
+
+        let snapshot = manager
+            .swap_panes("pane-a", "pane-b")
+            .expect("swap should succeed");
+
+        let pane_ids = crate::domain::split_tree::collect_pane_ids(&snapshot.tabs[0].layout);
+        assert_eq!(pane_ids, vec!["pane-b", "pane-a"]);
+    }
+
+    #[test]
+    fn swap_panes_different_tabs_errors() {
+        let manager = TabManager::new();
+        let seeds_a = vec![pane_seed("a")];
+        let ids_a: Vec<String> = seeds_a.iter().map(|s| s.pane_id.clone()).collect();
+        manager
+            .create_tab(tree_from_preset(LayoutPreset::OneByOne, &ids_a), seeds_a)
+            .expect("tab created");
+
+        let seeds_b = vec![pane_seed("b")];
+        let ids_b: Vec<String> = seeds_b.iter().map(|s| s.pane_id.clone()).collect();
+        manager
+            .create_tab(tree_from_preset(LayoutPreset::OneByOne, &ids_b), seeds_b)
+            .expect("tab created");
+
+        let result = manager.swap_panes("pane-a", "pane-b");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn update_tracked_cwd_unknown_pane_errors() {
+        let manager = TabManager::new();
+        let result = manager.update_tracked_cwd("nonexistent", "/tmp");
+        assert!(result.is_err());
     }
 
     #[test]
@@ -389,9 +527,8 @@ mod tests {
             .create_tab(tree_from_preset(LayoutPreset::OneByOne, &ids), seeds)
             .expect("tab created");
 
-        let (snapshot, _, removed_tab) = manager
-            .close_pane("pane-a")
-            .expect("close should succeed");
+        let (snapshot, _, removed_tab) =
+            manager.close_pane("pane-a").expect("close should succeed");
 
         assert!(removed_tab.is_some());
         assert!(snapshot.tabs.is_empty());

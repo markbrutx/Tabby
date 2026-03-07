@@ -55,6 +55,7 @@ interface WorkspaceStore {
   restartPane: (paneId: string) => Promise<void>;
   splitPane: (request: SplitPaneRequest) => Promise<void>;
   closePane: (paneId: string) => Promise<void>;
+  swapPanes: (paneIdA: string, paneIdB: string) => Promise<void>;
   updateSettings: (settings: WorkspaceSettings) => Promise<void>;
   resetSettings: () => Promise<void>;
   clearError: () => void;
@@ -130,6 +131,30 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
           wizardTab: shouldShowWizard
             ? makeWizardTab(payload.workspace)
             : null,
+        });
+
+        void transport.listenToPaneLifecycle((event) => {
+          set((state) => {
+            const workspace = state.workspace;
+            if (!workspace) {
+              return {};
+            }
+
+            const tabs = workspace.tabs.map((tab) => ({
+              ...tab,
+              panes: tab.panes.map((pane) => {
+                if (pane.id !== event.paneId) {
+                  return pane;
+                }
+                if (event.sessionId && pane.sessionId !== event.sessionId) {
+                  return pane;
+                }
+                return { ...pane, status: event.status };
+              }),
+            }));
+
+            return { workspace: { ...workspace, tabs } };
+          });
         });
       } catch (error) {
         set({
@@ -254,6 +279,10 @@ function createWorkspaceStoreState(transport: WorkspaceTransport) {
         () => transport.closePane(paneId),
         (ws) => (ws.tabs.length === 0 ? { wizardTab: makeWizardTab(ws) } : {}),
       );
+    },
+
+    async swapPanes(paneIdA, paneIdB) {
+      await runWorkspaceMutation(set, () => transport.swapPanes(paneIdA, paneIdB));
     },
 
     async updateSettings(settings) {

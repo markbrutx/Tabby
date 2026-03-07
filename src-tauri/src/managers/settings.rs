@@ -45,6 +45,13 @@ impl SettingsManager {
         self.write_settings(&defaults)
     }
 
+    pub fn update_last_working_directory(&self, cwd: &str) -> Result<(), TabbyError> {
+        let mut settings = self.get_settings()?;
+        settings.last_working_directory = Some(String::from(cwd));
+        self.write_settings(&settings)?;
+        Ok(())
+    }
+
     fn write_settings(&self, settings: &AppSettings) -> Result<AppSettings, TabbyError> {
         let store = self
             .app

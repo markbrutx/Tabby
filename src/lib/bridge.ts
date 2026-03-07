@@ -6,4 +6,4 @@ export const bridge: WorkspaceTransport =
   getBrowserTransport() ?? createTauriTransport();
 
 export { asErrorMessage };
-export type { WorkspaceTransport } from "@/lib/bridge/shared";
+export type { BrowserBounds, WorkspaceTransport } from "@/lib/bridge/shared";

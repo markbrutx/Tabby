@@ -3,5 +3,12 @@
   "identifier": "default",
   "description": "Default permissions for Tabby",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default", "store:default"]
+  "permissions": [
+    "core:default",
+    "core:webview:default",
+    "core:webview:allow-create-webview",
+    "core:webview:allow-create-webview-window",
+    "dialog:default",
+    "store:default"
+  ]
 }

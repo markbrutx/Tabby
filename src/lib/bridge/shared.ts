@@ -1,6 +1,8 @@
 import type {
   BootstrapSnapshot,
+  BrowserUrlChangedEvent,
   NewTabRequest,
+  PaneLifecycleEvent,
   PtyOutputEvent,
   PtyResizeRequest,
   SplitPaneRequest,
@@ -11,6 +13,13 @@ import type {
 } from "@/features/workspace/domain";
 
 export type UnlistenFn = () => void;
+
+export interface BrowserBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 export interface WorkspaceTransport {
   bootstrapWorkspace: () => Promise<BootstrapSnapshot>;
@@ -32,6 +41,26 @@ export interface WorkspaceTransport {
   resetAppSettings: () => Promise<WorkspaceSettings>;
   listenToPtyOutput: (
     handler: (payload: PtyOutputEvent) => void,
+  ) => Promise<UnlistenFn>;
+  listenToPaneLifecycle: (
+    handler: (payload: PaneLifecycleEvent) => void,
+  ) => Promise<UnlistenFn>;
+  trackPaneCwd: (paneId: string, cwd: string) => Promise<void>;
+  swapPanes: (paneIdA: string, paneIdB: string) => Promise<WorkspaceSnapshot>;
+  createBrowserWebview: (
+    paneId: string,
+    url: string,
+    bounds: BrowserBounds,
+  ) => Promise<void>;
+  navigateBrowser: (paneId: string, url: string) => Promise<void>;
+  closeBrowserWebview: (paneId: string) => Promise<void>;
+  setBrowserWebviewBounds: (
+    paneId: string,
+    bounds: BrowserBounds,
+  ) => Promise<void>;
+  setBrowserWebviewVisible: (paneId: string, visible: boolean) => Promise<void>;
+  listenToBrowserUrlChanged: (
+    handler: (event: BrowserUrlChangedEvent) => void,
   ) => Promise<UnlistenFn>;
 }
 

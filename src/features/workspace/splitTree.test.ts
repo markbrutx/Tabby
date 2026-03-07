@@ -9,6 +9,7 @@ import {
   findAdjacentPane,
   findNextPane,
   findPreviousPane,
+  swapPanes,
 } from "@/features/workspace/splitTree";
 
 const singlePane: SplitNode = { type: "pane", paneId: "p1" };
@@ -125,6 +126,31 @@ describe("splitTree", () => {
     it("cycles backward in DFS order", () => {
       expect(findPreviousPane(twoPane, "p2")).toBe("p1");
       expect(findPreviousPane(twoPane, "p1")).toBe("p2");
+    });
+  });
+
+  describe("swapPanes", () => {
+    it("swaps two panes in horizontal split", () => {
+      const result = swapPanes(twoPane, "p1", "p2");
+      expect(result).not.toBeNull();
+      expect(collectPaneIds(result!)).toEqual(["p2", "p1"]);
+    });
+
+    it("returns null for unknown pane", () => {
+      expect(swapPanes(twoPane, "p1", "unknown")).toBeNull();
+    });
+
+    it("self-swap returns same tree", () => {
+      const result = swapPanes(twoPane, "p1", "p1");
+      expect(result).not.toBeNull();
+      expect(collectPaneIds(result!)).toEqual(["p1", "p2"]);
+    });
+
+    it("deep tree swap (non-adjacent)", () => {
+      const fourPane = treeFromCount(["p1", "p2", "p3", "p4"]);
+      const result = swapPanes(fourPane, "p1", "p4");
+      expect(result).not.toBeNull();
+      expect(collectPaneIds(result!)).toEqual(["p4", "p2", "p3", "p1"]);
     });
   });
 

@@ -1,8 +1,12 @@
 import {
+  BROWSER_PROFILE_ID,
   CUSTOM_PROFILE_ID,
   type BootstrapSnapshot,
+  type BrowserUrlChangedEvent,
   type LayoutPreset,
   type NewTabRequest,
+  type PaneLifecycleEvent,
+  type PaneKind,
   type PaneProfile,
   type PaneSnapshot,
   type PtyOutputEvent,
@@ -19,11 +23,12 @@ import {
 import {
   splitPane as treeSplitPane,
   closePane as treeClosePane,
+  swapPanes as treeSwapPanes,
   treeFromPreset,
   treeFromCount,
   paneCountForPreset,
 } from "@/features/workspace/splitTree";
-import type { UnlistenFn, WorkspaceTransport } from "./shared";
+import type { BrowserBounds, UnlistenFn, WorkspaceTransport } from "./shared";
 
 const MOCK_DEFAULT_SETTINGS: WorkspaceSettings = {
   defaultLayout: "1x1",
@@ -34,6 +39,7 @@ const MOCK_DEFAULT_SETTINGS: WorkspaceSettings = {
   theme: "midnight",
   launchFullscreen: false,
   hasCompletedOnboarding: false,
+  lastWorkingDirectory: null,
 };
 
 let idCounter = 0;
@@ -67,6 +73,12 @@ const BUILT_IN_PROFILES: PaneProfile[] = [
     description: "Run any command of your choice",
     startupCommand: null,
   },
+  {
+    id: BROWSER_PROFILE_ID,
+    label: "Browser",
+    description: "Launch Google Chrome with a specific profile and URL",
+    startupCommand: null,
+  },
 ];
 
 function resolveProfile(
@@ -93,15 +105,20 @@ function createPane(
   index: number,
 ): PaneSnapshot {
   const resolved = resolveProfile(profileId, startupCommand);
+  const isBrowser = profileId === BROWSER_PROFILE_ID;
+  const paneKind: PaneKind = isBrowser ? "browser" : "terminal";
+
   return {
     id: nextId("pane"),
-    sessionId: nextId("session"),
+    sessionId: isBrowser ? nextId("browser") : nextId("session"),
     title: `Pane ${index + 1}`,
     cwd,
     profileId: resolved.id,
     profileLabel: resolved.label,
     startupCommand: resolved.startupCommand,
     status: "running",
+    paneKind,
+    url: isBrowser ? null : undefined,
   };
 }
 
@@ -141,6 +158,7 @@ interface MockState {
   settings: WorkspaceSettings;
   nextTabIndex: number;
   outputListeners: Array<(payload: PtyOutputEvent) => void>;
+  lifecycleListeners: Array<(payload: PaneLifecycleEvent) => void>;
 }
 
 function snapshot(state: MockState): WorkspaceSnapshot {
@@ -185,6 +203,7 @@ export function createMockTransport(): WorkspaceTransport {
     settings: { ...MOCK_DEFAULT_SETTINGS },
     nextTabIndex: 1,
     outputListeners: [],
+    lifecycleListeners: [],
   };
 
   function addTab(
@@ -198,6 +217,7 @@ export function createMockTransport(): WorkspaceTransport {
     state.nextTabIndex += 1;
 
     for (const pane of tab.panes) {
+      if (pane.paneKind === "browser") continue;
       setTimeout(() => {
         emitMockOutput(
           state,
@@ -507,6 +527,8 @@ export function createMockTransport(): WorkspaceTransport {
       const { tabIndex, paneIndex } = findPane(state, paneId);
       const pane = state.tabs[tabIndex].panes[paneIndex];
 
+      if (pane.paneKind === "browser") return;
+
       if (data === "\r") {
         emitMockOutput(state, paneId, pane.sessionId, "\r\n\x1b[32m➜\x1b[0m  ");
       } else if (data === "\x7f") {
@@ -543,6 +565,87 @@ export function createMockTransport(): WorkspaceTransport {
       return () => {
         state.outputListeners = state.outputListeners.filter((h) => h !== handler);
       };
+    },
+
+    async trackPaneCwd(paneId: string, cwd: string): Promise<void> {
+      const { tabIndex, paneIndex } = findPane(state, paneId);
+      state.tabs = state.tabs.map((tab, ti) =>
+        ti === tabIndex
+          ? {
+              ...tab,
+              panes: tab.panes.map((pane, pi) =>
+                pi === paneIndex ? { ...pane, cwd } : pane,
+              ),
+            }
+          : tab,
+      );
+      state.settings = { ...state.settings, lastWorkingDirectory: cwd };
+    },
+
+    async swapPanes(paneIdA: string, paneIdB: string): Promise<WorkspaceSnapshot> {
+      // Find the tab that contains both panes
+      const tabIndex = state.tabs.findIndex(
+        (tab) =>
+          tab.panes.some((p) => p.id === paneIdA) &&
+          tab.panes.some((p) => p.id === paneIdB),
+      );
+      if (tabIndex === -1) {
+        throw new Error(`Panes ${paneIdA} and ${paneIdB} must be in the same tab`);
+      }
+
+      const tab = state.tabs[tabIndex];
+      const newLayout = treeSwapPanes(tab.layout, paneIdA, paneIdB);
+      if (!newLayout) {
+        throw new Error(`Failed to swap panes ${paneIdA} and ${paneIdB}`);
+      }
+
+      state.tabs = state.tabs.map((t, i) =>
+        i === tabIndex ? { ...t, layout: newLayout } : t,
+      );
+
+      return snapshot(state);
+    },
+
+    async listenToPaneLifecycle(
+      handler: (payload: PaneLifecycleEvent) => void,
+    ): Promise<UnlistenFn> {
+      state.lifecycleListeners = [...state.lifecycleListeners, handler];
+      return () => {
+        state.lifecycleListeners = state.lifecycleListeners.filter((h) => h !== handler);
+      };
+    },
+
+    async createBrowserWebview(
+      _paneId: string,
+      _url: string,
+      _bounds: BrowserBounds,
+    ): Promise<void> {
+      // no-op in mock — iframe used instead
+    },
+
+    async navigateBrowser(_paneId: string, _url: string): Promise<void> {
+      // no-op in mock
+    },
+
+    async closeBrowserWebview(_paneId: string): Promise<void> {
+      // no-op in mock
+    },
+
+    async setBrowserWebviewBounds(
+      _paneId: string,
+      _bounds: BrowserBounds,
+    ): Promise<void> {
+      // no-op in mock
+    },
+
+    async setBrowserWebviewVisible(_paneId: string, _visible: boolean): Promise<void> {
+      // no-op in mock
+    },
+
+    async listenToBrowserUrlChanged(
+      _handler: (event: BrowserUrlChangedEvent) => void,
+    ): Promise<UnlistenFn> {
+      return () => undefined;
     },
   };
 }

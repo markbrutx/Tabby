@@ -18,8 +18,10 @@ const MENU_ITEM_SETTINGS: &str = "open-settings";
 const EVENT_OPEN_SETTINGS: &str = "menu-open-settings";
 
 use crate::commands::workspace::LaunchOverrides;
-use crate::domain::events::{PaneLifecycleEvent, PtyOutputEvent, WorkspaceChangedEvent};
-use crate::domain::types::SplitNode;
+use crate::domain::events::{
+    BrowserUrlChangedEvent, PaneLifecycleEvent, PtyOutputEvent, WorkspaceChangedEvent,
+};
+use crate::domain::types::{PaneKind, SplitNode};
 use crate::managers::coordinator::Coordinator;
 use crate::managers::pty::PtyManager;
 use crate::managers::settings::SettingsManager;
@@ -48,13 +50,22 @@ fn specta_builder() -> SpectaBuilder<tauri::Wry> {
             commands::workspace::update_pane_cwd,
             commands::workspace::split_pane,
             commands::workspace::close_pane,
+            commands::workspace::track_pane_cwd,
+            commands::workspace::swap_panes,
+            commands::browser::create_browser_webview,
+            commands::browser::navigate_browser,
+            commands::browser::close_browser_webview,
+            commands::browser::set_browser_webview_bounds,
+            commands::browser::set_browser_webview_visible,
             commands::pty::write_pty,
             commands::pty::resize_pty,
         ])
         .typ::<SplitNode>()
+        .typ::<PaneKind>()
         .typ::<PtyOutputEvent>()
         .typ::<PaneLifecycleEvent>()
         .typ::<WorkspaceChangedEvent>()
+        .typ::<BrowserUrlChangedEvent>()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -102,6 +113,12 @@ pub fn run(cli_args: CliArgs) {
                 if let Err(emit_err) = app_handle.emit(EVENT_OPEN_SETTINGS, ()) {
                     error!(?emit_err, "Failed to emit menu-open-settings event");
                 }
+            }
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.emit("app-close-requested", ());
             }
         })
         .setup(move |app| {

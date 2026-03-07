@@ -175,7 +175,41 @@ export function collectPaneIds(root: SplitNode): string[] {
   return [...collectPaneIds(root.first), ...collectPaneIds(root.second)];
 }
 
-export interface PaneRect {
+export function swapPanes(
+  root: SplitNode,
+  paneIdA: string,
+  paneIdB: string,
+): SplitNode | null {
+  const ids = collectPaneIds(root);
+  if (!ids.includes(paneIdA) || !ids.includes(paneIdB)) {
+    return null;
+  }
+  return swapPanesInner(root, paneIdA, paneIdB);
+}
+
+function swapPanesInner(
+  node: SplitNode,
+  paneIdA: string,
+  paneIdB: string,
+): SplitNode {
+  if (node.type === "pane") {
+    if (node.paneId === paneIdA) {
+      return { type: "pane", paneId: paneIdB };
+    }
+    if (node.paneId === paneIdB) {
+      return { type: "pane", paneId: paneIdA };
+    }
+    return node;
+  }
+
+  return {
+    ...node,
+    first: swapPanesInner(node.first, paneIdA, paneIdB),
+    second: swapPanesInner(node.second, paneIdA, paneIdB),
+  };
+}
+
+interface PaneRect {
   x: number;
   y: number;
   w: number;

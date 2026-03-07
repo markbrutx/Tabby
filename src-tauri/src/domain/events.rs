@@ -4,6 +4,8 @@ use specta::Type;
 use crate::domain::snapshot::{PaneRuntimeStatus, WorkspaceSnapshot};
 
 pub const PTY_OUTPUT_EVENT_NAME: &str = "pty-output";
+pub const PANE_LIFECYCLE_EVENT_NAME: &str = "pane-lifecycle";
+pub const BROWSER_URL_CHANGED: &str = "browser-url-changed";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PtyOutputEvent {
@@ -25,4 +27,11 @@ pub struct PaneLifecycleEvent {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceChangedEvent {
     pub workspace: WorkspaceSnapshot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserUrlChangedEvent {
+    pub pane_id: String,
+    pub url: String,
 }

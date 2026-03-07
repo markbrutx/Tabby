@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
   BootstrapSnapshot,
+  PaneLifecycleEvent,
   SplitNode,
   WorkspaceSettings,
   WorkspaceSnapshot,
@@ -76,6 +77,15 @@ function createTransportMock(overrides: Partial<WorkspaceTransport> = {}): Works
     updateAppSettings: vi.fn().mockResolvedValue(settings),
     resetAppSettings: vi.fn().mockResolvedValue(settings),
     listenToPtyOutput: vi.fn().mockResolvedValue(() => undefined),
+    listenToPaneLifecycle: vi.fn().mockResolvedValue(() => undefined),
+    trackPaneCwd: vi.fn().mockResolvedValue(undefined),
+    swapPanes: vi.fn().mockResolvedValue(workspace),
+    createBrowserWebview: vi.fn().mockResolvedValue(undefined),
+    navigateBrowser: vi.fn().mockResolvedValue(undefined),
+    closeBrowserWebview: vi.fn().mockResolvedValue(undefined),
+    setBrowserWebviewBounds: vi.fn().mockResolvedValue(undefined),
+    setBrowserWebviewVisible: vi.fn().mockResolvedValue(undefined),
+    listenToBrowserUrlChanged: vi.fn().mockResolvedValue(() => undefined),
     ...overrides,
   };
 }
@@ -154,6 +164,107 @@ describe("createWorkspaceStore", () => {
         { profileId: "custom", cwd: "/c", startupCommand: "npm dev" },
       ],
     });
+  });
+
+  it("lifecycle event updates pane status to exited", async () => {
+    const handler: { current: ((event: PaneLifecycleEvent) => void) | null } = { current: null };
+    const transport = createTransportMock({
+      listenToPaneLifecycle: vi.fn(async (h: (event: PaneLifecycleEvent) => void) => {
+        handler.current = h;
+        return () => { handler.current = null; };
+      }),
+    });
+    const store = createWorkspaceStore(transport);
+
+    await store.getState().initialize();
+
+    handler.current?.({
+      paneId: "pane-1",
+      sessionId: "session-1",
+      status: "exited",
+      errorMessage: null,
+    });
+
+    const pane = store.getState().workspace?.tabs[0].panes[0];
+    expect(pane?.status).toBe("exited");
+  });
+
+  it("lifecycle event updates pane status to failed with error", async () => {
+    const handler: { current: ((event: PaneLifecycleEvent) => void) | null } = { current: null };
+    const transport = createTransportMock({
+      listenToPaneLifecycle: vi.fn(async (h: (event: PaneLifecycleEvent) => void) => {
+        handler.current = h;
+        return () => { handler.current = null; };
+      }),
+    });
+    const store = createWorkspaceStore(transport);
+
+    await store.getState().initialize();
+
+    handler.current?.({
+      paneId: "pane-1",
+      sessionId: "session-1",
+      status: "failed",
+      errorMessage: "Process exited with code 1",
+    });
+
+    const pane = store.getState().workspace?.tabs[0].panes[0];
+    expect(pane?.status).toBe("failed");
+  });
+
+  it("lifecycle event with wrong session is ignored", async () => {
+    const handler: { current: ((event: PaneLifecycleEvent) => void) | null } = { current: null };
+    const transport = createTransportMock({
+      listenToPaneLifecycle: vi.fn(async (h: (event: PaneLifecycleEvent) => void) => {
+        handler.current = h;
+        return () => { handler.current = null; };
+      }),
+    });
+    const store = createWorkspaceStore(transport);
+
+    await store.getState().initialize();
+
+    handler.current?.({
+      paneId: "pane-1",
+      sessionId: "stale-session",
+      status: "exited",
+      errorMessage: null,
+    });
+
+    const pane = store.getState().workspace?.tabs[0].panes[0];
+    expect(pane?.status).toBe("running");
+  });
+
+  it("lifecycle event for unknown pane does not crash", async () => {
+    const handler: { current: ((event: PaneLifecycleEvent) => void) | null } = { current: null };
+    const transport = createTransportMock({
+      listenToPaneLifecycle: vi.fn(async (h: (event: PaneLifecycleEvent) => void) => {
+        handler.current = h;
+        return () => { handler.current = null; };
+      }),
+    });
+    const store = createWorkspaceStore(transport);
+
+    await store.getState().initialize();
+
+    handler.current?.({
+      paneId: "nonexistent-pane",
+      sessionId: null,
+      status: "exited",
+      errorMessage: null,
+    });
+
+    expect(store.getState().workspace?.tabs).toHaveLength(1);
+  });
+
+  it("swapPanes calls transport with correct args", async () => {
+    const transport = createTransportMock();
+    const store = createWorkspaceStore(transport);
+
+    await store.getState().initialize();
+    await store.getState().swapPanes("pane-a", "pane-b");
+
+    expect(transport.swapPanes).toHaveBeenCalledWith("pane-a", "pane-b");
   });
 
   it("applies focus and close transitions using transport responses", async () => {

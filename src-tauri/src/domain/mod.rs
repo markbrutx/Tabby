@@ -21,6 +21,8 @@ mod tests {
             profile_id: String::from("terminal"),
             profile_label: String::from("Terminal"),
             startup_command: None,
+            pane_kind: crate::domain::types::PaneKind::Terminal,
+            url: None,
         }
     }
 

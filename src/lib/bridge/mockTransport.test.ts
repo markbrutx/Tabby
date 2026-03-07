@@ -22,7 +22,7 @@ describe("mockTransport", () => {
     expect(result.settings.hasCompletedOnboarding).toBe(false);
     expect(result.settings.defaultProfileId).toBe("");
     expect(result.settings.defaultWorkingDirectory).toBe("");
-    expect(result.profiles).toHaveLength(4);
+    expect(result.profiles).toHaveLength(5);
   });
 
   it("bootstraps with one tab when onboarding completed", async () => {
@@ -32,7 +32,7 @@ describe("mockTransport", () => {
     expect(result.workspace.tabs).toHaveLength(1);
     expect(result.workspace.activeTabId).toBe(result.workspace.tabs[0].id);
     expect(result.settings.defaultLayout).toBe("1x1");
-    expect(result.profiles).toHaveLength(4);
+    expect(result.profiles).toHaveLength(5);
   });
 
   it("creates a tab with the correct pane count for preset", async () => {
@@ -267,6 +267,21 @@ describe("mockTransport", () => {
     expect(tab.panes[1].profileId).toBe("terminal");
   });
 
+  it("trackPaneCwd updates cwd without changing session", async () => {
+    const transport = await setupOnboarded();
+    const bootstrap = await transport.bootstrapWorkspace();
+    const pane = bootstrap.workspace.tabs[0].panes[0];
+    const oldSessionId = pane.sessionId;
+
+    await transport.trackPaneCwd(pane.id, "/new/tracked/path");
+
+    // Verify CWD changed but session stayed the same
+    const snapshot = await transport.bootstrapWorkspace();
+    const updatedPane = snapshot.workspace.tabs[0].panes[0];
+    expect(updatedPane.cwd).toBe("/new/tracked/path");
+    expect(updatedPane.sessionId).toBe(oldSessionId);
+  });
+
   it("creates a tab with arbitrary paneConfigs count (e.g. 5)", async () => {
     const transport = await setupOnboarded();
     await transport.bootstrapWorkspace();
@@ -292,6 +307,39 @@ describe("mockTransport", () => {
     expect(tab.layout.type).toBe("split");
   });
 
+  it("trackPaneCwd updates lastWorkingDirectory in settings", async () => {
+    const transport = await setupOnboarded();
+    const bootstrap = await transport.bootstrapWorkspace();
+    const pane = bootstrap.workspace.tabs[0].panes[0];
+
+    await transport.trackPaneCwd(pane.id, "/new/tracked/dir");
+
+    const settings = await transport.getAppSettings();
+    expect(settings.lastWorkingDirectory).toBe("/new/tracked/dir");
+  });
+
+  it("swaps two panes in the same tab", async () => {
+    const transport = await setupOnboarded();
+    const bootstrap = await transport.bootstrapWorkspace();
+    const paneId = bootstrap.workspace.tabs[0].panes[0].id;
+
+    const afterSplit = await transport.splitPane({
+      paneId,
+      direction: "horizontal",
+      profileId: null,
+      startupCommand: null,
+      cwd: null,
+    });
+
+    const paneA = afterSplit.tabs[0].panes[0].id;
+    const paneB = afterSplit.tabs[0].panes[1].id;
+
+    const afterSwap = await transport.swapPanes(paneA, paneB);
+    expect(afterSwap.tabs[0].panes).toHaveLength(2);
+    // Layout should have swapped pane positions
+    expect(afterSwap.tabs[0].layout).toBeDefined();
+  });
+
   it("closes a pane and collapses layout", async () => {
     const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
@@ -310,5 +358,81 @@ describe("mockTransport", () => {
 
     expect(afterClose.tabs[0].panes).toHaveLength(1);
     expect(afterClose.tabs[0].layout.type).toBe("pane");
+  });
+
+  it("creates a browser pane with paneKind=browser", async () => {
+    const transport = await setupOnboarded();
+    await transport.bootstrapWorkspace();
+
+    const snapshot = await transport.createTab({
+      preset: "1x1",
+      cwd: "/tmp",
+      profileId: "browser",
+      startupCommand: null,
+    });
+
+    const pane = snapshot.tabs[1].panes[0];
+    expect(pane.paneKind).toBe("browser");
+    expect(pane.profileId).toBe("browser");
+    expect(pane.profileLabel).toBe("Browser");
+  });
+
+  it("writePty is a no-op for browser panes", async () => {
+    const transport = await setupOnboarded();
+    const chunks: string[] = [];
+    await transport.listenToPtyOutput((payload) => {
+      chunks.push(payload.chunk);
+    });
+
+    await transport.bootstrapWorkspace();
+
+    const snapshot = await transport.createTab({
+      preset: "1x1",
+      cwd: "/tmp",
+      profileId: "browser",
+      startupCommand: null,
+    });
+
+    const pane = snapshot.tabs[1].panes[0];
+    await transport.writePty(pane.id, "hello");
+
+    const browserChunks = chunks.filter((c) => c.includes("hello"));
+    expect(browserChunks).toHaveLength(0);
+  });
+
+  it("webview transport methods are no-op", async () => {
+    const transport = createMockTransport();
+    await expect(
+      transport.createBrowserWebview("p1", "https://example.com", { x: 0, y: 0, width: 800, height: 600 }),
+    ).resolves.toBeUndefined();
+    await expect(transport.navigateBrowser("p1", "https://example.com")).resolves.toBeUndefined();
+    await expect(transport.closeBrowserWebview("p1")).resolves.toBeUndefined();
+    await expect(
+      transport.setBrowserWebviewBounds("p1", { x: 0, y: 0, width: 800, height: 600 }),
+    ).resolves.toBeUndefined();
+    await expect(transport.setBrowserWebviewVisible("p1", true)).resolves.toBeUndefined();
+    const unlisten = await transport.listenToBrowserUrlChanged(() => {});
+    expect(typeof unlisten).toBe("function");
+  });
+
+  it("creates per-pane configs with mixed terminal and browser panes", async () => {
+    const transport = await setupOnboarded();
+    await transport.bootstrapWorkspace();
+
+    const snapshot = await transport.createTab({
+      preset: "1x1",
+      cwd: null,
+      profileId: null,
+      startupCommand: null,
+      paneConfigs: [
+        { profileId: "terminal", cwd: "/a", startupCommand: null },
+        { profileId: "browser", cwd: "/b", startupCommand: null },
+      ],
+    });
+
+    const tab = snapshot.tabs[1];
+    expect(tab.panes).toHaveLength(2);
+    expect(tab.panes[0].paneKind).toBe("terminal");
+    expect(tab.panes[1].paneKind).toBe("browser");
   });
 });

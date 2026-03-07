@@ -109,6 +109,62 @@ async closePane(paneId: string) : Promise<Result<WorkspaceSnapshot, TabbyError>>
     else return { status: "error", error: e  as any };
 }
 },
+async trackPaneCwd(paneId: string, cwd: string) : Promise<Result<null, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("track_pane_cwd", { paneId, cwd }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async swapPanes(paneIdA: string, paneIdB: string) : Promise<Result<WorkspaceSnapshot, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("swap_panes", { paneIdA, paneIdB }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async createBrowserWebview(paneId: string, url: string, x: number, y: number, width: number, height: number) : Promise<Result<null, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("create_browser_webview", { paneId, url, x, y, width, height }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async navigateBrowser(paneId: string, url: string) : Promise<Result<null, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("navigate_browser", { paneId, url }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async closeBrowserWebview(paneId: string) : Promise<Result<null, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("close_browser_webview", { paneId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setBrowserWebviewBounds(paneId: string, x: number, y: number, width: number, height: number) : Promise<Result<null, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_browser_webview_bounds", { paneId, x, y, width, height }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setBrowserWebviewVisible(paneId: string, visible: boolean) : Promise<Result<null, TabbyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_browser_webview_visible", { paneId, visible }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async writePty(paneId: string, data: string) : Promise<Result<null, TabbyError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("write_pty", { paneId, data }) };
@@ -137,15 +193,17 @@ async resizePty(request: PtyResizeRequest) : Promise<Result<null, TabbyError>> {
 
 /** user-defined types **/
 
-export type AppSettings = { defaultLayout: LayoutPreset; defaultProfileId: string; defaultWorkingDirectory: string; defaultCustomCommand: string; fontSize: number; theme: ThemeMode; launchFullscreen: boolean; hasCompletedOnboarding?: boolean }
+export type AppSettings = { defaultLayout: LayoutPreset; defaultProfileId: string; defaultWorkingDirectory: string; defaultCustomCommand: string; fontSize: number; theme: ThemeMode; launchFullscreen: boolean; hasCompletedOnboarding?: boolean; lastWorkingDirectory?: string | null }
 export type BootstrapSnapshot = { workspace: WorkspaceSnapshot; settings: AppSettings; profiles: PaneProfile[] }
+export type BrowserUrlChangedEvent = { paneId: string; url: string }
 export type LayoutPreset = "1x1" | "1x2" | "2x2" | "2x3" | "3x3"
 export type NewTabRequest = { preset: LayoutPreset; cwd: string | null; profileId: string | null; startupCommand: string | null; paneConfigs?: PaneConfig[] | null }
 export type PaneConfig = { profileId: string; cwd: string; startupCommand: string | null }
+export type PaneKind = "terminal" | "browser"
 export type PaneLifecycleEvent = { paneId: string; sessionId: string | null; status: PaneRuntimeStatus; errorMessage: string | null }
 export type PaneProfile = { id: string; label: string; description: string; startupCommand: string | null }
 export type PaneRuntimeStatus = "starting" | "running" | "restarting" | "exited" | "failed"
-export type PaneSnapshot = { id: string; sessionId: string; title: string; cwd: string; profileId: string; profileLabel: string; startupCommand: string | null; status: PaneRuntimeStatus }
+export type PaneSnapshot = { id: string; sessionId: string; title: string; cwd: string; profileId: string; profileLabel: string; startupCommand: string | null; status: PaneRuntimeStatus; paneKind?: PaneKind; url?: string | null }
 export type PtyOutputEvent = { paneId: string; sessionId: string; chunk: string }
 export type PtyResizeRequest = { paneId: string; cols: number; rows: number }
 export type SplitDirection = "horizontal" | "vertical"

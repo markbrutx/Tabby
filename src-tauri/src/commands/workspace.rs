@@ -4,11 +4,11 @@ use tauri::State;
 
 use crate::cli::CliArgs;
 use crate::domain::commands::{
-    LaunchRequest, NewTabRequest, SplitPaneRequest, UpdatePaneCwdRequest,
-    UpdatePaneProfileRequest,
+    LaunchRequest, NewTabRequest, SplitPaneRequest, UpdatePaneCwdRequest, UpdatePaneProfileRequest,
 };
 use crate::domain::error::TabbyError;
 use crate::domain::snapshot::{BootstrapSnapshot, WorkspaceSnapshot};
+
 use crate::domain::types::built_in_profiles;
 use crate::managers::coordinator::Coordinator;
 use crate::managers::settings::SettingsManager;
@@ -84,7 +84,11 @@ pub fn update_pane_profile(
     coordinator: State<'_, Arc<Coordinator>>,
     request: UpdatePaneProfileRequest,
 ) -> Result<WorkspaceSnapshot, TabbyError> {
-    coordinator.update_pane_profile(&request.pane_id, &request.profile_id, request.startup_command)
+    coordinator.update_pane_profile(
+        &request.pane_id,
+        &request.profile_id,
+        request.startup_command,
+    )
 }
 
 #[tauri::command]
@@ -114,6 +118,29 @@ pub fn close_pane(
     pane_id: String,
 ) -> Result<WorkspaceSnapshot, TabbyError> {
     coordinator.close_pane(&pane_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn track_pane_cwd(
+    tab_manager: State<'_, Arc<TabManager>>,
+    settings_manager: State<'_, Arc<SettingsManager>>,
+    pane_id: String,
+    cwd: String,
+) -> Result<(), TabbyError> {
+    tab_manager.update_tracked_cwd(&pane_id, &cwd)?;
+    settings_manager.update_last_working_directory(&cwd)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn swap_panes(
+    tab_manager: State<'_, Arc<TabManager>>,
+    pane_id_a: String,
+    pane_id_b: String,
+) -> Result<WorkspaceSnapshot, TabbyError> {
+    tab_manager.swap_panes(&pane_id_a, &pane_id_b)
 }
 
 // TODO(phase-4): re-enable when single-instance CLI routing is wired

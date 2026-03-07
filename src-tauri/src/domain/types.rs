@@ -6,6 +6,7 @@ use crate::domain::error::TabbyError;
 
 pub const CUSTOM_PROFILE_ID: &str = "custom";
 pub const TERMINAL_PROFILE_ID: &str = "terminal";
+pub const BROWSER_PROFILE_ID: &str = "browser";
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 pub enum ThemeMode {
@@ -43,6 +44,14 @@ impl LayoutPreset {
             Self::ThreeByThree => 9,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum PaneKind {
+    #[default]
+    Terminal,
+    Browser,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type)]
@@ -88,6 +97,8 @@ pub struct AppSettings {
     pub launch_fullscreen: bool,
     #[serde(default)]
     pub has_completed_onboarding: bool,
+    #[serde(default)]
+    pub last_working_directory: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +116,8 @@ pub struct PaneSeed {
     pub profile_id: String,
     pub profile_label: String,
     pub startup_command: Option<String>,
+    pub pane_kind: PaneKind,
+    pub url: Option<String>,
 }
 
 pub fn built_in_profiles() -> Vec<PaneProfile> {
@@ -139,6 +152,12 @@ pub fn built_in_profiles() -> Vec<PaneProfile> {
             description: String::from("Run any command of your choice"),
             startup_command: None,
         },
+        PaneProfile {
+            id: String::from(BROWSER_PROFILE_ID),
+            label: String::from("Browser"),
+            description: String::from("Launch Google Chrome with a specific profile and URL"),
+            startup_command: None,
+        },
     ]
 }
 
@@ -150,6 +169,14 @@ pub fn resolve_profile(
         .into_iter()
         .find(|candidate| candidate.id == profile_id)
         .ok_or_else(|| TabbyError::Validation(format!("Unknown profile: {profile_id}")))?;
+
+    if profile.id == BROWSER_PROFILE_ID {
+        return Ok(ResolvedProfile {
+            id: profile.id,
+            label: profile.label,
+            startup_command: None,
+        });
+    }
 
     if profile.id == CUSTOM_PROFILE_ID {
         let command = startup_command
@@ -183,6 +210,7 @@ pub fn default_settings() -> AppSettings {
         theme: ThemeMode::System,
         launch_fullscreen: true,
         has_completed_onboarding: false,
+        last_working_directory: None,
     }
 }
 

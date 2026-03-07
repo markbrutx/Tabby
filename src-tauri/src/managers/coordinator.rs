@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tracing::{info, warn};
 
 use crate::domain::commands::{NewTabRequest, SplitPaneRequest};
 use crate::domain::error::TabbyError;
-use crate::domain::events::{PaneLifecycleEvent, WorkspaceChangedEvent};
+use crate::domain::events::{PaneLifecycleEvent, WorkspaceChangedEvent, PANE_LIFECYCLE_EVENT_NAME};
 use crate::domain::snapshot::{PaneRuntimeStatus, WorkspaceSnapshot};
 use crate::domain::split_tree::{tree_from_count, tree_from_preset};
 use crate::domain::types::{
-    create_pane_id, resolve_profile, AppSettings, PaneSeed, ResolvedProfile, CUSTOM_PROFILE_ID,
+    create_pane_id, resolve_profile, AppSettings, PaneKind, PaneSeed, ResolvedProfile,
+    BROWSER_PROFILE_ID, CUSTOM_PROFILE_ID,
 };
 use crate::managers::pty::{PtyManager, SpawnRequest};
 use crate::managers::tab::TabManager;
 
-const PANE_LIFECYCLE_EVENT: &str = "pane-lifecycle";
 const WORKSPACE_CHANGED_EVENT: &str = "workspace-changed";
 
 #[derive(Debug, Clone)]
@@ -25,11 +25,7 @@ pub struct Coordinator {
 }
 
 impl Coordinator {
-    pub fn new(
-        app: AppHandle,
-        tab_manager: Arc<TabManager>,
-        pty_manager: Arc<PtyManager>,
-    ) -> Self {
+    pub fn new(app: AppHandle, tab_manager: Arc<TabManager>, pty_manager: Arc<PtyManager>) -> Self {
         Self {
             app,
             tab_manager,
@@ -77,14 +73,18 @@ impl Coordinator {
         Ok(snapshot)
     }
 
-    pub fn close_tab(
-        &self,
-        tab_id: &str,
-    ) -> Result<WorkspaceSnapshot, TabbyError> {
-        let (snapshot, session_ids) = self.tab_manager.close_tab(tab_id)?;
-        self.pty_manager.kill_many(&session_ids);
+    pub fn close_tab(&self, tab_id: &str) -> Result<WorkspaceSnapshot, TabbyError> {
+        let browser_pane_ids = self.tab_manager.browser_pane_ids_for_tab(tab_id);
+        let pty_session_ids = self.tab_manager.terminal_session_ids_for_tab(tab_id)?;
+        let (snapshot, _all_session_ids) = self.tab_manager.close_tab(tab_id)?;
+        self.pty_manager.kill_many(&pty_session_ids);
+        self.close_browser_webviews_quiet(&browser_pane_ids);
 
-        info!(tab_id, killed_sessions = session_ids.len(), "Tab closed");
+        info!(
+            tab_id,
+            killed_sessions = pty_session_ids.len(),
+            "Tab closed"
+        );
 
         self.emit_workspace_changed(&snapshot);
         Ok(snapshot)
@@ -101,10 +101,7 @@ impl Coordinator {
             .profile_id
             .as_deref()
             .unwrap_or(&located.pane.profile_id);
-        let cwd = request
-            .cwd
-            .as_deref()
-            .unwrap_or(&located.pane.cwd);
+        let cwd = request.cwd.as_deref().unwrap_or(&located.pane.cwd);
         let explicit_command = request
             .startup_command
             .clone()
@@ -116,27 +113,33 @@ impl Coordinator {
         )?;
 
         let new_pane_id = create_pane_id();
-        let session_id = self.spawn_pty(&new_pane_id, cwd, &resolved)?;
+        let is_browser = resolved.id == BROWSER_PROFILE_ID;
 
-        self.emit_lifecycle(
-            &new_pane_id,
-            Some(&session_id),
-            PaneRuntimeStatus::Running,
-            None,
-        );
-
-        let seed = PaneSeed {
-            pane_id: new_pane_id.clone(),
-            session_id,
-            cwd: String::from(cwd),
-            profile_id: resolved.id,
-            profile_label: resolved.label,
-            startup_command: resolved.startup_command,
+        let seed = if is_browser {
+            self.create_browser_seed(new_pane_id.clone(), cwd)
+        } else {
+            let session_id = self.spawn_pty(&new_pane_id, cwd, &resolved)?;
+            self.emit_lifecycle(
+                &new_pane_id,
+                Some(&session_id),
+                PaneRuntimeStatus::Running,
+                None,
+            );
+            PaneSeed {
+                pane_id: new_pane_id.clone(),
+                session_id,
+                cwd: String::from(cwd),
+                profile_id: resolved.id,
+                profile_label: resolved.label,
+                startup_command: resolved.startup_command,
+                pane_kind: PaneKind::Terminal,
+                url: None,
+            }
         };
 
-        let snapshot =
-            self.tab_manager
-                .split_pane(&request.pane_id, request.direction, seed)?;
+        let snapshot = self
+            .tab_manager
+            .split_pane(&request.pane_id, request.direction, seed)?;
         self.emit_workspace_changed(&snapshot);
 
         info!(
@@ -149,14 +152,17 @@ impl Coordinator {
         Ok(snapshot)
     }
 
-    pub fn close_pane(
-        &self,
-        pane_id: &str,
-    ) -> Result<WorkspaceSnapshot, TabbyError> {
-        let (snapshot, session_id, removed_tab_id) =
-            self.tab_manager.close_pane(pane_id)?;
+    pub fn close_pane(&self, pane_id: &str) -> Result<WorkspaceSnapshot, TabbyError> {
+        let located = self.tab_manager.locate_pane(pane_id)?;
+        let is_browser = located.pane.pane_kind == PaneKind::Browser;
 
-        self.kill_session_quiet(&session_id);
+        let (snapshot, session_id, removed_tab_id) = self.tab_manager.close_pane(pane_id)?;
+
+        if is_browser {
+            self.close_browser_webviews_quiet(&[String::from(pane_id)]);
+        } else {
+            self.kill_session_quiet(&session_id);
+        }
 
         info!(pane_id, session_id, ?removed_tab_id, "Pane closed");
 
@@ -166,6 +172,12 @@ impl Coordinator {
 
     pub fn restart_pane(&self, pane_id: &str) -> Result<WorkspaceSnapshot, TabbyError> {
         let located = self.tab_manager.locate_pane(pane_id)?;
+
+        if located.pane.pane_kind == PaneKind::Browser {
+            let snapshot = self.tab_manager.snapshot()?;
+            return Ok(snapshot);
+        }
+
         let old_session_id = located.pane.session_id.clone();
 
         self.emit_lifecycle(
@@ -191,7 +203,12 @@ impl Coordinator {
             located.pane.cwd,
         )?;
 
-        self.emit_lifecycle(pane_id, Some(&new_session_id), PaneRuntimeStatus::Running, None);
+        self.emit_lifecycle(
+            pane_id,
+            Some(&new_session_id),
+            PaneRuntimeStatus::Running,
+            None,
+        );
         self.emit_workspace_changed(&snapshot);
 
         info!(pane_id, "Pane restarted");
@@ -206,19 +223,50 @@ impl Coordinator {
     ) -> Result<WorkspaceSnapshot, TabbyError> {
         let located = self.tab_manager.locate_pane(pane_id)?;
         let old_session_id = located.pane.session_id.clone();
+        let was_browser = located.pane.pane_kind == PaneKind::Browser;
+        let switching_to_browser = profile_id == BROWSER_PROFILE_ID;
+
         let resolved = resolve_profile(profile_id, startup_command)?;
 
-        let new_session_id = self.spawn_pty(pane_id, &located.pane.cwd, &resolved)?;
-        self.kill_session_quiet(&old_session_id);
+        if switching_to_browser {
+            if !was_browser {
+                self.kill_session_quiet(&old_session_id);
+            }
+            let sentinel_id = format!("browser-{}", uuid::Uuid::new_v4());
+            let snapshot = self.tab_manager.replace_pane_full(
+                pane_id,
+                sentinel_id,
+                resolved,
+                located.pane.cwd,
+                PaneKind::Browser,
+                None,
+            )?;
+            self.emit_workspace_changed(&snapshot);
+            info!(pane_id, profile_id, "Pane switched to browser");
+            return Ok(snapshot);
+        }
 
-        let snapshot = self.tab_manager.replace_pane(
+        // Switching to terminal profile
+        let new_session_id = self.spawn_pty(pane_id, &located.pane.cwd, &resolved)?;
+        if !was_browser {
+            self.kill_session_quiet(&old_session_id);
+        }
+
+        let snapshot = self.tab_manager.replace_pane_full(
             pane_id,
             new_session_id.clone(),
             resolved,
             located.pane.cwd,
+            PaneKind::Terminal,
+            None,
         )?;
 
-        self.emit_lifecycle(pane_id, Some(&new_session_id), PaneRuntimeStatus::Running, None);
+        self.emit_lifecycle(
+            pane_id,
+            Some(&new_session_id),
+            PaneRuntimeStatus::Running,
+            None,
+        );
         self.emit_workspace_changed(&snapshot);
 
         info!(pane_id, profile_id, "Pane profile updated");
@@ -247,14 +295,16 @@ impl Coordinator {
         let new_session_id = self.spawn_pty(pane_id, &next_cwd, &resolved)?;
         self.kill_session_quiet(&old_session_id);
 
-        let snapshot = self.tab_manager.replace_pane(
-            pane_id,
-            new_session_id.clone(),
-            resolved,
-            next_cwd,
-        )?;
+        let snapshot =
+            self.tab_manager
+                .replace_pane(pane_id, new_session_id.clone(), resolved, next_cwd)?;
 
-        self.emit_lifecycle(pane_id, Some(&new_session_id), PaneRuntimeStatus::Running, None);
+        self.emit_lifecycle(
+            pane_id,
+            Some(&new_session_id),
+            PaneRuntimeStatus::Running,
+            None,
+        );
         self.emit_workspace_changed(&snapshot);
 
         info!(pane_id, cwd, "Pane cwd updated");
@@ -262,18 +312,20 @@ impl Coordinator {
     }
 
     pub fn write_pty(&self, pane_id: &str, data: &str) -> Result<(), TabbyError> {
-        let session_id = self.tab_manager.session_id_for_pane(pane_id)?;
-        self.pty_manager.write(&session_id, data)
+        let located = self.tab_manager.locate_pane(pane_id)?;
+        if located.pane.pane_kind == PaneKind::Browser {
+            return Ok(());
+        }
+        self.pty_manager.write(&located.pane.session_id, data)
     }
 
-    pub fn resize_pty(
-        &self,
-        pane_id: &str,
-        cols: u16,
-        rows: u16,
-    ) -> Result<(), TabbyError> {
-        let session_id = self.tab_manager.session_id_for_pane(pane_id)?;
-        self.pty_manager.resize(&session_id, cols, rows)
+    pub fn resize_pty(&self, pane_id: &str, cols: u16, rows: u16) -> Result<(), TabbyError> {
+        let located = self.tab_manager.locate_pane(pane_id)?;
+        if located.pane.pane_kind == PaneKind::Browser {
+            return Ok(());
+        }
+        self.pty_manager
+            .resize(&located.pane.session_id, cols, rows)
     }
 
     fn seeds_uniform(
@@ -291,25 +343,43 @@ impl Coordinator {
             request.startup_command.clone(),
             &settings.default_custom_command,
         )?;
+        let fallback_cwd = if settings.default_working_directory.trim().is_empty() {
+            settings.last_working_directory.as_deref().unwrap_or("")
+        } else {
+            &settings.default_working_directory
+        };
         let cwd = request
             .cwd
             .as_deref()
             .filter(|v| !v.trim().is_empty())
-            .unwrap_or(&settings.default_working_directory);
+            .unwrap_or(fallback_cwd);
+
+        let is_browser = resolved.id == BROWSER_PROFILE_ID;
 
         let mut seeds = Vec::with_capacity(pane_count);
         for _ in 0..pane_count {
             let pane_id = create_pane_id();
-            let session_id = self.spawn_pty(&pane_id, cwd, &resolved)?;
-            self.emit_lifecycle(&pane_id, Some(&session_id), PaneRuntimeStatus::Running, None);
-            seeds.push(PaneSeed {
-                pane_id,
-                session_id,
-                cwd: String::from(cwd),
-                profile_id: resolved.id.clone(),
-                profile_label: resolved.label.clone(),
-                startup_command: resolved.startup_command.clone(),
-            });
+            if is_browser {
+                seeds.push(self.create_browser_seed(pane_id, cwd));
+            } else {
+                let session_id = self.spawn_pty(&pane_id, cwd, &resolved)?;
+                self.emit_lifecycle(
+                    &pane_id,
+                    Some(&session_id),
+                    PaneRuntimeStatus::Running,
+                    None,
+                );
+                seeds.push(PaneSeed {
+                    pane_id,
+                    session_id,
+                    cwd: String::from(cwd),
+                    profile_id: resolved.id.clone(),
+                    profile_label: resolved.label.clone(),
+                    startup_command: resolved.startup_command.clone(),
+                    pane_kind: PaneKind::Terminal,
+                    url: None,
+                });
+            }
         }
         Ok(seeds)
     }
@@ -335,16 +405,29 @@ impl Coordinator {
             };
 
             let pane_id = create_pane_id();
-            let session_id = self.spawn_pty(&pane_id, cwd, &resolved)?;
-            self.emit_lifecycle(&pane_id, Some(&session_id), PaneRuntimeStatus::Running, None);
-            seeds.push(PaneSeed {
-                pane_id,
-                session_id,
-                cwd: String::from(cwd),
-                profile_id: resolved.id.clone(),
-                profile_label: resolved.label.clone(),
-                startup_command: resolved.startup_command.clone(),
-            });
+            let is_browser = resolved.id == BROWSER_PROFILE_ID;
+
+            if is_browser {
+                seeds.push(self.create_browser_seed(pane_id, cwd));
+            } else {
+                let session_id = self.spawn_pty(&pane_id, cwd, &resolved)?;
+                self.emit_lifecycle(
+                    &pane_id,
+                    Some(&session_id),
+                    PaneRuntimeStatus::Running,
+                    None,
+                );
+                seeds.push(PaneSeed {
+                    pane_id,
+                    session_id,
+                    cwd: String::from(cwd),
+                    profile_id: resolved.id.clone(),
+                    profile_label: resolved.label.clone(),
+                    startup_command: resolved.startup_command.clone(),
+                    pane_kind: PaneKind::Terminal,
+                    url: None,
+                });
+            }
         }
         Ok(seeds)
     }
@@ -357,15 +440,27 @@ impl Coordinator {
         let startup_command = explicit_command
             .filter(|v| !v.trim().is_empty())
             .or_else(|| {
-                if profile_id == CUSTOM_PROFILE_ID
-                    && !fallback_custom_command.trim().is_empty()
-                {
+                if profile_id == CUSTOM_PROFILE_ID && !fallback_custom_command.trim().is_empty() {
                     Some(String::from(fallback_custom_command))
                 } else {
                     None
                 }
             });
         resolve_profile(profile_id, startup_command)
+    }
+
+    fn create_browser_seed(&self, pane_id: String, cwd: &str) -> PaneSeed {
+        let sentinel_id = format!("browser-{}", uuid::Uuid::new_v4());
+        PaneSeed {
+            pane_id,
+            session_id: sentinel_id,
+            cwd: String::from(cwd),
+            profile_id: String::from(BROWSER_PROFILE_ID),
+            profile_label: String::from("Browser"),
+            startup_command: None,
+            pane_kind: PaneKind::Browser,
+            url: None,
+        }
     }
 
     fn spawn_pty(
@@ -401,7 +496,7 @@ impl Coordinator {
             error_message,
         };
 
-        if let Err(error) = self.app.emit(PANE_LIFECYCLE_EVENT, event) {
+        if let Err(error) = self.app.emit(PANE_LIFECYCLE_EVENT_NAME, event) {
             warn!(?error, "Failed to emit pane lifecycle event");
         }
     }
@@ -413,6 +508,17 @@ impl Coordinator {
 
         if let Err(error) = self.app.emit(WORKSPACE_CHANGED_EVENT, event) {
             warn!(?error, "Failed to emit workspace changed event");
+        }
+    }
+
+    fn close_browser_webviews_quiet(&self, pane_ids: &[String]) {
+        for pane_id in pane_ids {
+            let label = format!("browser-{pane_id}");
+            if let Some(ww) = self.app.webview_windows().get(&label) {
+                if let Err(err) = ww.close() {
+                    warn!(?err, label, "Failed to close browser webview on cleanup");
+                }
+            }
         }
     }
 }

@@ -26,7 +26,7 @@ describe("workspaceStore + mockTransport integration", () => {
     expect(workspace!.tabs[0].panes).toHaveLength(1);
     expect(workspace!.tabs[0].layout.type).toBe("pane");
     expect(settings?.defaultLayout).toBe("1x1");
-    expect(profiles).toHaveLength(4);
+    expect(profiles).toHaveLength(5);
   });
 
   it("creates a new tab and switches to it", async () => {

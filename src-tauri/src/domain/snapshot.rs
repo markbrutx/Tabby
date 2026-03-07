@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::domain::error::TabbyError;
-use crate::domain::types::{AppSettings, PaneProfile, PaneSeed, SplitNode};
+use crate::domain::types::{AppSettings, PaneKind, PaneProfile, PaneSeed, SplitNode};
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +26,10 @@ pub struct PaneSnapshot {
     pub profile_label: String,
     pub startup_command: Option<String>,
     pub status: PaneRuntimeStatus,
+    #[serde(default)]
+    pub pane_kind: PaneKind,
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
@@ -64,6 +68,8 @@ impl TabSnapshot {
                 profile_label: seed.profile_label,
                 startup_command: seed.startup_command,
                 status,
+                pane_kind: seed.pane_kind,
+                url: seed.url,
             })
             .collect::<Vec<_>>();
 
