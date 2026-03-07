@@ -38,6 +38,7 @@ export function useTerminalSession({
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const rendererReadyRef = useRef(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -76,6 +77,7 @@ export function useTerminalSession({
         // WebGL is optional; xterm falls back to canvas/DOM rendering.
       }
 
+      rendererReadyRef.current = true;
       safeFit(fitAddon, container);
 
       if (isTauriRuntime()) {
@@ -130,11 +132,12 @@ export function useTerminalSession({
       terminal.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
+      rendererReadyRef.current = false;
     };
   }, [fontSize, pane.id, pane.sessionId]);
 
   useEffect(() => {
-    if (!terminalRef.current) {
+    if (!terminalRef.current || !rendererReadyRef.current) {
       return;
     }
 
