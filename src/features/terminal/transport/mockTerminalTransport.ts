@@ -5,7 +5,7 @@ import type {
 import type { UnlistenFn } from "@/lib/bridge/shared";
 import type { TerminalTransport } from "./terminalTransport";
 
-export interface MockTerminalState {
+interface MockTerminalState {
   findPane: (paneId: string) => { tabIndex: number; paneIndex: number };
   getTabs: () => ReadonlyArray<{ panes: ReadonlyArray<{ id: string; sessionId: string; paneKind: string; cwd: string }> }>;
   updatePaneCwd: (paneId: string, cwd: string) => void;

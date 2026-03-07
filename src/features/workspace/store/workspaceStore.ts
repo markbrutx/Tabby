@@ -12,8 +12,7 @@ import {
 import { asErrorMessage, bridge, type WorkspaceTransport } from "@/lib/bridge";
 import { useSettingsStore, createSettingsStore } from "@/features/settings/store/settingsStore";
 
-import type { PaneGroupConfig, SetupWizardConfig, WizardTab } from "./types";
-export type { PaneGroupConfig, SetupWizardConfig, WizardTab };
+import type { SetupWizardConfig, WizardTab } from "./types";
 
 interface CreateTabOverrides {
   cwd?: string;

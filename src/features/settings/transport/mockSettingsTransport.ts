@@ -1,7 +1,7 @@
 import type { WorkspaceSettings } from "@/features/workspace/domain";
 import type { SettingsTransport } from "./settingsTransport";
 
-export interface MockSettingsState {
+interface MockSettingsState {
   getSettings: () => WorkspaceSettings;
   setSettings: (settings: WorkspaceSettings) => void;
   getDefaultSettings: () => WorkspaceSettings;

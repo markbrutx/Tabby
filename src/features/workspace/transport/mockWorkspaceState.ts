@@ -110,14 +110,14 @@ export function createPane(
   };
 }
 
-export interface PaneSlotInput {
+interface PaneSlotInput {
   cwd: string;
   profileId: string;
   startupCommand: string | null;
   url?: string | null;
 }
 
-export function createTab(
+function createTab(
   preset: LayoutPreset,
   slots: PaneSlotInput[],
   tabIndex: number,

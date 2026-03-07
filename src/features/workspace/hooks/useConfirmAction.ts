@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { isTauriRuntime } from "@/lib/runtime";
 
-export type ConfirmAction =
+type ConfirmAction =
   | { type: "closePane"; paneId: string }
   | { type: "closeTab"; tabId: string }
   | { type: "quitApp" };

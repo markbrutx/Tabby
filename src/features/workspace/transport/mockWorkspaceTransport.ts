@@ -28,8 +28,7 @@ import {
   uniformSlots,
 } from "./mockWorkspaceState";
 
-export type { MockState };
-export { createMockState, MOCK_DEFAULT_SETTINGS, BUILT_IN_PROFILES } from "./mockWorkspaceState";
+export { createMockState, MOCK_DEFAULT_SETTINGS } from "./mockWorkspaceState";
 
 export function createMockWorkspaceTransport(
   state: MockState,
