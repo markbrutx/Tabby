@@ -304,3 +304,40 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - 18 new tests added (129→147 app tests, 190 total Rust), zero test failures
   - All tests are pure unit/integration — no Tauri AppHandle needed
 ---
+
+## 2026-03-08 22:45 - US-009: Define PaneContentDefinition type as a separate content model
+Thread:
+Run: 20260308-215923-84117 (iteration 10)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-10.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-10.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: c8d385d feat: define PaneContentDefinition type as separate content model (US-009)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (162 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (200+ tests, 10 new content tests)
+- Files changed:
+  - src-tauri/crates/tabby-workspace/src/content.rs (new — PaneContentDefinition enum, BrowserUrl value object, 10 tests)
+  - src-tauri/crates/tabby-workspace/src/ids.rs (added PaneContentId newtype)
+  - src-tauri/crates/tabby-workspace/src/lib.rs (export content module, PaneContentId, BrowserUrl, PaneContentDefinition)
+- What was implemented:
+  - Created PaneContentDefinition enum with Terminal and Browser variants in content.rs module
+  - Terminal variant: id (PaneContentId), profile_id (String), working_directory (String), command_override (Option<String>)
+  - Browser variant: id (PaneContentId), initial_url (BrowserUrl)
+  - BrowserUrl value object with Display, AsRef<str>, and as_str()
+  - PaneContentId newtype using id_newtype! macro (same pattern as PaneId/TabId)
+  - Factory methods: PaneContentDefinition::terminal() and PaneContentDefinition::browser()
+  - Accessor methods: content_id(), terminal_profile_id(), working_directory(), browser_url()
+  - Module isolation: content.rs imports only from ids module, no structural types (Tab, SplitNode, PaneSlot)
+  - Existing PaneSpec types remain unchanged (as required by acceptance criteria)
+  - 10 tests: construction, field access, identity uniqueness, clone, debug, boundary isolation
+- **Learnings for future iterations:**
+  - Used String fields (not ProfileId/WorkingDirectory from tabby-settings) to avoid cross-crate domain dependencies, matching existing TerminalPaneSpec convention
+  - BrowserUrl created as local value object within workspace crate — future stories may unify into shared kernel
+  - The id_newtype! macro in ids.rs is the standard pattern for all ID newtypes in this crate
+---
