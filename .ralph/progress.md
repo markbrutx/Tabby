@@ -3,6 +3,46 @@
 ## Codebase Patterns
 - (add reusable patterns here)
 
+## 2026-03-08 23:57 - US-017: Introduce ProjectionPublisherPort and move Tauri emitter to infra
+Thread:
+Run: 20260308-215923-84117 (iteration 18)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-18.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-18.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 4d0e886 feat: introduce ProjectionPublisherPort and move Tauri emitter to infra (US-017)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (142 app + 10 runtime + 27 settings + 51 workspace = 230 Rust tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (162 frontend tests)
+- Files changed:
+  - src-tauri/src/application/ports.rs (added ProjectionPublisherPort trait, removed RuntimeProjectionEmitter)
+  - src-tauri/src/application/projection_publisher.rs (DELETED — moved to infrastructure)
+  - src-tauri/src/application/mod.rs (removed projection_publisher module and ProjectionPublisher export)
+  - src-tauri/src/infrastructure/tauri_projection_publisher.rs (NEW — TauriProjectionPublisher implements ProjectionPublisherPort)
+  - src-tauri/src/infrastructure/mod.rs (export TauriProjectionPublisher)
+  - src-tauri/src/application/runtime_service.rs (uses ProjectionPublisherPort instead of RuntimeProjectionEmitter, 2 new tests)
+  - src-tauri/src/shell/mod.rs (AppShell uses Box<dyn ProjectionPublisherPort>, injects TauriProjectionPublisher)
+- What was implemented:
+  - Defined ProjectionPublisherPort trait with 3 methods: publish_workspace_projection, publish_settings_projection, publish_runtime_status
+  - Created TauriProjectionPublisher in infrastructure/ implementing the trait using Tauri app.emit
+  - Removed old ProjectionPublisher from application layer (was directly using AppHandle)
+  - Replaced RuntimeProjectionEmitter trait with ProjectionPublisherPort (superset with all 3 methods)
+  - RuntimeApplicationService now depends on Box<dyn ProjectionPublisherPort> — no more AppHandle or Tauri emitter
+  - AppShell holds Box<dyn ProjectionPublisherPort> — calls publish_workspace_projection and publish_settings_projection through the port
+  - Two TauriProjectionPublisher instances: one for AppShell (workspace + settings), one for RuntimeApplicationService (runtime status)
+  - 2 new tests: mock_publisher_receives_all_three_projection_types, projection_publisher_port_is_object_safe_behind_box
+- **Learnings for future iterations:**
+  - ProjectionPublisherPort subsumes RuntimeProjectionEmitter — no need for a separate single-method trait when the publisher handles all 3 projection types
+  - The infrastructure adapter (TauriProjectionPublisher) is the only code that imports Tauri Emitter and event constants — application services are fully decoupled
+  - MockProjectionEmitter tracks workspace_calls and settings_calls as counters, runtime emissions as (pane_id, status) pairs
+  - WorkspaceView.active_tab_id is a String (not Option<String>) — test construction must use String::new() not None
+---
+
 ## 2026-03-08 23:51 - US-016: Introduce TerminalProcessPort and BrowserSurfacePort traits
 Thread:
 Run: 20260308-215923-84117 (iteration 17)
