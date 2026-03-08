@@ -247,7 +247,7 @@ mod tests {
 
         let removed = registry.remove("pane-1");
         assert!(removed.is_some());
-        let removed = removed.unwrap(); // safe in test
+        let removed = removed.expect("remove returned Some, already asserted");
         assert_eq!(removed.pane_id, "pane-1");
         assert!(matches!(removed.kind, RuntimeKind::Terminal));
 
@@ -274,6 +274,121 @@ mod tests {
         assert_eq!(
             runtime.browser_location,
             Some(String::from("https://example.com"))
+        );
+    }
+
+    #[test]
+    fn stop_runtime_for_nonexistent_pane_returns_none() {
+        let mut registry = RuntimeRegistry::default();
+        let removed = registry.remove("nonexistent-pane");
+        assert!(
+            removed.is_none(),
+            "removing nonexistent runtime should return None"
+        );
+    }
+
+    #[test]
+    fn restart_runtime_replaces_registry_entry() {
+        let mut registry = RuntimeRegistry::default();
+
+        // Initial registration
+        registry.register_terminal("pane-1", sid("pty-session-1"));
+        assert_eq!(registry.snapshot().len(), 1);
+
+        // Simulate restart: remove + register with new session
+        let removed = registry.remove("pane-1");
+        assert!(removed.is_some(), "old runtime should be removed");
+
+        let runtime = registry.register_terminal("pane-1", sid("pty-session-2"));
+        assert_eq!(runtime.pane_id, "pane-1");
+        assert_eq!(runtime.runtime_session_id, Some(sid("pty-session-2")));
+        assert_eq!(
+            registry.snapshot().len(),
+            1,
+            "should have exactly one runtime after restart"
+        );
+    }
+
+    #[test]
+    fn mark_terminal_exit_failure_tracks_error() {
+        let mut registry = RuntimeRegistry::default();
+        let session_id = sid("pty-session-1");
+        registry.register_terminal("pane-1", session_id.clone());
+
+        let result = registry.mark_terminal_exit(
+            "pane-1",
+            Some(&session_id),
+            true,
+            Some(String::from("PTY spawn failed")),
+        );
+        assert!(result.is_ok(), "mark_terminal_exit should succeed");
+
+        let runtime = result.expect("already asserted ok");
+        assert!(matches!(runtime.status, RuntimeStatus::Failed));
+        assert_eq!(
+            runtime.last_error,
+            Some(String::from("PTY spawn failed")),
+            "should record the spawn failure message"
+        );
+    }
+
+    #[test]
+    fn mark_terminal_exit_with_wrong_session_id_is_ignored() {
+        let mut registry = RuntimeRegistry::default();
+        registry.register_terminal("pane-1", sid("pty-session-1"));
+
+        // When session ID doesn't match, the exit is silently ignored (stale event)
+        let result =
+            registry.mark_terminal_exit("pane-1", Some(&sid("wrong-session")), false, None);
+        assert!(result.is_ok(), "should succeed even with wrong session id");
+
+        let runtime = result.expect("already asserted ok");
+        assert!(
+            matches!(runtime.status, RuntimeStatus::Running),
+            "status should remain Running when session id does not match"
+        );
+    }
+
+    #[test]
+    fn mark_terminal_exit_for_nonexistent_pane_returns_error() {
+        let mut registry = RuntimeRegistry::default();
+        let result =
+            registry.mark_terminal_exit("nonexistent", Some(&sid("session-1")), false, None);
+        assert!(result.is_err(), "should return error for nonexistent pane");
+    }
+
+    #[test]
+    fn update_browser_location_for_nonexistent_pane_returns_error() {
+        let mut registry = RuntimeRegistry::default();
+        let result =
+            registry.update_browser_location("nonexistent", String::from("https://example.com"));
+        assert!(
+            result.is_err(),
+            "updating location for nonexistent pane should fail"
+        );
+    }
+
+    #[test]
+    fn snapshot_returns_all_registered_runtimes() {
+        let mut registry = RuntimeRegistry::default();
+        registry.register_terminal("pane-1", sid("pty-1"));
+        registry.register_browser(
+            "pane-2",
+            sid("browser-1"),
+            String::from("https://example.com"),
+        );
+        registry.register_terminal("pane-3", sid("pty-3"));
+
+        let snapshot = registry.snapshot();
+        assert_eq!(snapshot.len(), 3, "snapshot should contain all runtimes");
+    }
+
+    #[test]
+    fn empty_registry_snapshot_is_empty() {
+        let registry = RuntimeRegistry::default();
+        assert!(
+            registry.snapshot().is_empty(),
+            "empty registry should return empty snapshot"
         );
     }
 }

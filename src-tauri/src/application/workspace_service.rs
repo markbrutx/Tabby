@@ -222,4 +222,187 @@ mod tests {
         let result = service.close_pane(&PaneId::from(String::from("nonexistent-pane")));
         assert!(result.is_err(), "should return error for nonexistent pane");
     }
+
+    #[test]
+    fn close_tab_removes_tab_and_emits_pane_removed_events() {
+        let service = WorkspaceApplicationService::new();
+        let specs = vec![terminal_spec("a"), terminal_spec("b")];
+        service
+            .open_tab(LayoutPreset::OneByTwo, false, specs)
+            .expect("open_tab should succeed");
+
+        let tab_id = service
+            .with_session(|session| session.tab_summaries()[0].tab_id.clone())
+            .expect("with_session");
+
+        let events = service
+            .close_tab(&tab_id)
+            .expect("close_tab should succeed");
+
+        let pane_removed_count = events
+            .iter()
+            .filter(|e| matches!(e, WorkspaceDomainEvent::PaneRemoved { .. }))
+            .count();
+        assert_eq!(
+            pane_removed_count, 2,
+            "should emit PaneRemoved for each pane in the tab"
+        );
+
+        let is_empty = service.is_empty().expect("is_empty should succeed");
+        assert!(is_empty, "workspace should be empty after closing only tab");
+    }
+
+    #[test]
+    fn close_tab_not_found_returns_error() {
+        let service = WorkspaceApplicationService::new();
+        let result = service.close_tab(&TabId::from(String::from("nonexistent-tab")));
+        assert!(result.is_err(), "should return error for nonexistent tab");
+    }
+
+    #[test]
+    fn replace_pane_spec_updates_spec_and_emits_event() {
+        let service = WorkspaceApplicationService::new();
+        let specs = vec![terminal_spec("default")];
+        service
+            .open_tab(LayoutPreset::OneByOne, false, specs)
+            .expect("open_tab should succeed");
+
+        let pane_id = service
+            .with_session(|session| session.tab_summaries()[0].panes[0].pane_id.clone())
+            .expect("with_session");
+
+        let new_spec = PaneSpec::Browser(tabby_workspace::BrowserPaneSpec {
+            initial_url: String::from("https://example.com"),
+        });
+        let events = service
+            .replace_pane_spec(&pane_id, new_spec.clone())
+            .expect("replace_pane_spec should succeed");
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            WorkspaceDomainEvent::PaneSpecReplaced { pane_id: pid, spec } => {
+                assert_eq!(*pid, pane_id);
+                assert_eq!(*spec, new_spec);
+            }
+            other => panic!("expected PaneSpecReplaced, got {other:?}"),
+        }
+
+        let updated_spec = service
+            .pane_spec(&pane_id)
+            .expect("pane_spec should succeed");
+        assert_eq!(
+            updated_spec,
+            Some(new_spec),
+            "pane spec should be updated in workspace"
+        );
+    }
+
+    #[test]
+    fn replace_pane_spec_on_nonexistent_pane_returns_error() {
+        let service = WorkspaceApplicationService::new();
+        let new_spec = PaneSpec::Browser(tabby_workspace::BrowserPaneSpec {
+            initial_url: String::from("https://example.com"),
+        });
+        let result =
+            service.replace_pane_spec(&PaneId::from(String::from("nonexistent")), new_spec);
+        assert!(
+            result.is_err(),
+            "should return error for nonexistent pane replacement"
+        );
+    }
+
+    #[test]
+    fn split_nonexistent_pane_returns_error() {
+        let service = WorkspaceApplicationService::new();
+        let result = service.split_pane(
+            &PaneId::from(String::from("nonexistent")),
+            SplitDirection::Horizontal,
+            terminal_spec("default"),
+        );
+        assert!(result.is_err(), "should return error for nonexistent pane");
+    }
+
+    #[test]
+    fn open_tab_with_empty_specs_returns_validation_error() {
+        let service = WorkspaceApplicationService::new();
+        let result = service.open_tab(LayoutPreset::OneByOne, false, vec![]);
+        assert!(
+            result.is_err(),
+            "should return error when no pane specs provided"
+        );
+    }
+
+    #[test]
+    fn close_last_pane_closes_tab() {
+        let service = WorkspaceApplicationService::new();
+        let specs = vec![terminal_spec("default")];
+        service
+            .open_tab(LayoutPreset::OneByOne, false, specs)
+            .expect("open_tab should succeed");
+
+        let pane_id = service
+            .with_session(|session| session.tab_summaries()[0].panes[0].pane_id.clone())
+            .expect("with_session");
+
+        let events = service
+            .close_pane(&pane_id)
+            .expect("close_pane should succeed");
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, WorkspaceDomainEvent::PaneRemoved { .. })),
+            "should emit PaneRemoved"
+        );
+
+        let is_empty = service.is_empty().expect("is_empty should succeed");
+        assert!(
+            is_empty,
+            "closing last pane should also close the tab, leaving workspace empty"
+        );
+    }
+
+    #[test]
+    fn swap_nonexistent_panes_returns_error() {
+        let service = WorkspaceApplicationService::new();
+        let result = service.swap_pane_slots(
+            &PaneId::from(String::from("fake-a")),
+            &PaneId::from(String::from("fake-b")),
+        );
+        assert!(
+            result.is_err(),
+            "should return error when swapping nonexistent panes"
+        );
+    }
+
+    #[test]
+    fn set_active_tab_not_found_returns_error() {
+        let service = WorkspaceApplicationService::new();
+        let result = service.set_active_tab(&TabId::from(String::from("nonexistent")));
+        assert!(result.is_err(), "should return error for nonexistent tab");
+    }
+
+    #[test]
+    fn focus_pane_not_found_returns_error() {
+        let service = WorkspaceApplicationService::new();
+        let specs = vec![terminal_spec("default")];
+        service
+            .open_tab(LayoutPreset::OneByOne, false, specs)
+            .expect("open_tab should succeed");
+
+        let tab_id = service
+            .with_session(|session| session.tab_summaries()[0].tab_id.clone())
+            .expect("with_session");
+
+        let result = service.focus_pane(&tab_id, &PaneId::from(String::from("nonexistent-pane")));
+        assert!(result.is_err(), "should return error for nonexistent pane");
+    }
+
+    #[test]
+    fn track_working_directory_on_nonexistent_pane_returns_error() {
+        let service = WorkspaceApplicationService::new();
+        let result = service
+            .track_terminal_working_directory(&PaneId::from(String::from("nonexistent")), "/tmp");
+        assert!(result.is_err(), "should return error for nonexistent pane");
+    }
 }
