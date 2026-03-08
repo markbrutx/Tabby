@@ -10,7 +10,7 @@ use tabby_contracts::{
 };
 use tabby_settings::{built_in_profile_catalog, default_preferences};
 use tabby_workspace::layout::LayoutPreset;
-use tabby_workspace::WorkspaceEvent;
+use tabby_workspace::WorkspaceDomainEvent;
 
 use crate::application::commands::WorkspaceCommand;
 use crate::application::{
@@ -125,10 +125,12 @@ impl AppShell {
                 self.apply_workspace_events(events)?;
             }
             WorkspaceCommand::SetActiveTab { tab_id } => {
-                self.workspace_service.set_active_tab(&tab_id)?;
+                let events = self.workspace_service.set_active_tab(&tab_id)?;
+                self.apply_workspace_events(events)?;
             }
             WorkspaceCommand::FocusPane { tab_id, pane_id } => {
-                self.workspace_service.focus_pane(&tab_id, &pane_id)?;
+                let events = self.workspace_service.focus_pane(&tab_id, &pane_id)?;
+                self.apply_workspace_events(events)?;
             }
             WorkspaceCommand::SplitPane(cmd) => {
                 let events =
@@ -185,7 +187,7 @@ impl AppShell {
         LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne)
     }
 
-    fn apply_workspace_events(&self, events: Vec<WorkspaceEvent>) -> Result<(), ShellError> {
+    fn apply_workspace_events(&self, events: Vec<WorkspaceDomainEvent>) -> Result<(), ShellError> {
         BootstrapService::apply_workspace_events(
             events,
             &self.settings_service,

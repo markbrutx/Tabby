@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use tabby_workspace::layout::{LayoutPreset, SplitDirection};
 use tabby_workspace::{
-    PaneSpec, TabLayoutStrategy, WorkspaceError, WorkspaceEvent, WorkspaceSession,
+    PaneSpec, TabLayoutStrategy, WorkspaceDomainEvent, WorkspaceError, WorkspaceSession,
 };
 
 use crate::shell::error::ShellError;
@@ -42,7 +42,7 @@ impl WorkspaceApplicationService {
         layout: LayoutPreset,
         auto_layout: bool,
         pane_specs: Vec<PaneSpec>,
-    ) -> Result<Vec<WorkspaceEvent>, ShellError> {
+    ) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         let strategy = if auto_layout {
             TabLayoutStrategy::AutoCount
         } else {
@@ -53,19 +53,23 @@ impl WorkspaceApplicationService {
             .map_err(workspace_error_to_shell)
     }
 
-    pub fn close_tab(&self, tab_id: &str) -> Result<Vec<WorkspaceEvent>, ShellError> {
+    pub fn close_tab(&self, tab_id: &str) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .close_tab(tab_id)
             .map_err(workspace_error_to_shell)
     }
 
-    pub fn set_active_tab(&self, tab_id: &str) -> Result<(), ShellError> {
+    pub fn set_active_tab(&self, tab_id: &str) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .set_active_tab(tab_id)
             .map_err(workspace_error_to_shell)
     }
 
-    pub fn focus_pane(&self, tab_id: &str, pane_id: &str) -> Result<(), ShellError> {
+    pub fn focus_pane(
+        &self,
+        tab_id: &str,
+        pane_id: &str,
+    ) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .focus_pane(tab_id, pane_id)
             .map_err(workspace_error_to_shell)
@@ -76,13 +80,13 @@ impl WorkspaceApplicationService {
         pane_id: &str,
         direction: SplitDirection,
         spec: PaneSpec,
-    ) -> Result<Vec<WorkspaceEvent>, ShellError> {
+    ) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .split_pane(pane_id, direction, spec)
             .map_err(workspace_error_to_shell)
     }
 
-    pub fn close_pane(&self, pane_id: &str) -> Result<Vec<WorkspaceEvent>, ShellError> {
+    pub fn close_pane(&self, pane_id: &str) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .close_pane(pane_id)
             .map_err(workspace_error_to_shell)
@@ -98,7 +102,7 @@ impl WorkspaceApplicationService {
         &self,
         pane_id: &str,
         spec: PaneSpec,
-    ) -> Result<Vec<WorkspaceEvent>, ShellError> {
+    ) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .replace_pane_spec(pane_id, spec)
             .map_err(workspace_error_to_shell)

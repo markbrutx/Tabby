@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use tabby_runtime::PaneRuntime;
 use tabby_settings::{resolve_default_working_directory, UserPreferences};
 use tabby_workspace::layout::LayoutPreset;
-use tabby_workspace::{PaneSpec, WorkspaceEvent};
+use tabby_workspace::{PaneSpec, WorkspaceDomainEvent};
 
 use crate::application::{
     RuntimeApplicationService, SettingsApplicationService, WorkspaceApplicationService,
@@ -120,19 +120,23 @@ impl BootstrapService {
     }
 
     pub(crate) fn apply_workspace_events(
-        events: Vec<WorkspaceEvent>,
+        events: Vec<WorkspaceDomainEvent>,
         settings_service: &SettingsApplicationService,
         runtime_service: &RuntimeApplicationService,
     ) -> Result<(), ShellError> {
         let preferences = settings_service.preferences()?;
         for event in events {
             match event {
-                WorkspaceEvent::PaneAdded { pane_id, spec }
-                | WorkspaceEvent::PaneSpecReplaced { pane_id, spec } => {
+                WorkspaceDomainEvent::PaneAdded { pane_id, spec }
+                | WorkspaceDomainEvent::PaneSpecReplaced { pane_id, spec } => {
                     runtime_service.start_runtime(&pane_id, &spec, &preferences)?;
                 }
-                WorkspaceEvent::PaneRemoved { pane_id, .. } => {
+                WorkspaceDomainEvent::PaneRemoved { pane_id, .. } => {
                     runtime_service.stop_runtime(&pane_id);
+                }
+                WorkspaceDomainEvent::ActivePaneChanged { .. }
+                | WorkspaceDomainEvent::ActiveTabChanged { .. } => {
+                    // Focus events don't require runtime side-effects
                 }
             }
         }
