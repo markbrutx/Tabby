@@ -1,3 +1,7 @@
+mod value_objects;
+
+pub use value_objects::{FontSize, ProfileId, WorkingDirectory};
+
 use thiserror::Error;
 
 pub const CUSTOM_PROFILE_ID: &str = "custom";
@@ -15,7 +19,7 @@ pub enum ThemeMode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerminalProfile {
-    pub id: String,
+    pub id: ProfileId,
     pub label: String,
     pub description: String,
     pub startup_command_template: Option<String>,
@@ -29,10 +33,10 @@ pub struct ProfileCatalog {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserPreferences {
     pub default_layout: String,
-    pub default_terminal_profile_id: String,
-    pub default_working_directory: String,
+    pub default_terminal_profile_id: ProfileId,
+    pub default_working_directory: WorkingDirectory,
     pub default_custom_command: String,
-    pub font_size: u16,
+    pub font_size: FontSize,
     pub theme: ThemeMode,
     pub launch_fullscreen: bool,
     pub has_completed_onboarding: bool,
@@ -41,7 +45,7 @@ pub struct UserPreferences {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedTerminalProfile {
-    pub id: String,
+    pub id: ProfileId,
     pub label: String,
     pub command: Option<String>,
 }
@@ -55,10 +59,10 @@ pub enum SettingsError {
 pub fn default_preferences() -> UserPreferences {
     UserPreferences {
         default_layout: String::from(DEFAULT_LAYOUT_PRESET),
-        default_terminal_profile_id: String::from(TERMINAL_PROFILE_ID),
-        default_working_directory: String::new(),
+        default_terminal_profile_id: ProfileId::new(TERMINAL_PROFILE_ID),
+        default_working_directory: WorkingDirectory::empty(),
         default_custom_command: String::new(),
-        font_size: 13,
+        font_size: FontSize::default(),
         theme: ThemeMode::System,
         launch_fullscreen: true,
         has_completed_onboarding: false,
@@ -70,25 +74,25 @@ pub fn built_in_profile_catalog() -> ProfileCatalog {
     ProfileCatalog {
         terminal_profiles: vec![
             TerminalProfile {
-                id: String::from(TERMINAL_PROFILE_ID),
+                id: ProfileId::new(TERMINAL_PROFILE_ID),
                 label: String::from("Terminal"),
                 description: String::from("Standard shell session"),
                 startup_command_template: None,
             },
             TerminalProfile {
-                id: String::from(CLAUDE_PROFILE_ID),
+                id: ProfileId::new(CLAUDE_PROFILE_ID),
                 label: String::from("Claude Code"),
                 description: String::from("Anthropic coding assistant"),
                 startup_command_template: Some(String::from("claude")),
             },
             TerminalProfile {
-                id: String::from(CODEX_PROFILE_ID),
+                id: ProfileId::new(CODEX_PROFILE_ID),
                 label: String::from("Codex"),
                 description: String::from("OpenAI coding agent"),
                 startup_command_template: Some(String::from("codex")),
             },
             TerminalProfile {
-                id: String::from(CUSTOM_PROFILE_ID),
+                id: ProfileId::new(CUSTOM_PROFILE_ID),
                 label: String::from("Custom"),
                 description: String::from("Run any command"),
                 startup_command_template: None,
@@ -99,7 +103,7 @@ pub fn built_in_profile_catalog() -> ProfileCatalog {
 
 pub fn normalize_preferences(mut preferences: UserPreferences) -> UserPreferences {
     let catalog = built_in_profile_catalog();
-    let profile_id = preferences.default_terminal_profile_id.trim();
+    let profile_id = preferences.default_terminal_profile_id.as_str().trim();
 
     if profile_id.is_empty()
         || !catalog
@@ -108,9 +112,9 @@ pub fn normalize_preferences(mut preferences: UserPreferences) -> UserPreference
             .any(|profile| profile.id == profile_id)
         || (profile_id == CUSTOM_PROFILE_ID && preferences.default_custom_command.trim().is_empty())
     {
-        preferences.default_terminal_profile_id = String::from(TERMINAL_PROFILE_ID);
-    } else if profile_id != preferences.default_terminal_profile_id {
-        preferences.default_terminal_profile_id = String::from(profile_id);
+        preferences.default_terminal_profile_id = ProfileId::new(TERMINAL_PROFILE_ID);
+    } else if profile_id != preferences.default_terminal_profile_id.as_str() {
+        preferences.default_terminal_profile_id = ProfileId::new(profile_id);
     }
 
     if !is_known_layout_preset(&preferences.default_layout) {
@@ -121,11 +125,7 @@ pub fn normalize_preferences(mut preferences: UserPreferences) -> UserPreference
 }
 
 pub fn validate_preferences(preferences: &UserPreferences) -> Result<(), SettingsError> {
-    if preferences.font_size < 10 || preferences.font_size > 24 {
-        return Err(SettingsError::Validation(String::from(
-            "Font size must be between 10 and 24",
-        )));
-    }
+    // FontSize is validated at construction time via FontSize::new().
 
     if !is_known_layout_preset(&preferences.default_layout) {
         return Err(SettingsError::Validation(format!(
@@ -135,7 +135,7 @@ pub fn validate_preferences(preferences: &UserPreferences) -> Result<(), Setting
     }
 
     resolve_terminal_profile(
-        &preferences.default_terminal_profile_id,
+        preferences.default_terminal_profile_id.as_str(),
         None,
         &preferences.default_custom_command,
     )?;
@@ -189,7 +189,7 @@ pub fn resolve_default_working_directory(
         .filter(|value| !value.is_empty())
         .map(String::from)
         .or_else(|| {
-            let value = preferences.default_working_directory.trim();
+            let value = preferences.default_working_directory.as_str().trim();
             (!value.is_empty()).then(|| String::from(value))
         })
         .or_else(|| {
@@ -211,7 +211,8 @@ pub fn is_known_layout_preset(value: &str) -> bool {
 mod tests {
     use super::{
         default_preferences, normalize_preferences, resolve_default_working_directory,
-        resolve_terminal_profile, validate_preferences, CUSTOM_PROFILE_ID, TERMINAL_PROFILE_ID,
+        resolve_terminal_profile, validate_preferences, FontSize, ProfileId, WorkingDirectory,
+        CUSTOM_PROFILE_ID, TERMINAL_PROFILE_ID,
     };
 
     #[test]
@@ -232,7 +233,8 @@ mod tests {
     #[test]
     fn resolve_default_working_directory_prefers_explicit_then_defaults() {
         let mut preferences = default_preferences();
-        preferences.default_working_directory = String::from("/defaults");
+        preferences.default_working_directory =
+            WorkingDirectory::new("/defaults").expect("valid path");
         preferences.last_working_directory = Some(String::from("/last"));
 
         assert_eq!(
@@ -248,7 +250,7 @@ mod tests {
     #[test]
     fn normalize_preferences_fixes_invalid_defaults() {
         let normalized = normalize_preferences(super::UserPreferences {
-            default_terminal_profile_id: String::from("browser"),
+            default_terminal_profile_id: ProfileId::new("browser"),
             ..default_preferences()
         });
         assert_eq!(normalized.default_terminal_profile_id, TERMINAL_PROFILE_ID);
@@ -262,5 +264,21 @@ mod tests {
         })
         .expect_err("unknown layout should fail");
         assert!(error.to_string().contains("Unknown layout"));
+    }
+
+    #[test]
+    fn font_size_validation_is_enforced_at_construction() {
+        assert!(FontSize::new(6).is_err());
+        assert!(FontSize::new(7).is_err());
+        assert!(FontSize::new(8).is_ok());
+        assert!(FontSize::new(14).is_ok());
+        assert!(FontSize::new(72).is_ok());
+        assert!(FontSize::new(73).is_err());
+    }
+
+    #[test]
+    fn default_preferences_font_size_is_valid() {
+        let prefs = default_preferences();
+        assert_eq!(prefs.font_size.value(), 13);
     }
 }

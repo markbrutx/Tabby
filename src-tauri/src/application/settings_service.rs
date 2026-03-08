@@ -163,7 +163,7 @@ mod tests {
         let loaded = decode_preferences(Some(valid_json)).expect("should decode");
         assert!(!loaded.should_persist);
         assert_eq!(loaded.preferences.default_terminal_profile_id, "claude");
-        assert_eq!(loaded.preferences.font_size, 14);
+        assert_eq!(loaded.preferences.font_size.value(), 14);
     }
 
     #[test]

@@ -94,7 +94,9 @@ impl AppShell {
         &self,
         dto: SettingsCommandDto,
     ) -> Result<SettingsView, ShellError> {
-        let command = dto_mappers::settings_command_from_dto(dto);
+        let command = dto_mappers::settings_command_from_dto(dto).map_err(|error| match error {
+            tabby_settings::SettingsError::Validation(msg) => ShellError::Validation(msg),
+        })?;
         let preferences = self.settings_service.dispatch_settings_command(command)?;
         let settings = dto_mappers::settings_view_from_preferences(&preferences);
         self.publisher.emit_settings_projection(&preferences);

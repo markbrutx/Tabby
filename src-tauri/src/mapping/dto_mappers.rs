@@ -5,7 +5,10 @@ use tabby_contracts::{
     WorkspaceCommandDto, WorkspaceView,
 };
 use tabby_runtime::{PaneRuntime, RuntimeKind, RuntimeStatus};
-use tabby_settings::{ProfileCatalog, ThemeMode, UserPreferences};
+use tabby_settings::{
+    FontSize, ProfileCatalog, ProfileId, SettingsError, ThemeMode, UserPreferences,
+    WorkingDirectory,
+};
 use tabby_workspace::layout::{LayoutPreset, SplitDirection, SplitNode};
 use tabby_workspace::{PaneId, PaneSpec, TabId, WorkspaceSession};
 
@@ -23,10 +26,10 @@ pub fn settings_view_from_preferences(preferences: &UserPreferences) -> Settings
         default_layout: layout_preset_to_dto(
             LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne),
         ),
-        default_terminal_profile_id: preferences.default_terminal_profile_id.clone(),
-        default_working_directory: preferences.default_working_directory.clone(),
+        default_terminal_profile_id: preferences.default_terminal_profile_id.as_str().to_string(),
+        default_working_directory: preferences.default_working_directory.as_str().to_string(),
         default_custom_command: preferences.default_custom_command.clone(),
-        font_size: preferences.font_size,
+        font_size: preferences.font_size.value(),
         theme: theme_mode_to_dto(preferences.theme),
         launch_fullscreen: preferences.launch_fullscreen,
         has_completed_onboarding: preferences.has_completed_onboarding,
@@ -34,18 +37,20 @@ pub fn settings_view_from_preferences(preferences: &UserPreferences) -> Settings
     }
 }
 
-pub fn preferences_from_settings_view(view: &SettingsView) -> UserPreferences {
-    UserPreferences {
+pub fn preferences_from_settings_view(
+    view: &SettingsView,
+) -> Result<UserPreferences, SettingsError> {
+    Ok(UserPreferences {
         default_layout: layout_preset_to_string(view.default_layout),
-        default_terminal_profile_id: view.default_terminal_profile_id.clone(),
-        default_working_directory: view.default_working_directory.clone(),
+        default_terminal_profile_id: ProfileId::new(view.default_terminal_profile_id.clone()),
+        default_working_directory: WorkingDirectory::new(view.default_working_directory.clone())?,
         default_custom_command: view.default_custom_command.clone(),
-        font_size: view.font_size,
+        font_size: FontSize::new(view.font_size)?,
         theme: theme_mode_from_dto(view.theme),
         launch_fullscreen: view.launch_fullscreen,
         has_completed_onboarding: view.has_completed_onboarding,
         last_working_directory: view.last_working_directory.clone(),
-    }
+    })
 }
 
 pub fn profile_catalog_view_from_catalog(catalog: &ProfileCatalog) -> ProfileCatalogView {
@@ -54,7 +59,7 @@ pub fn profile_catalog_view_from_catalog(catalog: &ProfileCatalog) -> ProfileCat
             .terminal_profiles
             .iter()
             .map(|profile| ProfileView {
-                id: profile.id.clone(),
+                id: profile.id.as_str().to_string(),
                 label: profile.label.clone(),
                 description: profile.description.clone(),
                 startup_command_template: profile.startup_command_template.clone(),
@@ -228,12 +233,16 @@ pub fn workspace_command_from_dto(
     }
 }
 
-pub fn settings_command_from_dto(dto: SettingsCommandDto) -> SettingsCommand {
+pub fn settings_command_from_dto(
+    dto: SettingsCommandDto,
+) -> Result<SettingsCommand, SettingsError> {
     match dto {
-        SettingsCommandDto::Update { settings } => SettingsCommand::Update(UpdateSettingsCommand {
-            preferences: preferences_from_settings_view(&settings),
-        }),
-        SettingsCommandDto::Reset => SettingsCommand::Reset,
+        SettingsCommandDto::Update { settings } => {
+            Ok(SettingsCommand::Update(UpdateSettingsCommand {
+                preferences: preferences_from_settings_view(&settings)?,
+            }))
+        }
+        SettingsCommandDto::Reset => Ok(SettingsCommand::Reset),
     }
 }
 
@@ -278,11 +287,10 @@ pub fn serialize_preferences(
     serde_json::to_value(view)
 }
 
-pub fn deserialize_preferences(
-    value: serde_json::Value,
-) -> Result<UserPreferences, serde_json::Error> {
-    let view: SettingsView = serde_json::from_value(value)?;
-    Ok(preferences_from_settings_view(&view))
+pub fn deserialize_preferences(value: serde_json::Value) -> Result<UserPreferences, SettingsError> {
+    let view: SettingsView =
+        serde_json::from_value(value).map_err(|e| SettingsError::Validation(e.to_string()))?;
+    preferences_from_settings_view(&view)
 }
 
 // ---------------------------------------------------------------------------
@@ -420,10 +428,10 @@ mod tests {
     fn settings_round_trip_preserves_all_fields() {
         let preferences = UserPreferences {
             default_layout: String::from("2x2"),
-            default_terminal_profile_id: String::from("claude"),
-            default_working_directory: String::from("/tmp"),
+            default_terminal_profile_id: ProfileId::new("claude"),
+            default_working_directory: WorkingDirectory::new("/tmp").expect("valid path"),
             default_custom_command: String::from("fish"),
-            font_size: 16,
+            font_size: FontSize::new(16).expect("valid size"),
             theme: ThemeMode::Dawn,
             launch_fullscreen: true,
             has_completed_onboarding: true,
@@ -431,13 +439,13 @@ mod tests {
         };
 
         let view = settings_view_from_preferences(&preferences);
-        let restored = preferences_from_settings_view(&view);
+        let restored = preferences_from_settings_view(&view).expect("should round-trip");
 
         assert_eq!(restored.default_layout, "2x2");
         assert_eq!(restored.default_terminal_profile_id, "claude");
-        assert_eq!(restored.default_working_directory, "/tmp");
+        assert_eq!(restored.default_working_directory.as_str(), "/tmp");
         assert_eq!(restored.default_custom_command, "fish");
-        assert_eq!(restored.font_size, 16);
+        assert_eq!(restored.font_size.value(), 16);
         assert!(matches!(restored.theme, ThemeMode::Dawn));
         assert!(restored.launch_fullscreen);
         assert!(restored.has_completed_onboarding);
@@ -448,7 +456,7 @@ mod tests {
     fn settings_round_trip_with_defaults() {
         let defaults = default_preferences();
         let view = settings_view_from_preferences(&defaults);
-        let restored = preferences_from_settings_view(&view);
+        let restored = preferences_from_settings_view(&view).expect("should round-trip");
 
         assert_eq!(restored.default_layout, defaults.default_layout);
         assert_eq!(
@@ -456,6 +464,14 @@ mod tests {
             defaults.default_terminal_profile_id
         );
         assert_eq!(restored.font_size, defaults.font_size);
+    }
+
+    #[test]
+    fn preferences_from_settings_view_rejects_invalid_font_size() {
+        let mut view = settings_view_from_preferences(&default_preferences());
+        view.font_size = 6;
+        let err = preferences_from_settings_view(&view).expect_err("should reject font size 6");
+        assert!(err.to_string().contains("Font size"));
     }
 
     // -- Layout preset mapping ----------------------------------------------
@@ -579,13 +595,13 @@ mod tests {
         let catalog = ProfileCatalog {
             terminal_profiles: vec![
                 TerminalProfile {
-                    id: String::from("terminal"),
+                    id: ProfileId::new("terminal"),
                     label: String::from("Terminal"),
                     description: String::from("Default terminal"),
                     startup_command_template: None,
                 },
                 TerminalProfile {
-                    id: String::from("claude"),
+                    id: ProfileId::new("claude"),
                     label: String::from("Claude Code"),
                     description: String::from("AI assistant"),
                     startup_command_template: Some(String::from("claude")),
@@ -719,7 +735,7 @@ mod tests {
     fn settings_command_update_maps_preferences() {
         let view = settings_view_from_preferences(&default_preferences());
         let dto = SettingsCommandDto::Update { settings: view };
-        let cmd = settings_command_from_dto(dto);
+        let cmd = settings_command_from_dto(dto).expect("should map");
 
         match cmd {
             SettingsCommand::Update(update) => {
@@ -735,8 +751,17 @@ mod tests {
     #[test]
     fn settings_command_reset_maps_correctly() {
         let dto = SettingsCommandDto::Reset;
-        let cmd = settings_command_from_dto(dto);
+        let cmd = settings_command_from_dto(dto).expect("should map");
         assert!(matches!(cmd, SettingsCommand::Reset));
+    }
+
+    #[test]
+    fn settings_command_rejects_invalid_font_size() {
+        let mut view = settings_view_from_preferences(&default_preferences());
+        view.font_size = 200;
+        let err = settings_command_from_dto(SettingsCommandDto::Update { settings: view })
+            .expect_err("should reject invalid font size");
+        assert!(err.to_string().contains("Font size"));
     }
 
     // -- RuntimeCommandDto → RuntimeCommand ----------------------------------
@@ -836,10 +861,10 @@ mod tests {
     fn serialize_deserialize_preferences_round_trips() {
         let preferences = UserPreferences {
             default_layout: String::from("1x2"),
-            default_terminal_profile_id: String::from("claude"),
-            default_working_directory: String::from("/home"),
+            default_terminal_profile_id: ProfileId::new("claude"),
+            default_working_directory: WorkingDirectory::new("/home").expect("valid path"),
             default_custom_command: String::new(),
-            font_size: 18,
+            font_size: FontSize::new(18).expect("valid size"),
             theme: ThemeMode::Midnight,
             launch_fullscreen: false,
             has_completed_onboarding: true,
@@ -851,7 +876,7 @@ mod tests {
 
         assert_eq!(restored.default_layout, "1x2");
         assert_eq!(restored.default_terminal_profile_id, "claude");
-        assert_eq!(restored.font_size, 18);
+        assert_eq!(restored.font_size.value(), 18);
         assert!(matches!(restored.theme, ThemeMode::Midnight));
         assert_eq!(restored.last_working_directory.as_deref(), Some("/var"));
     }
@@ -864,7 +889,7 @@ mod tests {
         let preferences = default_preferences();
         let catalog = ProfileCatalog {
             terminal_profiles: vec![TerminalProfile {
-                id: String::from("terminal"),
+                id: ProfileId::new("terminal"),
                 label: String::from("Terminal"),
                 description: String::from("Default"),
                 startup_command_template: None,

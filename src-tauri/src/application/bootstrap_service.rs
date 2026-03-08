@@ -88,7 +88,7 @@ impl BootstrapService {
             });
         let profile_id = cli_args
             .profile
-            .unwrap_or_else(|| preferences.default_terminal_profile_id.clone());
+            .unwrap_or_else(|| preferences.default_terminal_profile_id.as_str().to_string());
         let working_directory =
             resolve_default_working_directory(cli_args.cwd.as_deref(), &preferences);
         let pane_spec = PaneSpec::Terminal(tabby_workspace::TerminalPaneSpec {
@@ -111,7 +111,7 @@ impl BootstrapService {
         let layout =
             LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne);
         let pane_spec = PaneSpec::Terminal(tabby_workspace::TerminalPaneSpec {
-            launch_profile_id: preferences.default_terminal_profile_id.clone(),
+            launch_profile_id: preferences.default_terminal_profile_id.as_str().to_string(),
             working_directory: resolve_default_working_directory(None, &preferences),
             command_override: None,
         });
