@@ -201,3 +201,34 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - The observation_receiver parameter threads through: AppShell → BootstrapService → RuntimeCoordinator → RuntimeApplicationService → PtyManager::spawn
   - portable_pty exit_code() returns u32, converted via i32::try_from with unwrap_or(i32::MAX) fallback
 ---
+
+## 2026-03-08 22:32 - US-006: Make RuntimeApplicationService the single owner of registry and status transitions
+Thread:
+Run: 20260308-215923-84117 (iteration 7)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-7.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-7.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: c989674 feat: make RuntimeApplicationService the single owner of registry and status transitions (US-006)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (162 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (171 Rust tests: 110 app + 8 runtime + 27 settings + 26 workspace)
+- Files changed:
+  - src-tauri/src/shell/mod.rs (removed manual stop_runtime call from ReplacePaneSpec handler)
+  - src-tauri/src/application/runtime_coordinator.rs (added stop_runtime before start_runtime in PaneSpecReplaced handler; added AC#5 test; updated comments)
+- What was implemented:
+  - Moved stop_runtime responsibility from shell/mod.rs to RuntimeCoordinator for PaneSpecReplaced events
+  - RuntimeApplicationService is now the exclusive owner of RuntimeRegistry mutations — no other module calls registry methods or stop_runtime before workspace mutations
+  - All status transitions (Starting→Running via register, Running→Exited/Failed via mark_terminal_exit, Running→Exited via stop) go through RuntimeApplicationService
+  - Projection events (RuntimeStatusChangedEvent) are emitted only by RuntimeApplicationService after registry mutation
+  - Added comprehensive test: replace_pane_spec_event_triggers_coordinator_stop_old_then_start_new
+- **Learnings for future iterations:**
+  - The change was minimal (1 line removed, 1 line added in production code) — the architecture was already mostly correct from prior stories
+  - RuntimeRegistry.terminal_session_id() does not filter by RuntimeKind — it returns any session ID for the pane, so checking kind requires registry.get() instead
+  - The coordinator pattern cleanly separates "what happened" (workspace events) from "what to do about it" (runtime lifecycle)
+---
