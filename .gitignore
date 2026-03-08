@@ -19,6 +19,7 @@ workbench/
 .agents/
 .claude/
 .codex/
+.ralph/
 AGENTS.md
 
 # Local environment overrides
