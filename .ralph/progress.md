@@ -1,5 +1,40 @@
 # Progress Log
 
+## 2026-03-09 00:17 - US-021: Ensure generated DTO field naming exists only at transport boundary
+Thread:
+Run: 20260308-215923-84117 (iteration 22)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-22.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-22.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 88e7a87 feat: add DTO boundary enforcement script and integrate into lint (US-021)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS (includes ESLint + DTO boundary check)
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (174 frontend tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (237 Rust tests)
+- Files changed:
+  - scripts/check-dto-boundary.sh (NEW — grep-based enforcement script)
+  - package.json (lint script updated to include DTO boundary check; added lint:dto-boundary script)
+- What was implemented:
+  - Full audit of all frontend files confirmed no snake_case DTO field access outside allowed zones
+  - All stores use camelCase domain models exclusively (verified)
+  - All selectors use camelCase domain models exclusively (verified)
+  - All components use camelCase domain models exclusively (verified)
+  - Created scripts/check-dto-boundary.sh that checks 17 snake_case DTO field patterns
+  - Allowed zones: src/contracts/ (auto-generated), src/app-shell/clients/ (transport), src/features/*/application/ (stores, mappers)
+  - Test files (*.test.ts, *.test.tsx) excluded — they construct DTO fixtures for assertions
+  - Script integrated into `bun run lint` so it runs in CI alongside ESLint
+  - Standalone `bun run lint:dto-boundary` also available
+- **Learnings for future iterations:**
+  - The browser hook test (useBrowserWebview.test.tsx) constructs raw DTO objects for mock assertions — this is expected at the test level
+  - Application stores legitimately construct DTOs for outbound dispatch (e.g., WorkspaceCommandDto, RuntimeCommandDto)
+  - The anti-corruption pattern works in both directions: mappers for incoming DTOs, direct construction for outgoing commands
+---
+
 ## Codebase Patterns
 - (add reusable patterns here)
 
