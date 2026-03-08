@@ -1,10 +1,7 @@
 import { create } from "zustand";
-import type {
-  BrowserLocationObservedEvent,
-  PaneRuntimeView,
-} from "@/contracts/tauri-bindings";
+import type { PaneRuntimeView } from "@/contracts/tauri-bindings";
 import type { BrowserBounds, RuntimeReadModel } from "@/features/runtime/domain/models";
-import type { RuntimeClient, UnlistenFn } from "@/app-shell/clients";
+import type { RuntimeClient } from "@/app-shell/clients";
 import { mapRuntimeFromDto } from "@/features/runtime/application/snapshot-mappers";
 
 export interface RuntimeState {
@@ -24,9 +21,6 @@ export interface RuntimeState {
   setBrowserBounds: (paneId: string, bounds: BrowserBounds) => Promise<void>;
   setBrowserVisible: (paneId: string, visible: boolean) => Promise<void>;
   navigateBrowser: (paneId: string, url: string) => Promise<void>;
-  subscribeBrowserLocation: (
-    handler: (event: BrowserLocationObservedEvent) => void,
-  ) => Promise<UnlistenFn>;
 }
 
 function toRuntimeMap(dtos: PaneRuntimeView[]): Record<string, RuntimeReadModel> {
@@ -52,8 +46,8 @@ export function createRuntimeStore(deps: RuntimeStoreDeps) {
         return;
       }
 
-      runtimeListenersReady = Promise.all([
-        runtimeClient.listenStatusChanged((dto) => {
+      runtimeListenersReady = runtimeClient
+        .listenStatusChanged((dto) => {
           const runtime = mapRuntimeFromDto(dto);
           set((state) => ({
             runtimes: {
@@ -61,28 +55,8 @@ export function createRuntimeStore(deps: RuntimeStoreDeps) {
               [runtime.paneId]: runtime,
             },
           }));
-        }),
-        runtimeClient.listenBrowserLocationObserved(
-          (event: BrowserLocationObservedEvent) => {
-            set((state) => {
-              const current = state.runtimes[event.paneId];
-              if (!current) {
-                return state;
-              }
-
-              return {
-                runtimes: {
-                  ...state.runtimes,
-                  [event.paneId]: {
-                    ...current,
-                    browserLocation: event.url,
-                  },
-                },
-              };
-            });
-          },
-        ),
-      ]).then(() => undefined);
+        })
+        .then(() => undefined);
 
       await runtimeListenersReady;
     },
@@ -160,8 +134,5 @@ export function createRuntimeStore(deps: RuntimeStoreDeps) {
       });
     },
 
-    async subscribeBrowserLocation(handler) {
-      return runtimeClient.listenBrowserLocationObserved(handler);
-    },
   }));
 }

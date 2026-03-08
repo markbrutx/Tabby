@@ -1,5 +1,42 @@
 # Progress Log
 
+## 2026-03-09 00:39 - US-024: Decouple feature stores from knowing neighboring store internal shapes
+Thread:
+Run: 20260308-215923-84117 (iteration 25)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-25.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-25.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: cba06a9 feat: decouple feature stores from cross-feature dependencies (US-024)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (186 tests, 18 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (237 tests)
+- Files changed:
+  - src/features/runtime/application/store.ts (removed cross-feature import, added RuntimeStoreDeps interface)
+  - src/features/runtime/application/store.test.ts (updated for deps pattern, added dispatcher and isolation tests)
+  - src/features/workspace/application/store.ts (renamed onOnboardingComplete to onWizardComplete)
+  - src/features/workspace/application/store.test.ts (updated callback name, added isolation test)
+  - src/features/settings/application/store.test.ts (added isolation test)
+  - src/features/browser/hooks/useBrowserWebview.test.tsx (updated for RuntimeStoreDeps)
+  - src/contexts/stores.ts (wires dispatcher from terminal into runtime store deps)
+- What was implemented:
+  - Removed direct import of ptyOutputDispatcher from runtime store (was cross-feature: runtime → terminal)
+  - Created RuntimeStoreDeps interface with injected initTerminalDispatcher/teardownTerminalDispatcher
+  - Renamed workspace store's onOnboardingComplete callback to onWizardComplete (removes onboarding concept from workspace context)
+  - Moved terminal dispatcher import to composition root (stores.ts) where cross-feature wiring belongs
+  - Added isolation tests for all three stores proving independent instantiation
+  - Added delegation tests for runtime store's terminal dispatcher methods
+- **Learnings for future iterations:**
+  - Cross-feature imports should live at the composition root (stores.ts), not inside feature stores
+  - Callback naming matters for bounded context purity — use domain-neutral names (onWizardComplete) not cross-context concepts (onOnboardingComplete)
+  - The dependency injection pattern via deps interfaces keeps stores testable in isolation
+---
+
 ## 2026-03-09 00:33 - US-023: Move onboarding cross-context updates to app-level coordinator
 Thread:
 Run: 20260308-215923-84117 (iteration 24)

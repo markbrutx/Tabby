@@ -18,11 +18,11 @@ use tracing::{error, warn};
 use tracing_subscriber::EnvFilter;
 
 use tabby_contracts::{
-    BrowserLocationObservedEvent, BrowserSurfaceBoundsDto, BrowserSurfaceCommandDto,
-    LayoutPresetDto, PaneRuntimeView, PaneSpecDto, ProfileCatalogView, RuntimeCommandDto,
-    RuntimeStatusChangedEvent, SettingsCommandDto, SettingsProjectionUpdatedEvent, SettingsView,
-    SplitDirectionDto, SplitNodeDto, TerminalOutputEvent, WorkspaceBootstrapView,
-    WorkspaceCommandDto, WorkspaceProjectionUpdatedEvent, WorkspaceView,
+    BrowserSurfaceBoundsDto, BrowserSurfaceCommandDto, LayoutPresetDto, PaneRuntimeView,
+    PaneSpecDto, ProfileCatalogView, RuntimeCommandDto, RuntimeStatusChangedEvent,
+    SettingsCommandDto, SettingsProjectionUpdatedEvent, SettingsView, SplitDirectionDto,
+    SplitNodeDto, TerminalOutputEvent, WorkspaceBootstrapView, WorkspaceCommandDto,
+    WorkspaceProjectionUpdatedEvent, WorkspaceView,
 };
 
 use crate::shell::AppShell;
@@ -53,7 +53,6 @@ fn specta_builder() -> SpectaBuilder<Wry> {
         .typ::<PaneRuntimeView>()
         .typ::<RuntimeStatusChangedEvent>()
         .typ::<TerminalOutputEvent>()
-        .typ::<BrowserLocationObservedEvent>()
         .typ::<BrowserSurfaceCommandDto>()
         .typ::<BrowserSurfaceBoundsDto>()
         .typ::<PaneSpecDto>()

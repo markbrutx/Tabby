@@ -64,7 +64,9 @@ export function useBrowserWebview({
   const setBrowserBounds = useRuntimeStore((s) => s.setBrowserBounds);
   const setBrowserVisible = useRuntimeStore((s) => s.setBrowserVisible);
   const navigateBrowser = useRuntimeStore((s) => s.navigateBrowser);
-  const subscribeBrowserLocation = useRuntimeStore((s) => s.subscribeBrowserLocation);
+  const runtimeBrowserLocation = useRuntimeStore(
+    (s) => s.runtimes[pane.id]?.browserLocation ?? null,
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [currentUrl, setCurrentUrl] = useState(pane.url ?? DEFAULT_BROWSER_URL);
@@ -169,32 +171,14 @@ export function useBrowserWebview({
     void setBrowserVisible(pane.id, visible).catch(() => undefined);
   }, [pane.id, visible, isTauri, setBrowserVisible]);
 
-  // Effect 5: URL change events from native webview
+  // Effect 5: Sync browser location from unified runtime store
   useEffect(() => {
-    if (!isTauri) return;
+    if (!isTauri || !runtimeBrowserLocation) return;
+    if (runtimeBrowserLocation === currentUrlRef.current) return;
 
-    let cancelled = false;
-    let unlisten: (() => void) | null = null;
-
-    void subscribeBrowserLocation((event) => {
-      if (cancelled) return;
-      if (event.paneId === pane.id) {
-        setCurrentUrl(event.url);
-        onUrlChangeRef.current?.(event.url);
-      }
-    }).then((fn) => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [pane.id, isTauri, subscribeBrowserLocation]);
+    setCurrentUrl(runtimeBrowserLocation);
+    onUrlChangeRef.current?.(runtimeBrowserLocation);
+  }, [isTauri, runtimeBrowserLocation]);
 
   const navigate = useCallback(
     (url: string) => {

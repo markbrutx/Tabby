@@ -10,7 +10,6 @@ function makeMockRuntimeClient(): RuntimeClient {
     dispatchBrowserSurface: vi.fn().mockResolvedValue(undefined),
     listenStatusChanged: vi.fn().mockResolvedValue(() => {}),
     listenTerminalOutput: vi.fn().mockResolvedValue(() => {}),
-    listenBrowserLocationObserved: vi.fn().mockResolvedValue(() => {}),
   };
 }
 
@@ -152,6 +151,43 @@ describe("createRuntimeStore", () => {
       store.getState().teardownTerminalOutputDispatcher();
 
       expect(teardownTerminalDispatcher).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("browser location via unified RuntimeStatusChangedEvent", () => {
+    it("updates browser_location from RuntimeStatusChangedEvent payload", () => {
+      let statusHandler: ((runtime: PaneRuntimeView) => void) | null = null;
+      const deps = makeMockDeps({
+        listenStatusChanged: vi.fn((handler) => {
+          statusHandler = handler;
+          return Promise.resolve(() => {});
+        }),
+      });
+
+      const store = createRuntimeStore(deps);
+      store.getState().loadBootstrap([
+        makeRuntimeDto({
+          paneId: "pane-b",
+          kind: "browser",
+          status: "running",
+          browserLocation: "https://example.com",
+        }),
+      ]);
+
+      void store.getState().initializeListeners();
+
+      // Simulate browser navigation arriving as RuntimeStatusChangedEvent
+      statusHandler!(
+        makeRuntimeDto({
+          paneId: "pane-b",
+          kind: "browser",
+          status: "running",
+          browserLocation: "https://docs.rs",
+        }),
+      );
+
+      const runtime = store.getState().runtimes["pane-b"];
+      expect(runtime.browserLocation).toBe("https://docs.rs");
     });
   });
 

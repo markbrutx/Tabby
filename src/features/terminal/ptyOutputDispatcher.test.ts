@@ -15,7 +15,6 @@ function makeMockTransport(): RuntimeClient {
     dispatch: vi.fn(async () => undefined),
     dispatchBrowserSurface: vi.fn(async () => undefined),
     listenStatusChanged: vi.fn(async () => () => undefined),
-    listenBrowserLocationObserved: vi.fn(async () => () => undefined),
     listenTerminalOutput: vi.fn(async (handler) => {
       captured = handler;
       return (() => { captured = null; }) as UnlistenFn;
@@ -108,8 +107,7 @@ describe("ptyOutputDispatcher", () => {
       dispatch: vi.fn(async () => undefined),
       dispatchBrowserSurface: vi.fn(async () => undefined),
       listenStatusChanged: vi.fn(async () => () => undefined),
-      listenBrowserLocationObserved: vi.fn(async () => () => undefined),
-      listenTerminalOutput: vi.fn(() => {
+        listenTerminalOutput: vi.fn(() => {
         callCount += 1;
         if (callCount === 1) {
           return new Promise<UnlistenFn>((r) => { resolveFirst = r; });
@@ -141,8 +139,7 @@ describe("ptyOutputDispatcher", () => {
       dispatch: vi.fn(async () => undefined),
       dispatchBrowserSurface: vi.fn(async () => undefined),
       listenStatusChanged: vi.fn(async () => () => undefined),
-      listenBrowserLocationObserved: vi.fn(async () => () => undefined),
-      listenTerminalOutput: vi.fn(() => {
+        listenTerminalOutput: vi.fn(() => {
         return new Promise<UnlistenFn>((r) => { resolveListener = r; });
       }),
     } satisfies RuntimeClient;

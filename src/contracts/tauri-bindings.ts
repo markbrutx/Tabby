@@ -57,7 +57,6 @@ async dispatchBrowserSurfaceCommand(command: BrowserSurfaceCommandDto) : Promise
 
 /** user-defined types **/
 
-export type BrowserLocationObservedEvent = { paneId: string; url: string }
 export type BrowserSurfaceBoundsDto = { x: number; y: number; width: number; height: number }
 export type BrowserSurfaceCommandDto = { kind: "ensure"; pane_id: string; url: string; bounds: BrowserSurfaceBoundsDto } | { kind: "setBounds"; pane_id: string; bounds: BrowserSurfaceBoundsDto } | { kind: "setVisible"; pane_id: string; visible: boolean } | { kind: "close"; pane_id: string }
 export type LayoutPresetDto = "1x1" | "1x2" | "2x2" | "2x3" | "3x3"

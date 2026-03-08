@@ -269,13 +269,6 @@ pub struct RuntimeStatusChangedEvent {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct BrowserLocationObservedEvent {
-    pub pane_id: String,
-    pub url: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
 pub struct WorkspaceProjectionUpdatedEvent {
     pub workspace: WorkspaceView,
 }

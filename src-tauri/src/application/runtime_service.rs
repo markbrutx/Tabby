@@ -1041,6 +1041,90 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
+    // US-025: Browser location observation → unified RuntimeStatusChangedEvent
+    // -----------------------------------------------------------------------
+
+    /// US-025: Browser location observation flows through RuntimeStatusChangedEvent
+    /// (not a separate BrowserLocationObservedEvent). Verifies: browser surface triggers
+    /// location change → registry updated → RuntimeStatusChangedEvent emitted with
+    /// updated browser_location.
+    #[test]
+    fn browser_location_observation_emits_runtime_status_changed() {
+        let (service, _terminal, _browser, emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = PaneSpec::Browser(BrowserPaneSpec {
+            initial_url: String::from("https://example.com"),
+        });
+
+        service
+            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .expect("start browser runtime");
+
+        // Clear initial emission from start_runtime
+        emitter.emitted.lock().expect("lock").clear();
+
+        // Simulate browser navigation observation (as browser_surface.rs would call)
+        service
+            .observe_browser_location("pane-b", "https://docs.rs/tauri")
+            .expect("observe should succeed");
+
+        // Verify: registry updated
+        let snapshot = service.snapshot().expect("snapshot");
+        let browser_runtime = snapshot
+            .iter()
+            .find(|r| r.pane_id == "pane-b")
+            .expect("found");
+        assert_eq!(
+            browser_runtime.browser_location.as_deref(),
+            Some("https://docs.rs/tauri"),
+            "registry should reflect observed browser location"
+        );
+
+        // Verify: RuntimeStatusChangedEvent was emitted (via publish_runtime_status)
+        let emitted = emitter.emitted.lock().expect("lock");
+        assert_eq!(emitted.len(), 1, "exactly one emission for location change");
+        assert_eq!(emitted[0].0, "pane-b");
+        assert_eq!(emitted[0].1, RuntimeStatus::Running);
+    }
+
+    /// US-025: on_browser_location_changed trait method also flows through RuntimeStatusChangedEvent
+    #[test]
+    fn on_browser_location_changed_trait_emits_runtime_status_changed() {
+        let (service, _terminal, _browser, emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = PaneSpec::Browser(BrowserPaneSpec {
+            initial_url: String::from("https://example.com"),
+        });
+
+        service
+            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .expect("start");
+        emitter.emitted.lock().expect("lock").clear();
+
+        // Call the trait method directly (as browser_surface.rs would via AppShell)
+        let pane_id = PaneId::from(String::from("pane-b"));
+        RuntimeObservationReceiver::on_browser_location_changed(
+            &service,
+            &pane_id,
+            "https://github.com",
+        );
+
+        let snapshot = service.snapshot().expect("snapshot");
+        let runtime = snapshot
+            .iter()
+            .find(|r| r.pane_id == "pane-b")
+            .expect("found");
+        assert_eq!(
+            runtime.browser_location.as_deref(),
+            Some("https://github.com"),
+        );
+
+        let emitted = emitter.emitted.lock().expect("lock");
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "pane-b");
+    }
+
+    // -----------------------------------------------------------------------
     // AC#5: Projection publishing works with mock publisher
     // -----------------------------------------------------------------------
 

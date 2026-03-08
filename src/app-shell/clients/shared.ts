@@ -1,7 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { commands, type Result } from "@/contracts/tauri-bindings";
 import type {
-  BrowserLocationObservedEvent,
   BrowserSurfaceCommandDto,
   PaneRuntimeView,
   RuntimeCommandDto,
@@ -40,9 +39,6 @@ export interface RuntimeClient {
   listenTerminalOutput: (
     handler: (payload: TerminalOutputEvent) => void,
   ) => Promise<UnlistenFn>;
-  listenBrowserLocationObserved: (
-    handler: (payload: BrowserLocationObservedEvent) => void,
-  ) => Promise<UnlistenFn>;
 }
 
 export interface AppShellClients {
@@ -55,7 +51,6 @@ export const WORKSPACE_PROJECTION_UPDATED_EVENT = "workspace_projection_updated"
 export const SETTINGS_PROJECTION_UPDATED_EVENT = "settings_projection_updated";
 export const RUNTIME_STATUS_CHANGED_EVENT = "runtime_status_changed";
 export const TERMINAL_OUTPUT_RECEIVED_EVENT = "terminal_output_received";
-export const BROWSER_LOCATION_OBSERVED_EVENT = "browser_location_observed";
 
 export function unwrapResult<T>(result: Result<T, unknown>): T {
   if (result.status === "ok") {
@@ -128,12 +123,6 @@ export function createTauriShellClients(): AppShellClients {
       async listenTerminalOutput(handler) {
         return listen<TerminalOutputEvent>(
           TERMINAL_OUTPUT_RECEIVED_EVENT,
-          (event) => handler(event.payload),
-        );
-      },
-      async listenBrowserLocationObserved(handler) {
-        return listen<BrowserLocationObservedEvent>(
-          BROWSER_LOCATION_OBSERVED_EVENT,
           (event) => handler(event.payload),
         );
       },

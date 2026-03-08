@@ -56,7 +56,6 @@ const mockBridge = {
   }),
   listenStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   listenTerminalOutput: vi.fn(() => Promise.resolve(() => {})),
-  listenBrowserLocationObserved: vi.fn(() => Promise.resolve(() => {})),
 } satisfies RuntimeClient;
 
 // Create a real store backed by the mock client and wire it into the module mock
