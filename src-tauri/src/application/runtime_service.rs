@@ -3,17 +3,14 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 use tracing::warn;
 
-use tabby_contracts::PaneRuntimeView;
-
 use crate::application::commands::RuntimeCommand;
-use tabby_runtime::{RuntimeRegistry, RuntimeStatus};
+use tabby_runtime::{PaneRuntime, RuntimeRegistry, RuntimeStatus};
 use tabby_settings::{resolve_terminal_profile, SettingsError, UserPreferences};
 use tabby_workspace::PaneSpec;
 
 use crate::application::ProjectionPublisher;
 use crate::shell::browser_surface;
 use crate::shell::error::ShellError;
-use crate::shell::mapping::pane_runtime_to_view;
 use crate::shell::pty::PtyManager;
 
 #[derive(Debug)]
@@ -40,7 +37,7 @@ impl RuntimeApplicationService {
         spec: &PaneSpec,
         preferences: &UserPreferences,
     ) -> Result<(), ShellError> {
-        let runtime_view = match spec {
+        let runtime = match spec {
             PaneSpec::Terminal(spec) => {
                 let resolved = resolve_terminal_profile(
                     &spec.launch_profile_id,
@@ -53,21 +50,16 @@ impl RuntimeApplicationService {
                     &spec.working_directory,
                     resolved.command.as_deref(),
                 )?;
-                let runtime = self
-                    .lock_runtimes()?
-                    .register_terminal(pane_id, runtime_session_id);
-                pane_runtime_to_view(&runtime)
+                self.lock_runtimes()?
+                    .register_terminal(pane_id, runtime_session_id)
             }
-            PaneSpec::Browser(spec) => {
-                let runtime = self.lock_runtimes()?.register_browser(
-                    pane_id,
-                    format!("browser-{}", uuid::Uuid::new_v4()),
-                    spec.initial_url.clone(),
-                );
-                pane_runtime_to_view(&runtime)
-            }
+            PaneSpec::Browser(spec) => self.lock_runtimes()?.register_browser(
+                pane_id,
+                format!("browser-{}", uuid::Uuid::new_v4()),
+                spec.initial_url.clone(),
+            ),
         };
-        self.publisher.emit_runtime_status(&runtime_view);
+        self.publisher.emit_runtime_status(&runtime);
         Ok(())
     }
 
@@ -107,8 +99,7 @@ impl RuntimeApplicationService {
 
         let mut exited = runtime;
         exited.status = RuntimeStatus::Exited;
-        self.publisher
-            .emit_runtime_status(&pane_runtime_to_view(&exited));
+        self.publisher.emit_runtime_status(&exited);
     }
 
     pub fn restart_runtime(
@@ -152,8 +143,7 @@ impl RuntimeApplicationService {
                     .update_browser_location(&pane_id, url)
                     .ok();
                 if let Some(runtime) = maybe_runtime {
-                    self.publisher
-                        .emit_runtime_status(&pane_runtime_to_view(&runtime));
+                    self.publisher.emit_runtime_status(&runtime);
                 }
             }
         }
@@ -161,13 +151,8 @@ impl RuntimeApplicationService {
         Ok(())
     }
 
-    pub fn snapshot(&self) -> Result<Vec<PaneRuntimeView>, ShellError> {
-        Ok(self
-            .lock_runtimes()?
-            .snapshot()
-            .iter()
-            .map(pane_runtime_to_view)
-            .collect())
+    pub fn snapshot(&self) -> Result<Vec<PaneRuntime>, ShellError> {
+        Ok(self.lock_runtimes()?.snapshot().to_vec())
     }
 
     fn lock_runtimes(&self) -> Result<std::sync::MutexGuard<'_, RuntimeRegistry>, ShellError> {

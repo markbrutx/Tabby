@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
-use tabby_contracts::WorkspaceBootstrapView;
-use tabby_settings::{built_in_profile_catalog, resolve_default_working_directory};
+use tabby_runtime::PaneRuntime;
+use tabby_settings::{resolve_default_working_directory, UserPreferences};
 use tabby_workspace::layout::LayoutPreset;
 use tabby_workspace::{PaneSpec, WorkspaceEvent};
 
@@ -10,7 +10,12 @@ use crate::application::{
 };
 use crate::cli::CliArgs;
 use crate::shell::error::ShellError;
-use crate::shell::mapping::profile_catalog_view_from_catalog;
+
+/// Domain-level result of bootstrapping — free of transport DTOs.
+pub struct BootstrapSnapshot {
+    pub preferences: UserPreferences,
+    pub runtimes: Vec<PaneRuntime>,
+}
 
 #[derive(Debug)]
 pub struct BootstrapService {
@@ -29,7 +34,7 @@ impl BootstrapService {
         workspace_service: &WorkspaceApplicationService,
         settings_service: &SettingsApplicationService,
         runtime_service: &RuntimeApplicationService,
-    ) -> Result<WorkspaceBootstrapView, ShellError> {
+    ) -> Result<BootstrapSnapshot, ShellError> {
         let cli_args = self
             .launch_overrides
             .lock()
@@ -53,11 +58,9 @@ impl BootstrapService {
             }
         }
 
-        Ok(WorkspaceBootstrapView {
-            workspace: workspace_service.workspace_view()?,
-            settings: settings_service.settings_view()?,
-            profile_catalog: profile_catalog_view_from_catalog(&built_in_profile_catalog()),
-            runtime_projections: runtime_service.snapshot()?,
+        Ok(BootstrapSnapshot {
+            preferences: settings_service.preferences()?,
+            runtimes: runtime_service.snapshot()?,
         })
     }
 

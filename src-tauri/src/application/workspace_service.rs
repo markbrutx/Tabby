@@ -1,13 +1,11 @@
 use std::sync::Mutex;
 
-use tabby_contracts::WorkspaceView;
 use tabby_workspace::layout::{LayoutPreset, SplitDirection};
 use tabby_workspace::{
     PaneSpec, TabLayoutStrategy, WorkspaceError, WorkspaceEvent, WorkspaceSession,
 };
 
 use crate::shell::error::ShellError;
-use crate::shell::mapping::workspace_view_from_session;
 
 #[derive(Debug)]
 pub struct WorkspaceApplicationService {
@@ -21,14 +19,17 @@ impl WorkspaceApplicationService {
         }
     }
 
-    pub fn workspace_view(&self) -> Result<WorkspaceView, ShellError> {
+    pub fn with_session<F, R>(&self, f: F) -> Result<R, ShellError>
+    where
+        F: FnOnce(&WorkspaceSession) -> R,
+    {
         let workspace = self.lock_workspace()?;
-        Ok(workspace_view_from_session(&workspace))
+        Ok(f(&workspace))
     }
 
     pub fn is_empty(&self) -> Result<bool, ShellError> {
-        let view = self.workspace_view()?;
-        Ok(view.tabs.is_empty())
+        let workspace = self.lock_workspace()?;
+        Ok(workspace.tab_summaries().is_empty())
     }
 
     pub fn pane_spec(&self, pane_id: &str) -> Result<Option<PaneSpec>, ShellError> {
@@ -154,11 +155,10 @@ mod tests {
             !events.is_empty(),
             "should emit at least one PaneAdded event"
         );
-        let view = service
-            .workspace_view()
-            .expect("workspace_view should succeed");
-        assert_eq!(view.tabs.len(), 1, "workspace should have one tab");
-        assert_eq!(view.tabs[0].panes.len(), 1, "tab should have one pane");
+        let tab_count = service
+            .with_session(|session| session.tab_summaries().len())
+            .expect("with_session should succeed");
+        assert_eq!(tab_count, 1, "workspace should have one tab");
     }
 
     #[test]
@@ -169,20 +169,19 @@ mod tests {
             .open_tab(LayoutPreset::OneByTwo, false, specs)
             .expect("open_tab should succeed");
 
-        let view = service.workspace_view().expect("workspace_view");
-        let pane_id = &view.tabs[0].panes[0].pane_id;
+        let pane_id = service
+            .with_session(|session| session.tab_summaries()[0].panes[0].pane_id.clone())
+            .expect("with_session");
 
         let events = service
-            .close_pane(pane_id)
+            .close_pane(&pane_id)
             .expect("close_pane should succeed");
 
         assert!(!events.is_empty(), "should emit PaneRemoved event");
-        let view_after = service.workspace_view().expect("workspace_view");
-        assert_eq!(
-            view_after.tabs[0].panes.len(),
-            1,
-            "should have one pane remaining"
-        );
+        let pane_count = service
+            .with_session(|session| session.tab_summaries()[0].panes.len())
+            .expect("with_session");
+        assert_eq!(pane_count, 1, "should have one pane remaining");
     }
 
     #[test]
@@ -193,20 +192,19 @@ mod tests {
             .open_tab(LayoutPreset::OneByOne, false, specs)
             .expect("open_tab should succeed");
 
-        let view = service.workspace_view().expect("workspace_view");
-        let pane_id = &view.tabs[0].panes[0].pane_id;
+        let pane_id = service
+            .with_session(|session| session.tab_summaries()[0].panes[0].pane_id.clone())
+            .expect("with_session");
 
         let events = service
-            .split_pane(pane_id, SplitDirection::Horizontal, terminal_spec("split"))
+            .split_pane(&pane_id, SplitDirection::Horizontal, terminal_spec("split"))
             .expect("split_pane should succeed");
 
         assert!(!events.is_empty(), "should emit PaneAdded event");
-        let view_after = service.workspace_view().expect("workspace_view");
-        assert_eq!(
-            view_after.tabs[0].panes.len(),
-            2,
-            "should have two panes after split"
-        );
+        let pane_count = service
+            .with_session(|session| session.tab_summaries()[0].panes.len())
+            .expect("with_session");
+        assert_eq!(pane_count, 2, "should have two panes after split");
     }
 
     #[test]

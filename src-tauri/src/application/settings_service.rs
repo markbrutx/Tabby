@@ -4,16 +4,14 @@ use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 use tracing::warn;
 
-use tabby_contracts::SettingsView;
 use tabby_settings::{
     default_preferences, normalize_preferences, validate_preferences, SettingsError,
     UserPreferences,
 };
 
 use crate::application::commands::SettingsCommand;
-
+use crate::mapping::dto_mappers;
 use crate::shell::error::ShellError;
-use crate::shell::mapping::{preferences_from_settings_view, settings_view_from_preferences};
 
 const STORE_PATH: &str = "tabby-settings.json";
 const SETTINGS_KEY: &str = "settings";
@@ -46,15 +44,10 @@ impl SettingsApplicationService {
             .map(|guard| guard.clone())
     }
 
-    pub fn settings_view(&self) -> Result<SettingsView, ShellError> {
-        let preferences = self.preferences()?;
-        Ok(settings_view_from_preferences(&preferences))
-    }
-
     pub fn dispatch_settings_command(
         &self,
         command: SettingsCommand,
-    ) -> Result<(UserPreferences, SettingsView), ShellError> {
+    ) -> Result<UserPreferences, ShellError> {
         let next_preferences = match command {
             SettingsCommand::Update(update) => {
                 let next = normalize_preferences(update.preferences);
@@ -65,20 +58,18 @@ impl SettingsApplicationService {
         };
 
         self.persist_preferences(&next_preferences)?;
-        let view = settings_view_from_preferences(&next_preferences);
-        Ok((next_preferences, view))
+        Ok(next_preferences)
     }
 
     pub fn persist_preferences(
         &self,
         next_preferences: &UserPreferences,
     ) -> Result<(), ShellError> {
-        let settings_view = settings_view_from_preferences(next_preferences);
         let store = self
             .app
             .store(STORE_PATH)
             .map_err(|error| ShellError::Store(error.to_string()))?;
-        let value = serde_json::to_value(settings_view)
+        let value = dto_mappers::serialize_preferences(next_preferences)
             .map_err(|error| ShellError::Serialization(error.to_string()))?;
         store.set(SETTINGS_KEY, value);
 
@@ -98,7 +89,7 @@ fn load_preferences(app: &AppHandle) -> Result<UserPreferences, ShellError> {
 
     let loaded = decode_preferences(store.get(SETTINGS_KEY))?;
     if loaded.should_persist {
-        let value = serde_json::to_value(settings_view_from_preferences(&loaded.preferences))
+        let value = dto_mappers::serialize_preferences(&loaded.preferences)
             .map_err(|error| ShellError::Serialization(error.to_string()))?;
         store.set(SETTINGS_KEY, value);
     }
@@ -114,9 +105,9 @@ fn decode_preferences(value: Option<serde_json::Value>) -> Result<LoadedPreferen
         });
     };
 
-    match serde_json::from_value::<SettingsView>(value) {
-        Ok(saved) => {
-            let preferences = normalize_preferences(preferences_from_settings_view(&saved));
+    match dto_mappers::deserialize_preferences(value) {
+        Ok(raw) => {
+            let preferences = normalize_preferences(raw);
             validate_preferences(&preferences).map_err(settings_error_to_shell)?;
             Ok(LoadedPreferences {
                 preferences,

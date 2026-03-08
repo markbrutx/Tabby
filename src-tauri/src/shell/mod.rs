@@ -1,6 +1,5 @@
 pub(crate) mod browser_surface;
 pub mod error;
-pub(crate) mod mapping;
 pub(crate) mod pty;
 
 use tauri::AppHandle;
@@ -9,7 +8,7 @@ use tabby_contracts::{
     RuntimeCommandDto, SettingsCommandDto, SettingsView, WorkspaceBootstrapView,
     WorkspaceCommandDto, WorkspaceView,
 };
-use tabby_settings::default_preferences;
+use tabby_settings::{built_in_profile_catalog, default_preferences};
 use tabby_workspace::layout::LayoutPreset;
 use tabby_workspace::WorkspaceEvent;
 
@@ -19,10 +18,8 @@ use crate::application::{
     WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
+use crate::mapping::dto_mappers;
 use crate::shell::error::ShellError;
-use crate::shell::mapping::{
-    runtime_command_from_dto, settings_command_from_dto, workspace_command_from_dto,
-};
 
 pub const WORKSPACE_PROJECTION_UPDATED_EVENT: &str = "workspace_projection_updated";
 pub const SETTINGS_PROJECTION_UPDATED_EVENT: &str = "settings_projection_updated";
@@ -52,11 +49,22 @@ impl AppShell {
     }
 
     pub fn bootstrap(&self) -> Result<WorkspaceBootstrapView, ShellError> {
-        self.bootstrap_service.bootstrap(
+        let snapshot = self.bootstrap_service.bootstrap(
             &self.workspace_service,
             &self.settings_service,
             &self.runtime_service,
-        )
+        )?;
+
+        let view = self.workspace_service.with_session(|session| {
+            dto_mappers::bootstrap_view(
+                session,
+                &snapshot.preferences,
+                &built_in_profile_catalog(),
+                &snapshot.runtimes,
+            )
+        })?;
+
+        Ok(view)
     }
 
     pub fn apply_cli_launch_request(&self, cli_args: CliArgs) -> Result<(), ShellError> {
@@ -73,11 +81,13 @@ impl AppShell {
         dto: WorkspaceCommandDto,
     ) -> Result<WorkspaceView, ShellError> {
         let default_layout = self.resolve_default_layout();
-        let command = workspace_command_from_dto(dto, default_layout);
+        let command = dto_mappers::workspace_command_from_dto(dto, default_layout);
         self.execute_workspace_command(command)?;
 
-        let view = self.workspace_service.workspace_view()?;
-        self.emit_workspace_projection(&view);
+        let view = self
+            .workspace_service
+            .with_session(dto_mappers::workspace_view_from_session)?;
+        self.publisher.emit_workspace_projection_from_view(&view);
         Ok(view)
     }
 
@@ -85,9 +95,10 @@ impl AppShell {
         &self,
         dto: SettingsCommandDto,
     ) -> Result<SettingsView, ShellError> {
-        let command = settings_command_from_dto(dto);
-        let (_preferences, settings) = self.settings_service.dispatch_settings_command(command)?;
-        self.emit_settings_projection(&settings);
+        let command = dto_mappers::settings_command_from_dto(dto);
+        let preferences = self.settings_service.dispatch_settings_command(command)?;
+        let settings = dto_mappers::settings_view_from_preferences(&preferences);
+        self.publisher.emit_settings_projection(&preferences);
         Ok(settings)
     }
 
@@ -96,7 +107,7 @@ impl AppShell {
         window: &tauri::Window,
         dto: RuntimeCommandDto,
     ) -> Result<(), ShellError> {
-        let command = runtime_command_from_dto(dto);
+        let command = dto_mappers::runtime_command_from_dto(dto);
         self.runtime_service
             .dispatch_runtime_command(window, command)
     }
@@ -180,13 +191,5 @@ impl AppShell {
             &self.settings_service,
             &self.runtime_service,
         )
-    }
-
-    fn emit_workspace_projection(&self, workspace: &WorkspaceView) {
-        self.publisher.emit_workspace_projection(workspace);
-    }
-
-    fn emit_settings_projection(&self, settings: &SettingsView) {
-        self.publisher.emit_settings_projection(settings);
     }
 }
