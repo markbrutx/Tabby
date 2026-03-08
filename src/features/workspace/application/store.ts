@@ -16,7 +16,6 @@ import type {
 } from "@/features/workspace/domain/models";
 import { mapPaneSpecToDto, mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
 import type { WorkspaceClient } from "@/app-shell/clients";
-import type { SettingsReadModel } from "@/features/settings/domain/models";
 import type { SetupWizardConfig, WizardTab } from "@/features/workspace/store/types";
 
 export interface WorkspaceStore {
@@ -101,12 +100,7 @@ function toPaneSpec(group: SetupWizardConfig["groups"][number]): PaneSpecDto[] {
 
 export interface WorkspaceStoreDeps {
   workspaceClient: WorkspaceClient;
-  getSettingsStore: () => {
-    getState: () => {
-      settings: SettingsReadModel | null;
-      updateSettings: (settings: SettingsReadModel) => Promise<void>;
-    };
-  };
+  onOnboardingComplete: () => void;
 }
 
 export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
@@ -163,11 +157,7 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
             pane_specs: config.groups.flatMap(toPaneSpec),
           } satisfies WorkspaceCommandDto),
         () => {
-          const settingsState = deps.getSettingsStore().getState();
-          const settings = settingsState.settings;
-          if (settings && !settings.hasCompletedOnboarding) {
-            void settingsState.updateSettings({ ...settings, hasCompletedOnboarding: true });
-          }
+          deps.onOnboardingComplete();
           return {};
         },
       );

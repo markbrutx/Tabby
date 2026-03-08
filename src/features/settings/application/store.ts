@@ -17,6 +17,7 @@ export interface SettingsState {
   loadBootstrap: (settings: SettingsView, profiles: readonly { id: string; label: string; description: string; startupCommandTemplate: string | null }[]) => void;
   initializeListeners: () => Promise<void>;
   updateSettings: (settings: SettingsReadModel) => Promise<void>;
+  markOnboardingComplete: () => Promise<void>;
   resetSettings: () => Promise<void>;
 }
 
@@ -76,6 +77,13 @@ export function createSettingsStore(settingsClient: SettingsClient) {
         set({ settings: mapSettingsFromDto(nextDto) });
       } catch (error) {
         throw new Error(asErrorMessage(error));
+      }
+    },
+
+    async markOnboardingComplete() {
+      const current = get().settings;
+      if (current && !current.hasCompletedOnboarding) {
+        await get().updateSettings({ ...current, hasCompletedOnboarding: true });
       }
     },
 

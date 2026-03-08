@@ -12,10 +12,12 @@ export interface BootstrapableWorkspaceStore {
 
 export interface BootstrapableSettingsStore {
   getState: () => {
+    settings: { readonly hasCompletedOnboarding: boolean } | null;
     loadBootstrap: (
       settings: WorkspaceBootstrapView["settings"],
       profiles: WorkspaceBootstrapView["profileCatalog"]["terminalProfiles"],
     ) => void;
+    markOnboardingComplete: () => Promise<void>;
   };
 }
 
@@ -34,6 +36,7 @@ export interface AppBootstrapCoordinatorDeps {
 
 export interface AppBootstrapCoordinator {
   initialize: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
 }
 
 export function createAppBootstrapCoordinator(
@@ -56,6 +59,14 @@ export function createAppBootstrapCoordinator(
         await deps.workspaceStore.getState().loadBootstrap(payload);
       } catch (error) {
         deps.workspaceStore.getState().setBootstrapError(asErrorMessage(error));
+      }
+    },
+
+    async completeOnboarding() {
+      const settingsState = deps.settingsStore.getState();
+      const settings = settingsState.settings;
+      if (settings && !settings.hasCompletedOnboarding) {
+        await settingsState.markOnboardingComplete();
       }
     },
   };

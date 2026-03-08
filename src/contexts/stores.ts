@@ -8,14 +8,26 @@ export const useSettingsStore = createSettingsStore(shellClients.settings);
 
 export const useRuntimeStore = createRuntimeStore(shellClients.runtime);
 
-export const useWorkspaceStore = createWorkspaceStore({
+const coordinatorDeps = {
   workspaceClient: shellClients.workspace,
-  getSettingsStore: () => useSettingsStore,
-});
-
-export const bootstrapCoordinator = createAppBootstrapCoordinator({
-  workspaceClient: shellClients.workspace,
-  workspaceStore: useWorkspaceStore,
   settingsStore: useSettingsStore,
   runtimeStore: useRuntimeStore,
+};
+
+// Coordinator is created first so workspace store can reference it via closure.
+// The workspaceStore dep is assigned immediately after store creation.
+let coordinator: ReturnType<typeof createAppBootstrapCoordinator>;
+
+export const useWorkspaceStore = createWorkspaceStore({
+  workspaceClient: shellClients.workspace,
+  onOnboardingComplete: () => {
+    void coordinator.completeOnboarding();
+  },
 });
+
+coordinator = createAppBootstrapCoordinator({
+  ...coordinatorDeps,
+  workspaceStore: useWorkspaceStore,
+});
+
+export const bootstrapCoordinator = coordinator;

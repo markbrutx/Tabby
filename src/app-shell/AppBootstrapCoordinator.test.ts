@@ -95,7 +95,9 @@ function makeMockDeps(
 
   const settingsStore: BootstrapableSettingsStore = {
     getState: () => ({
+      settings: null,
       loadBootstrap: vi.fn(),
+      markOnboardingComplete: vi.fn().mockResolvedValue(undefined),
     }),
   };
 
@@ -144,7 +146,9 @@ describe("AppBootstrapCoordinator", () => {
       },
       settingsStore: {
         getState: () => ({
+          settings: null,
           loadBootstrap: loadSettings,
+          markOnboardingComplete: vi.fn().mockResolvedValue(undefined),
         }),
       },
       runtimeStore: {
@@ -187,7 +191,9 @@ describe("AppBootstrapCoordinator", () => {
       },
       settingsStore: {
         getState: () => ({
+          settings: null,
           loadBootstrap: loadSettings,
+          markOnboardingComplete: vi.fn().mockResolvedValue(undefined),
         }),
       },
       runtimeStore: {
@@ -203,6 +209,69 @@ describe("AppBootstrapCoordinator", () => {
     expect(setBootstrapError).toHaveBeenCalledWith("network failure");
     expect(loadSettings).not.toHaveBeenCalled();
     expect(loadRuntime).not.toHaveBeenCalled();
+  });
+
+  it("completeOnboarding updates settings through coordinator, not through workspace store", async () => {
+    const markOnboardingComplete = vi.fn().mockResolvedValue(undefined);
+    const settingsStore: BootstrapableSettingsStore = {
+      getState: () => ({
+        settings: { hasCompletedOnboarding: false },
+        loadBootstrap: vi.fn(),
+        markOnboardingComplete,
+      }),
+    };
+
+    const { deps } = makeMockDeps();
+    const coordinator = createAppBootstrapCoordinator({
+      ...deps,
+      settingsStore,
+    });
+
+    await coordinator.completeOnboarding();
+
+    expect(markOnboardingComplete).toHaveBeenCalledOnce();
+  });
+
+  it("completeOnboarding is a no-op when onboarding is already complete", async () => {
+    const markOnboardingComplete = vi.fn().mockResolvedValue(undefined);
+    const settingsStore: BootstrapableSettingsStore = {
+      getState: () => ({
+        settings: { hasCompletedOnboarding: true },
+        loadBootstrap: vi.fn(),
+        markOnboardingComplete,
+      }),
+    };
+
+    const { deps } = makeMockDeps();
+    const coordinator = createAppBootstrapCoordinator({
+      ...deps,
+      settingsStore,
+    });
+
+    await coordinator.completeOnboarding();
+
+    expect(markOnboardingComplete).not.toHaveBeenCalled();
+  });
+
+  it("completeOnboarding is a no-op when settings are null", async () => {
+    const markOnboardingComplete = vi.fn().mockResolvedValue(undefined);
+    const settingsStore: BootstrapableSettingsStore = {
+      getState: () => ({
+        settings: null,
+        loadBootstrap: vi.fn(),
+        markOnboardingComplete,
+      }),
+    };
+
+    const { deps } = makeMockDeps();
+    const coordinator = createAppBootstrapCoordinator({
+      ...deps,
+      settingsStore,
+    });
+
+    await coordinator.completeOnboarding();
+
+    expect(markOnboardingComplete).not.toHaveBeenCalled();
   });
 
   it("distributes settings before runtime before workspace", async () => {
@@ -227,9 +296,11 @@ describe("AppBootstrapCoordinator", () => {
       },
       settingsStore: {
         getState: () => ({
+          settings: null,
           loadBootstrap: vi.fn().mockImplementation(() => {
             callOrder.push("settings");
           }),
+          markOnboardingComplete: vi.fn().mockResolvedValue(undefined),
         }),
       },
       runtimeStore: {

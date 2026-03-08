@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WorkspaceBootstrapView, WorkspaceView } from "@/contracts/tauri-bindings";
 import type { WorkspaceClient } from "@/app-shell/clients";
-import type { SettingsReadModel } from "@/features/settings/domain/models";
 import { createWorkspaceStore } from "./store";
 import type { WorkspaceStoreDeps } from "./store";
 
@@ -75,17 +74,12 @@ function makeMockWorkspaceClient(
 
 function makeMockDeps(
   clientOverrides?: Partial<WorkspaceClient>,
+  depsOverrides?: Partial<WorkspaceStoreDeps>,
 ): WorkspaceStoreDeps {
-  const settingsStore = {
-    getState: () => ({
-      settings: null as SettingsReadModel | null,
-      updateSettings: vi.fn().mockResolvedValue(undefined),
-    }),
-  };
-
   return {
     workspaceClient: makeMockWorkspaceClient(clientOverrides),
-    getSettingsStore: () => settingsStore,
+    onOnboardingComplete: vi.fn(),
+    ...depsOverrides,
   };
 }
 
@@ -335,11 +329,13 @@ describe("createWorkspaceStore", () => {
     expect(store.getState().wizardTab).not.toBeNull();
   });
 
-  it("createTabFromWizard dispatches openTab and marks onboarding complete", async () => {
+  it("createTabFromWizard dispatches openTab and calls onOnboardingComplete", async () => {
     const tabView = makeWorkspaceView();
-    const deps = makeMockDeps({
-      dispatch: vi.fn().mockResolvedValue(tabView),
-    });
+    const onOnboardingComplete = vi.fn();
+    const deps = makeMockDeps(
+      { dispatch: vi.fn().mockResolvedValue(tabView) },
+      { onOnboardingComplete },
+    );
     const store = createWorkspaceStore(deps);
 
     await store.getState().loadBootstrap(makeBootstrapPayload());
@@ -360,6 +356,7 @@ describe("createWorkspaceStore", () => {
         auto_layout: true,
       }),
     );
+    expect(onOnboardingComplete).toHaveBeenCalledOnce();
   });
 
   it("dispatches closePane command through injected client", async () => {

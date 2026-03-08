@@ -1,5 +1,41 @@
 # Progress Log
 
+## 2026-03-09 00:30 - US-022: Extract bootstrap orchestration from workspace store to AppBootstrapCoordinator
+Thread:
+Run: 20260308-215923-84117 (iteration 23)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-23.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-23.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 92f1ead feat: extract bootstrap orchestration to AppBootstrapCoordinator (US-022)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (178 tests, 18 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (237 tests)
+- Files changed:
+  - src/app-shell/AppBootstrapCoordinator.ts (NEW — coordinator module)
+  - src/app-shell/AppBootstrapCoordinator.test.ts (NEW — 3 tests)
+  - src/features/workspace/application/store.ts (removed initialize(), added beginBootstrap/loadBootstrap/setBootstrapError, removed cross-store deps)
+  - src/features/workspace/application/store.test.ts (updated for new API)
+  - src/contexts/stores.ts (wires coordinator, removes cross-store deps from workspace store)
+  - src/App.tsx (calls bootstrapCoordinator.initialize() instead of workspace store)
+- What was implemented:
+  - Created AppBootstrapCoordinator in src/app-shell/ that orchestrates the bootstrap sequence
+  - Coordinator calls workspaceClient.bootstrap(), then distributes data to settings store, runtime store, and workspace store
+  - Workspace store no longer calls getSettingsStore().loadBootstrap() or getRuntimeStore().loadBootstrap()
+  - Workspace store has no import of settings/runtime store for bootstrap purposes (settings store dep remains for onboarding flow in createTabFromWizard only)
+  - App.tsx calls bootstrapCoordinator.initialize() instead of workspace store directly
+  - Added 3 coordinator tests: distributes to all stores, handles errors, verifies ordering
+- **Learnings for future iterations:**
+  - Workspace store still needs settings store access for non-bootstrap concerns (onboarding flag in createTabFromWizard) — this is acceptable per AC
+  - The coordinator is a plain object (not a zustand store) since React doesn't need to subscribe to its state — isHydrating/error live in workspace store
+  - DTO boundary script correctly allows the new file since it doesn't use snake_case field names
+---
+
 ## 2026-03-09 00:17 - US-021: Ensure generated DTO field naming exists only at transport boundary
 Thread:
 Run: 20260308-215923-84117 (iteration 22)
