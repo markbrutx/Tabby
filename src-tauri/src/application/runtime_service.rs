@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Manager};
 use tracing::warn;
@@ -39,6 +39,7 @@ impl RuntimeApplicationService {
         pane_id: &str,
         spec: &PaneSpec,
         preferences: &UserPreferences,
+        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<(), ShellError> {
         let runtime = match spec {
             PaneSpec::Terminal(spec) => {
@@ -52,6 +53,7 @@ impl RuntimeApplicationService {
                     pane_id,
                     &spec.working_directory,
                     resolved.command.as_deref(),
+                    observation_receiver,
                 )?;
                 self.lock_runtimes()?
                     .register_terminal(pane_id, RuntimeSessionId::from(pty_session_id))
@@ -110,9 +112,10 @@ impl RuntimeApplicationService {
         pane_id: &str,
         spec: &PaneSpec,
         preferences: &UserPreferences,
+        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<(), ShellError> {
         self.stop_runtime(pane_id);
-        self.start_runtime(pane_id, spec, preferences)
+        self.start_runtime(pane_id, spec, preferences, observation_receiver)
     }
 
     pub fn dispatch_runtime_command(

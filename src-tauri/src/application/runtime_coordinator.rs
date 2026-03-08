@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use tabby_workspace::WorkspaceDomainEvent;
 
+use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use crate::application::{RuntimeApplicationService, SettingsApplicationService};
 use crate::shell::error::ShellError;
 
@@ -25,6 +28,7 @@ impl RuntimeCoordinator {
         events: Vec<WorkspaceDomainEvent>,
         settings_service: &SettingsApplicationService,
         runtime_service: &RuntimeApplicationService,
+        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<(), ShellError> {
         if events.is_empty() {
             return Ok(());
@@ -35,10 +39,20 @@ impl RuntimeCoordinator {
         for event in events {
             match event {
                 WorkspaceDomainEvent::PaneAdded { pane_id, spec } => {
-                    runtime_service.start_runtime(pane_id.as_ref(), &spec, &preferences)?;
+                    runtime_service.start_runtime(
+                        pane_id.as_ref(),
+                        &spec,
+                        &preferences,
+                        Arc::clone(&observation_receiver),
+                    )?;
                 }
                 WorkspaceDomainEvent::PaneSpecReplaced { pane_id, spec } => {
-                    runtime_service.start_runtime(pane_id.as_ref(), &spec, &preferences)?;
+                    runtime_service.start_runtime(
+                        pane_id.as_ref(),
+                        &spec,
+                        &preferences,
+                        Arc::clone(&observation_receiver),
+                    )?;
                 }
                 WorkspaceDomainEvent::PaneRemoved { pane_id, .. } => {
                     runtime_service.stop_runtime(pane_id.as_ref());

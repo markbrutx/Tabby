@@ -2,6 +2,8 @@ pub(crate) mod browser_surface;
 pub mod error;
 pub(crate) mod pty;
 
+use std::sync::Arc;
+
 use tauri::AppHandle;
 
 use tabby_contracts::{
@@ -13,6 +15,7 @@ use tabby_workspace::layout::LayoutPreset;
 use tabby_workspace::WorkspaceDomainEvent;
 
 use crate::application::commands::WorkspaceCommand;
+use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use crate::application::{
     BootstrapService, ProjectionPublisher, RuntimeApplicationService, RuntimeCoordinator,
     SettingsApplicationService, WorkspaceApplicationService,
@@ -31,7 +34,7 @@ pub struct AppShell {
     bootstrap_service: BootstrapService,
     settings_service: SettingsApplicationService,
     workspace_service: WorkspaceApplicationService,
-    runtime_service: RuntimeApplicationService,
+    runtime_service: Arc<RuntimeApplicationService>,
     publisher: ProjectionPublisher,
 }
 
@@ -41,7 +44,7 @@ impl AppShell {
         Ok(Self {
             bootstrap_service: BootstrapService::new(cli_args),
             workspace_service: WorkspaceApplicationService::new(),
-            runtime_service: RuntimeApplicationService::new(app.clone()),
+            runtime_service: Arc::new(RuntimeApplicationService::new(app.clone())),
             publisher: ProjectionPublisher::new(app),
             settings_service,
         })
@@ -52,6 +55,7 @@ impl AppShell {
             &self.workspace_service,
             &self.settings_service,
             &self.runtime_service,
+            self.observation_receiver(),
         )?;
 
         let view = self.workspace_service.with_session(|session| {
@@ -72,6 +76,7 @@ impl AppShell {
             &self.workspace_service,
             &self.settings_service,
             &self.runtime_service,
+            self.observation_receiver(),
         )
     }
 
@@ -197,8 +202,12 @@ impl AppShell {
                     .pane_spec(&pane_id)?
                     .ok_or_else(|| ShellError::NotFound(format!("pane {pane_id}")))?;
                 let preferences = self.settings_service.preferences()?;
-                self.runtime_service
-                    .restart_runtime(pane_id.as_ref(), &spec, &preferences)?;
+                self.runtime_service.restart_runtime(
+                    pane_id.as_ref(),
+                    &spec,
+                    &preferences,
+                    self.observation_receiver(),
+                )?;
             }
         }
         Ok(())
@@ -212,11 +221,16 @@ impl AppShell {
         LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne)
     }
 
+    fn observation_receiver(&self) -> Arc<dyn RuntimeObservationReceiver> {
+        Arc::clone(&self.runtime_service) as Arc<dyn RuntimeObservationReceiver>
+    }
+
     fn apply_workspace_events(&self, events: Vec<WorkspaceDomainEvent>) -> Result<(), ShellError> {
         RuntimeCoordinator::handle_workspace_events(
             events,
             &self.settings_service,
             &self.runtime_service,
+            self.observation_receiver(),
         )
     }
 }

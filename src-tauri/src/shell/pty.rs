@@ -7,13 +7,12 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use tauri::{AppHandle, Emitter};
 use tracing::warn;
 
-use tabby_contracts::{
-    PaneRuntimeView, RuntimeKindDto, RuntimeStatusChangedEvent, RuntimeStatusDto,
-    TerminalOutputEvent,
-};
+use tabby_contracts::TerminalOutputEvent;
+use tabby_workspace::PaneId;
 
+use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use crate::shell::error::ShellError;
-use crate::shell::{RUNTIME_STATUS_CHANGED_EVENT, TERMINAL_OUTPUT_RECEIVED_EVENT};
+use crate::shell::TERMINAL_OUTPUT_RECEIVED_EVENT;
 
 struct PtySession {
     writer: Mutex<Box<dyn Write + Send>>,
@@ -46,6 +45,7 @@ impl PtyManager {
         pane_id: &str,
         working_directory: &str,
         startup_command: Option<&str>,
+        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<String, ShellError> {
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -115,11 +115,9 @@ impl PtyManager {
                 }
             }
 
-            let event =
-                build_terminal_exit_event(&pane_id, &runtime_session_id_for_thread, &session);
-            if let Err(error) = app.emit(RUNTIME_STATUS_CHANGED_EVENT, event) {
-                warn!(?error, "Failed to emit terminal exit event");
-            }
+            let exit_code = resolve_exit_code(&session);
+            let domain_pane_id = PaneId::from(pane_id);
+            observation_receiver.on_terminal_exited(&domain_pane_id, exit_code);
         });
 
         Ok(runtime_session_id)
@@ -243,41 +241,16 @@ fn extract_valid_utf8(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
     }
 }
 
-fn build_terminal_exit_event(
-    pane_id: &str,
-    runtime_session_id: &str,
-    session: &PtySession,
-) -> RuntimeStatusChangedEvent {
-    let (status, last_error) = match session.child.lock() {
-        Ok(mut child) => match child.try_wait() {
-            Ok(Some(exit_status)) if exit_status.success() => (RuntimeStatusDto::Exited, None),
-            Ok(Some(exit_status)) => (
-                RuntimeStatusDto::Failed,
-                Some(format!(
-                    "Process exited with code {}",
-                    exit_status.exit_code()
-                )),
-            ),
-            Ok(None) => (RuntimeStatusDto::Exited, None),
-            Err(_) => (
-                RuntimeStatusDto::Failed,
-                Some(String::from("Failed to read process exit status")),
-            ),
-        },
-        Err(_) => (
-            RuntimeStatusDto::Failed,
-            Some(String::from("Child lock poisoned")),
-        ),
-    };
-
-    RuntimeStatusChangedEvent {
-        runtime: PaneRuntimeView {
-            pane_id: String::from(pane_id),
-            runtime_session_id: Some(String::from(runtime_session_id)),
-            kind: RuntimeKindDto::Terminal,
-            status,
-            last_error,
-            browser_location: None,
-        },
+/// Extracts the exit code from the PTY child process.
+/// Returns `None` if the status could not be determined (lock poisoned, still running, etc.).
+fn resolve_exit_code(session: &PtySession) -> Option<i32> {
+    let mut child = session.child.lock().ok()?;
+    match child.try_wait() {
+        Ok(Some(exit_status)) => {
+            let code = exit_status.exit_code();
+            Some(i32::try_from(code).unwrap_or(i32::MAX))
+        }
+        Ok(None) => None,
+        Err(_) => None,
     }
 }

@@ -9,9 +9,8 @@ use tabby_workspace::PaneId;
 /// All parameters use domain types only — no Tauri `AppHandle`, no DTO types,
 /// no transport event shapes.
 ///
-/// Infrastructure will be wired to call this trait in a future story.
-/// The trait and its implementation on `RuntimeApplicationService` are
-/// introduced here; actual infra callers follow in subsequent stories.
+/// `on_terminal_exited` is wired to PTY infrastructure (US-005).
+/// Remaining methods will be wired to infrastructure in subsequent stories.
 #[allow(dead_code)]
 pub trait RuntimeObservationReceiver: Send + Sync {
     /// Called by the PTY read thread when terminal output data is available.
@@ -186,5 +185,130 @@ mod tests {
         assert_eq!(log.terminal_cwds.len(), 2);
         assert_eq!(log.terminal_cwds[0].1, "/a");
         assert_eq!(log.terminal_cwds[1].1, "/b");
+    }
+
+    // --- Integration-style test: PTY exit → on_terminal_exited → registry update → projection ---
+
+    use tabby_runtime::{RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
+
+    /// A receiver backed by a real `RuntimeRegistry`, simulating what
+    /// `RuntimeApplicationService.on_terminal_exited()` does without
+    /// requiring a Tauri `AppHandle`.
+    struct RegistryBackedReceiver {
+        registry: Mutex<RuntimeRegistry>,
+        projections_emitted: Mutex<Vec<(String, RuntimeStatus)>>,
+    }
+
+    impl RegistryBackedReceiver {
+        fn new(registry: RuntimeRegistry) -> Self {
+            Self {
+                registry: Mutex::new(registry),
+                projections_emitted: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl RuntimeObservationReceiver for RegistryBackedReceiver {
+        fn on_terminal_output_received(&self, _pane_id: &PaneId, _data: &[u8]) {}
+
+        fn on_terminal_exited(&self, pane_id: &PaneId, exit_code: Option<i32>) {
+            let failed = exit_code.is_some_and(|code| code != 0);
+            let message = exit_code
+                .filter(|code| *code != 0)
+                .map(|code| format!("Process exited with code {code}"));
+
+            if let Ok(mut runtimes) = self.registry.lock() {
+                if let Ok(runtime) =
+                    runtimes.mark_terminal_exit(pane_id.as_ref(), None, failed, message)
+                {
+                    // Simulate projection emit
+                    if let Ok(mut projections) = self.projections_emitted.lock() {
+                        projections.push((runtime.pane_id.clone(), runtime.status));
+                    }
+                }
+            }
+        }
+
+        fn on_browser_location_changed(&self, _pane_id: &PaneId, _url: &str) {}
+        fn on_terminal_cwd_changed(&self, _pane_id: &PaneId, _cwd: &str) {}
+    }
+
+    #[test]
+    fn pty_exit_triggers_registry_update_and_projection_via_receiver() {
+        // Setup: register a terminal runtime in the registry
+        let mut registry = RuntimeRegistry::default();
+        let session_id = RuntimeSessionId::from(String::from("pty-session-1"));
+        registry.register_terminal("pane-1", session_id);
+
+        // Create receiver backed by registry (simulates RuntimeApplicationService)
+        let receiver = RegistryBackedReceiver::new(registry);
+
+        // Simulate PTY exit: infrastructure calls on_terminal_exited
+        let pane_id = pane("pane-1");
+        receiver.on_terminal_exited(&pane_id, Some(0));
+
+        // Verify: registry was updated with Exited status
+        let snapshot = receiver.registry.lock().expect("lock").snapshot();
+        assert_eq!(snapshot.len(), 1);
+        assert!(
+            matches!(snapshot[0].status, RuntimeStatus::Exited),
+            "registry should reflect Exited status after normal exit"
+        );
+
+        // Verify: projection was emitted
+        let projections = receiver.projections_emitted.lock().expect("lock");
+        assert_eq!(projections.len(), 1);
+        assert_eq!(projections[0].0, "pane-1");
+        assert!(matches!(projections[0].1, RuntimeStatus::Exited));
+    }
+
+    #[test]
+    fn pty_exit_with_nonzero_code_marks_failed_and_emits_projection() {
+        let mut registry = RuntimeRegistry::default();
+        let session_id = RuntimeSessionId::from(String::from("pty-session-2"));
+        registry.register_terminal("pane-f", session_id);
+
+        let receiver = RegistryBackedReceiver::new(registry);
+
+        // Simulate PTY exit with failure code
+        let pane_id = pane("pane-f");
+        receiver.on_terminal_exited(&pane_id, Some(1));
+
+        // Verify: registry records Failed status
+        let snapshot = receiver.registry.lock().expect("lock").snapshot();
+        assert_eq!(snapshot.len(), 1);
+        assert!(
+            matches!(snapshot[0].status, RuntimeStatus::Failed),
+            "registry should reflect Failed status after non-zero exit"
+        );
+        assert_eq!(
+            snapshot[0].last_error,
+            Some(String::from("Process exited with code 1")),
+        );
+
+        // Verify: projection was emitted with Failed status
+        let projections = receiver.projections_emitted.lock().expect("lock");
+        assert_eq!(projections.len(), 1);
+        assert!(matches!(projections[0].1, RuntimeStatus::Failed));
+    }
+
+    #[test]
+    fn pty_exit_with_unknown_code_marks_exited() {
+        let mut registry = RuntimeRegistry::default();
+        let session_id = RuntimeSessionId::from(String::from("pty-session-3"));
+        registry.register_terminal("pane-u", session_id);
+
+        let receiver = RegistryBackedReceiver::new(registry);
+
+        // Simulate PTY exit with unknown exit code (None)
+        let pane_id = pane("pane-u");
+        receiver.on_terminal_exited(&pane_id, None);
+
+        let snapshot = receiver.registry.lock().expect("lock").snapshot();
+        assert_eq!(snapshot.len(), 1);
+        assert!(
+            matches!(snapshot[0].status, RuntimeStatus::Exited),
+            "unknown exit code should default to Exited (not Failed)"
+        );
     }
 }

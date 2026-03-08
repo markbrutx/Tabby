@@ -1,10 +1,11 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tabby_runtime::PaneRuntime;
 use tabby_settings::{resolve_default_working_directory, UserPreferences};
 use tabby_workspace::layout::LayoutPreset;
 use tabby_workspace::PaneSpec;
 
+use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use crate::application::{
     RuntimeApplicationService, RuntimeCoordinator, SettingsApplicationService,
     WorkspaceApplicationService,
@@ -35,6 +36,7 @@ impl BootstrapService {
         workspace_service: &WorkspaceApplicationService,
         settings_service: &SettingsApplicationService,
         runtime_service: &RuntimeApplicationService,
+        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<BootstrapSnapshot, ShellError> {
         let cli_args = self
             .launch_overrides
@@ -50,11 +52,17 @@ impl BootstrapService {
                     workspace_service,
                     settings_service,
                     runtime_service,
+                    Arc::clone(&observation_receiver),
                 )?;
             } else {
                 let preferences = settings_service.preferences()?;
                 if preferences.has_completed_onboarding {
-                    self.open_default_tab(workspace_service, settings_service, runtime_service)?;
+                    self.open_default_tab(
+                        workspace_service,
+                        settings_service,
+                        runtime_service,
+                        observation_receiver,
+                    )?;
                 }
             }
         }
@@ -71,6 +79,7 @@ impl BootstrapService {
         workspace_service: &WorkspaceApplicationService,
         settings_service: &SettingsApplicationService,
         runtime_service: &RuntimeApplicationService,
+        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<(), ShellError> {
         if !cli_args.has_launch_overrides() {
             return Ok(());
@@ -97,7 +106,12 @@ impl BootstrapService {
             command_override: cli_args.command,
         });
         let events = workspace_service.open_tab(layout, false, vec![pane_spec])?;
-        RuntimeCoordinator::handle_workspace_events(events, settings_service, runtime_service)?;
+        RuntimeCoordinator::handle_workspace_events(
+            events,
+            settings_service,
+            runtime_service,
+            observation_receiver,
+        )?;
         Ok(())
     }
 
@@ -106,6 +120,7 @@ impl BootstrapService {
         workspace_service: &WorkspaceApplicationService,
         settings_service: &SettingsApplicationService,
         runtime_service: &RuntimeApplicationService,
+        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<(), ShellError> {
         let preferences = settings_service.preferences()?;
         let layout =
@@ -116,7 +131,12 @@ impl BootstrapService {
             command_override: None,
         });
         let events = workspace_service.open_tab(layout, false, vec![pane_spec])?;
-        RuntimeCoordinator::handle_workspace_events(events, settings_service, runtime_service)?;
+        RuntimeCoordinator::handle_workspace_events(
+            events,
+            settings_service,
+            runtime_service,
+            observation_receiver,
+        )?;
         Ok(())
     }
 }
