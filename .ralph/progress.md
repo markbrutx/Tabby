@@ -1,5 +1,80 @@
 # Progress Log
 
+## 2026-03-09 00:52 - US-026: Audit and remove all declared-but-not-real contract abstractions
+Thread:
+Run: 20260308-215923-84117 (iteration 27)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-27.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-27.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: see below
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (187 tests, 18 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (239 tests)
+- Files changed:
+  - .ralph/contract-audit.md (new — audit results documenting all 24 contract types)
+  - .ralph/progress.md (updated)
+- What was implemented:
+  - Comprehensive audit of all 24 types in tabby-contracts/src/lib.rs
+  - Verified every DTO, event, and command variant has at least one producer and one consumer
+  - Verified all 4 frontend event listeners match backend emitters (event name strings match exactly)
+  - Verified all 20 command variants (9 workspace + 2 settings + 5 runtime + 4 browser surface) have frontend producers and backend consumers
+  - Result: zero phantom types found — all contract types are fully connected
+  - No code removals needed — the contract surface is clean
+  - Documented full audit results in .ralph/contract-audit.md
+- **Learnings for future iterations:**
+  - The US-025 cleanup (removing BrowserLocationObservedEvent) was the last phantom event — the contract surface is now clean
+  - All types follow a clear pattern: domain → dto_mappers → transport → frontend store
+  - Event names are defined as constants in both Rust (shell/mod.rs) and TypeScript (shared.ts), making cross-verification straightforward
+---
+
+## 2026-03-09 00:48 - US-025: Unify browser location observation into runtime projection
+Thread:
+Run: 20260308-215923-84117 (iteration 26)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-26.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-26.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: f99997d feat: unify browser location observation into runtime projection (US-025)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (187 tests, 18 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (239 tests)
+- Files changed:
+  - src-tauri/crates/tabby-contracts/src/lib.rs (removed BrowserLocationObservedEvent struct)
+  - src-tauri/src/lib.rs (removed BrowserLocationObservedEvent import and specta type registration)
+  - src-tauri/src/application/runtime_service.rs (added 2 tests for browser location → RuntimeStatusChangedEvent flow)
+  - src/contracts/tauri-bindings.ts (removed BrowserLocationObservedEvent type)
+  - src/app-shell/clients/shared.ts (removed listenBrowserLocationObserved from RuntimeClient interface and implementation, removed BROWSER_LOCATION_OBSERVED_EVENT constant)
+  - src/features/runtime/application/store.ts (removed subscribeBrowserLocation action, removed separate browser location listener from initializeListeners)
+  - src/features/runtime/application/store.test.ts (added test for browser location via unified RuntimeStatusChangedEvent, removed listenBrowserLocationObserved from mock)
+  - src/features/browser/hooks/useBrowserWebview.ts (replaced subscribeBrowserLocation effect with useEffect watching runtimeBrowserLocation from runtime store)
+  - src/features/browser/hooks/useBrowserWebview.test.tsx (removed listenBrowserLocationObserved from mock)
+  - src/features/terminal/ptyOutputDispatcher.test.ts (removed listenBrowserLocationObserved from all mock clients)
+- What was implemented:
+  - Removed BrowserLocationObservedEvent from tabby-contracts (Rust) and tauri-bindings (TS) — it was defined but never emitted by the backend
+  - Removed listenBrowserLocationObserved from RuntimeClient interface and Tauri implementation
+  - Removed separate browser location listener from runtime store's initializeListeners (was dead code — the event was never emitted)
+  - Removed subscribeBrowserLocation action from runtime store
+  - Replaced useBrowserWebview's Effect 5 (separate event subscription) with a reactive useEffect watching runtimeBrowserLocation from the unified runtime store
+  - Browser location now flows: infra (on_navigation) → AppShell → RuntimeApplicationService.observe_browser_location → registry update → RuntimeStatusChangedEvent → frontend runtime store → useBrowserWebview
+  - Added 2 Rust tests verifying the end-to-end flow through both observe_browser_location method and on_browser_location_changed trait method
+  - Added 1 frontend test verifying browser_location updates arrive via RuntimeStatusChangedEvent
+- **Learnings for future iterations:**
+  - The BrowserLocationObservedEvent was defined in contracts and registered with specta but never emitted — a dead event path. Always verify event flow end-to-end before assuming it works.
+  - The backend already used the unified RuntimeStatusChangedEvent for browser location; only the frontend had redundant (dead) listener code.
+  - Replacing event subscription with reactive store observation is cleaner — React's useEffect naturally handles the browser location sync without manual subscribe/unsubscribe lifecycle.
+---
+
 ## 2026-03-09 00:39 - US-024: Decouple feature stores from knowing neighboring store internal shapes
 Thread:
 Run: 20260308-215923-84117 (iteration 25)
