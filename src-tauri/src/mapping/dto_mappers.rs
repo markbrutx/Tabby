@@ -10,7 +10,7 @@ use tabby_settings::{
     WorkingDirectory,
 };
 use tabby_workspace::layout::{LayoutPreset, SplitDirection, SplitNode};
-use tabby_workspace::{PaneId, PaneSpec, TabId, WorkspaceSession};
+use tabby_workspace::{PaneContentDefinition, PaneId, PaneSpec, TabId, WorkspaceSession};
 
 use crate::application::commands::{
     CloseTabCommand, OpenTabCommand, ReplacePaneSpecCommand, RuntimeCommand, SettingsCommand,
@@ -85,10 +85,20 @@ pub fn workspace_view_from_session(session: &WorkspaceSession) -> WorkspaceView 
                 panes: tab
                     .panes
                     .iter()
-                    .map(|pane| PaneView {
-                        pane_id: pane.pane_id.to_string(),
-                        title: pane.title.clone(),
-                        spec: pane_spec_to_dto(&pane.spec),
+                    .map(|pane| {
+                        let spec_dto = session
+                            .pane_content(&pane.content_id)
+                            .map(pane_content_to_spec_dto)
+                            .unwrap_or_else(|| PaneSpecDto::Terminal {
+                                launch_profile_id: String::new(),
+                                working_directory: String::new(),
+                                command_override: None,
+                            });
+                        PaneView {
+                            pane_id: pane.pane_id.to_string(),
+                            title: pane.title.clone(),
+                            spec: spec_dto,
+                        }
                     })
                     .collect(),
                 active_pane_id: tab.active_pane_id.to_string(),
@@ -97,7 +107,26 @@ pub fn workspace_view_from_session(session: &WorkspaceSession) -> WorkspaceView 
     }
 }
 
-pub fn pane_spec_to_dto(value: &PaneSpec) -> PaneSpecDto {
+fn pane_content_to_spec_dto(content: &PaneContentDefinition) -> PaneSpecDto {
+    match content {
+        PaneContentDefinition::Terminal {
+            profile_id,
+            working_directory,
+            command_override,
+            ..
+        } => PaneSpecDto::Terminal {
+            launch_profile_id: profile_id.clone(),
+            working_directory: working_directory.clone(),
+            command_override: command_override.clone(),
+        },
+        PaneContentDefinition::Browser { initial_url, .. } => PaneSpecDto::Browser {
+            initial_url: initial_url.as_str().to_string(),
+        },
+    }
+}
+
+#[cfg(test)]
+fn pane_spec_to_dto(value: &PaneSpec) -> PaneSpecDto {
     match value {
         PaneSpec::Terminal(spec) => PaneSpecDto::Terminal {
             launch_profile_id: spec.launch_profile_id.clone(),

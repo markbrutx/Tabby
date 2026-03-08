@@ -2,6 +2,8 @@ pub mod content;
 pub mod ids;
 pub mod layout;
 
+use std::collections::HashMap;
+
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -44,7 +46,7 @@ impl PaneSpec {
 pub struct PaneSlot {
     pub pane_id: PaneId,
     pub title: String,
-    pub spec: PaneSpec,
+    pub content_id: PaneContentId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +63,7 @@ pub struct WorkspaceSession {
     pub tabs: Vec<Tab>,
     pub active_tab_id: Option<TabId>,
     next_tab_index: usize,
+    content_store: HashMap<PaneContentId, PaneContentDefinition>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +103,7 @@ impl Default for WorkspaceSession {
             tabs: Vec::new(),
             active_tab_id: None,
             next_tab_index: 1,
+            content_store: HashMap::new(),
         }
     }
 }
@@ -119,15 +123,28 @@ impl WorkspaceSession {
 
         let tab_id = create_tab_id();
         let title = format!("Workspace {}", self.next_tab_index);
-        let panes = pane_specs
-            .into_iter()
-            .enumerate()
-            .map(|(index, spec)| PaneSlot {
-                pane_id: create_pane_id(),
-                title: format!("Pane {}", index + 1),
+
+        let mut panes = Vec::new();
+        let mut pane_added_events = Vec::new();
+
+        for (index, spec) in pane_specs.into_iter().enumerate() {
+            let content = content_from_spec(&spec);
+            let content_id = content.content_id().clone();
+            let pane_id = create_pane_id();
+
+            self.content_store.insert(content_id.clone(), content);
+
+            pane_added_events.push(WorkspaceDomainEvent::PaneAdded {
+                pane_id: pane_id.clone(),
                 spec,
-            })
-            .collect::<Vec<_>>();
+            });
+
+            panes.push(PaneSlot {
+                pane_id,
+                title: format!("Pane {}", index + 1),
+                content_id,
+            });
+        }
 
         let pane_ids = panes
             .iter()
@@ -143,20 +160,14 @@ impl WorkspaceSession {
             tab_id: tab_id.clone(),
             title,
             layout,
-            panes: panes.clone(),
+            panes,
             active_pane_id: active_pane_id.clone(),
         });
         self.active_tab_id = Some(tab_id.clone());
         self.next_tab_index += 1;
         self.validate()?;
 
-        let mut events: Vec<WorkspaceDomainEvent> = panes
-            .into_iter()
-            .map(|pane| WorkspaceDomainEvent::PaneAdded {
-                pane_id: pane.pane_id,
-                spec: pane.spec,
-            })
-            .collect();
+        let mut events = pane_added_events;
         events.push(WorkspaceDomainEvent::ActiveTabChanged {
             tab_id: tab_id.clone(),
         });
@@ -186,16 +197,30 @@ impl WorkspaceSession {
         } else {
             self.active_tab_id.clone()
         };
-        self.validate()?;
 
         let mut events: Vec<WorkspaceDomainEvent> = removed
             .panes
             .into_iter()
-            .map(|pane| WorkspaceDomainEvent::PaneRemoved {
-                pane_id: pane.pane_id,
-                spec: pane.spec,
+            .map(|pane| {
+                let spec = self
+                    .content_store
+                    .remove(&pane.content_id)
+                    .map(|c| spec_from_content(&c))
+                    .unwrap_or_else(|| {
+                        PaneSpec::Terminal(TerminalPaneSpec {
+                            launch_profile_id: String::new(),
+                            working_directory: String::new(),
+                            command_override: None,
+                        })
+                    });
+                WorkspaceDomainEvent::PaneRemoved {
+                    pane_id: pane.pane_id,
+                    spec,
+                }
             })
             .collect();
+
+        self.validate()?;
 
         if was_active {
             if let Some(new_active_tab_id) = &self.active_tab_id {
@@ -271,10 +296,17 @@ impl WorkspaceSession {
         spec: PaneSpec,
     ) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
         let (tab_index, _) = self.locate_pane(pane_id)?;
+
+        let content = content_from_spec(&spec);
+        let content_id = content.content_id().clone();
+        let new_pane_id = create_pane_id();
+
+        self.content_store.insert(content_id.clone(), content);
+
         let new_pane = PaneSlot {
-            pane_id: create_pane_id(),
+            pane_id: new_pane_id.clone(),
             title: format!("Pane {}", self.tabs[tab_index].panes.len() + 1),
-            spec,
+            content_id,
         };
 
         let next_layout = split_pane_layout(
@@ -288,12 +320,12 @@ impl WorkspaceSession {
         })?;
 
         self.tabs[tab_index].layout = next_layout;
-        self.tabs[tab_index].panes.push(new_pane.clone());
+        self.tabs[tab_index].panes.push(new_pane);
         self.validate()?;
 
         Ok(vec![WorkspaceDomainEvent::PaneAdded {
-            pane_id: new_pane.pane_id,
-            spec: new_pane.spec,
+            pane_id: new_pane_id,
+            spec,
         }])
     }
 
@@ -308,6 +340,19 @@ impl WorkspaceSession {
             })?;
         let was_active_pane = self.tabs[tab_index].active_pane_id == *pane_id;
         let removed = self.tabs[tab_index].panes.remove(pane_index);
+
+        // Destroy the associated PaneContentDefinition (1:1 ownership)
+        let removed_spec = self
+            .content_store
+            .remove(&removed.content_id)
+            .map(|c| spec_from_content(&c))
+            .unwrap_or_else(|| {
+                PaneSpec::Terminal(TerminalPaneSpec {
+                    launch_profile_id: String::new(),
+                    working_directory: String::new(),
+                    command_override: None,
+                })
+            });
 
         let mut extra_events = Vec::new();
 
@@ -352,7 +397,7 @@ impl WorkspaceSession {
 
         let mut events = vec![WorkspaceDomainEvent::PaneRemoved {
             pane_id: removed.pane_id,
-            spec: removed.spec,
+            spec: removed_spec,
         }];
         events.extend(extra_events);
         Ok(events)
@@ -388,15 +433,21 @@ impl WorkspaceSession {
         pane_id: &PaneId,
         spec: PaneSpec,
     ) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
-        let (_, pane_index) = self.locate_pane(pane_id)?;
-        let pane = self
-            .tabs
-            .iter_mut()
-            .flat_map(|tab| tab.panes.iter_mut())
-            .find(|pane| pane.pane_id == *pane_id)
-            .ok_or_else(|| WorkspaceError::NotFound(format!("pane {pane_id}")))?;
-        pane.spec = spec.clone();
-        let _ = pane_index;
+        let (tab_index, pane_index) = self.locate_pane(pane_id)?;
+
+        // Destroy old content
+        let old_content_id = self.tabs[tab_index].panes[pane_index].content_id.clone();
+        self.content_store.remove(&old_content_id);
+
+        // Create new content with new id (atomic replace)
+        let new_content = content_from_spec(&spec);
+        let new_content_id = new_content.content_id().clone();
+        self.content_store
+            .insert(new_content_id.clone(), new_content);
+
+        // Update pane's content reference
+        self.tabs[tab_index].panes[pane_index].content_id = new_content_id;
+
         self.validate()?;
 
         Ok(vec![WorkspaceDomainEvent::PaneSpecReplaced {
@@ -410,18 +461,26 @@ impl WorkspaceSession {
         pane_id: &PaneId,
         working_directory: &str,
     ) -> Result<(), WorkspaceError> {
-        let pane = self
+        let content_id = self
             .tabs
-            .iter_mut()
-            .flat_map(|tab| tab.panes.iter_mut())
+            .iter()
+            .flat_map(|tab| tab.panes.iter())
             .find(|pane| pane.pane_id == *pane_id)
+            .map(|pane| pane.content_id.clone())
             .ok_or_else(|| WorkspaceError::NotFound(format!("pane {pane_id}")))?;
 
-        match &mut pane.spec {
-            PaneSpec::Terminal(spec) => {
-                spec.working_directory = String::from(working_directory);
+        let content = self.content_store.get_mut(&content_id).ok_or_else(|| {
+            WorkspaceError::State(format!("content not found for pane {pane_id}"))
+        })?;
+
+        match content {
+            PaneContentDefinition::Terminal {
+                working_directory: wd,
+                ..
+            } => {
+                *wd = String::from(working_directory);
             }
-            PaneSpec::Browser(_) => {
+            PaneContentDefinition::Browser { .. } => {
                 return Err(WorkspaceError::Validation(String::from(
                     "browser panes do not track working directories",
                 )))
@@ -435,7 +494,13 @@ impl WorkspaceSession {
             .iter()
             .flat_map(|tab| tab.panes.iter())
             .find(|pane| pane.pane_id == *pane_id)
-            .map(|pane| pane.spec.clone())
+            .and_then(|pane| self.content_store.get(&pane.content_id))
+            .map(spec_from_content)
+    }
+
+    /// Returns the content definition for a given content ID.
+    pub fn pane_content(&self, content_id: &PaneContentId) -> Option<&PaneContentDefinition> {
+        self.content_store.get(content_id)
     }
 
     pub fn tab_summaries(&self) -> &[Tab] {
@@ -447,6 +512,11 @@ impl WorkspaceSession {
             if self.active_tab_id.is_some() {
                 return Err(WorkspaceError::State(String::from(
                     "workspace has no tabs but still points to an active tab",
+                )));
+            }
+            if !self.content_store.is_empty() {
+                return Err(WorkspaceError::State(String::from(
+                    "workspace has no tabs but content store is not empty (orphaned content)",
                 )));
             }
             return Ok(());
@@ -461,6 +531,8 @@ impl WorkspaceSession {
                 "active tab does not exist in workspace",
             )));
         }
+
+        let mut all_content_ids = std::collections::HashSet::new();
 
         for tab in &self.tabs {
             if tab.panes.is_empty() {
@@ -487,6 +559,26 @@ impl WorkspaceSession {
                 .map(|pane| pane.pane_id.clone())
                 .collect::<Vec<_>>();
             validate_layout(&tab.layout, &pane_ids)?;
+
+            // Verify every pane has a content definition in the store
+            for pane in &tab.panes {
+                if !self.content_store.contains_key(&pane.content_id) {
+                    return Err(WorkspaceError::State(format!(
+                        "pane {} references missing content {}",
+                        pane.pane_id, pane.content_id
+                    )));
+                }
+                all_content_ids.insert(pane.content_id.clone());
+            }
+        }
+
+        // Verify no orphaned content definitions
+        for content_id in self.content_store.keys() {
+            if !all_content_ids.contains(content_id) {
+                return Err(WorkspaceError::State(format!(
+                    "orphaned content definition {content_id}"
+                )));
+            }
         }
 
         Ok(())
@@ -529,6 +621,41 @@ pub fn create_pane_id() -> PaneId {
 
 pub fn create_tab_id() -> TabId {
     TabId::from(Uuid::new_v4().to_string())
+}
+
+pub fn create_content_id() -> PaneContentId {
+    PaneContentId::from(Uuid::new_v4().to_string())
+}
+
+fn content_from_spec(spec: &PaneSpec) -> PaneContentDefinition {
+    let id = create_content_id();
+    match spec {
+        PaneSpec::Terminal(t) => PaneContentDefinition::terminal(
+            id,
+            &t.launch_profile_id,
+            &t.working_directory,
+            t.command_override.clone(),
+        ),
+        PaneSpec::Browser(b) => PaneContentDefinition::browser(id, BrowserUrl::new(&b.initial_url)),
+    }
+}
+
+fn spec_from_content(content: &PaneContentDefinition) -> PaneSpec {
+    match content {
+        PaneContentDefinition::Terminal {
+            profile_id,
+            working_directory,
+            command_override,
+            ..
+        } => PaneSpec::Terminal(TerminalPaneSpec {
+            launch_profile_id: profile_id.clone(),
+            working_directory: working_directory.clone(),
+            command_override: command_override.clone(),
+        }),
+        PaneContentDefinition::Browser { initial_url, .. } => PaneSpec::Browser(BrowserPaneSpec {
+            initial_url: initial_url.as_str().to_string(),
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -855,5 +982,241 @@ mod tests {
             .ok();
         workspace2.set_active_tab(&tab_id2).ok();
         workspace2.pane_spec(&pane_id2);
+    }
+
+    // --- US-010: PaneSlot + content ref pattern tests ---
+
+    #[test]
+    fn pane_slot_holds_content_id_not_spec() {
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByOne),
+                vec![terminal("/tmp")],
+            )
+            .expect("tab should open");
+
+        let pane = &workspace.tabs[0].panes[0];
+        // PaneSlot has content_id (not spec directly)
+        let content = workspace
+            .pane_content(&pane.content_id)
+            .expect("content should exist for pane's content_id");
+
+        // Content definition holds the terminal details
+        assert_eq!(content.terminal_profile_id(), Some("terminal"));
+        assert_eq!(content.working_directory(), Some("/tmp"));
+    }
+
+    #[test]
+    fn open_tab_creates_content_definitions_for_each_pane() {
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByTwo),
+                vec![terminal("/a"), browser("https://example.com")],
+            )
+            .expect("tab should open");
+
+        // Each pane has a distinct content_id
+        let content_id_a = workspace.tabs[0].panes[0].content_id.clone();
+        let content_id_b = workspace.tabs[0].panes[1].content_id.clone();
+        assert_ne!(content_id_a, content_id_b);
+
+        // Content definitions are accessible via pane_content()
+        let content_a = workspace
+            .pane_content(&content_id_a)
+            .expect("content A should exist");
+        assert_eq!(content_a.terminal_profile_id(), Some("terminal"));
+
+        let content_b = workspace
+            .pane_content(&content_id_b)
+            .expect("content B should exist");
+        assert!(content_b.browser_url().is_some());
+    }
+
+    #[test]
+    fn close_pane_destroys_associated_content() {
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByTwo),
+                vec![terminal("/a"), terminal("/b")],
+            )
+            .expect("tab should open");
+
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+        let content_id = workspace.tabs[0].panes[0].content_id.clone();
+
+        // Content exists before close
+        assert!(workspace.pane_content(&content_id).is_some());
+
+        workspace
+            .close_pane(&pane_id)
+            .expect("close should succeed");
+
+        // Content destroyed after close — no orphans
+        assert!(
+            workspace.pane_content(&content_id).is_none(),
+            "content should be destroyed when pane is closed"
+        );
+        workspace
+            .validate()
+            .expect("workspace should be valid after close_pane");
+    }
+
+    #[test]
+    fn close_tab_destroys_all_pane_content() {
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByTwo),
+                vec![terminal("/a"), terminal("/b")],
+            )
+            .expect("tab should open");
+
+        let content_id_a = workspace.tabs[0].panes[0].content_id.clone();
+        let content_id_b = workspace.tabs[0].panes[1].content_id.clone();
+        let tab_id = workspace.tabs[0].tab_id.clone();
+
+        workspace
+            .close_tab(&tab_id)
+            .expect("close tab should succeed");
+
+        assert!(workspace.pane_content(&content_id_a).is_none());
+        assert!(workspace.pane_content(&content_id_b).is_none());
+        workspace
+            .validate()
+            .expect("workspace should be valid after close_tab");
+    }
+
+    #[test]
+    fn replace_pane_spec_destroys_old_creates_new_content() {
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByOne),
+                vec![terminal("/tmp")],
+            )
+            .expect("tab should open");
+
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+        let old_content_id = workspace.tabs[0].panes[0].content_id.clone();
+
+        let new_spec = browser("https://example.com");
+        workspace
+            .replace_pane_spec(&pane_id, new_spec)
+            .expect("replace should succeed");
+
+        // Old content destroyed
+        assert!(
+            workspace.pane_content(&old_content_id).is_none(),
+            "old content should be destroyed on replace"
+        );
+
+        // New content created with new id
+        let new_content_id = workspace.tabs[0].panes[0].content_id.clone();
+        assert_ne!(
+            old_content_id, new_content_id,
+            "replace should create a new content_id"
+        );
+
+        let new_content = workspace
+            .pane_content(&new_content_id)
+            .expect("new content should exist");
+        assert!(
+            new_content.browser_url().is_some(),
+            "new content should be a browser"
+        );
+
+        workspace
+            .validate()
+            .expect("workspace should be valid after replace");
+    }
+
+    #[test]
+    fn spec_accessed_through_content_definition_not_pane() {
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByOne),
+                vec![terminal("/home/user")],
+            )
+            .expect("tab should open");
+
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+
+        // Access spec through pane_spec() which internally goes through content store
+        let spec = workspace
+            .pane_spec(&pane_id)
+            .expect("pane_spec should resolve through content");
+        match spec {
+            PaneSpec::Terminal(t) => {
+                assert_eq!(t.launch_profile_id, "terminal");
+                assert_eq!(t.working_directory, "/home/user");
+            }
+            PaneSpec::Browser(_) => panic!("expected terminal"),
+        }
+    }
+
+    #[test]
+    fn no_orphaned_content_after_split_and_close_sequence() {
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByOne),
+                vec![terminal("/tmp")],
+            )
+            .expect("tab should open");
+
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+
+        // Split creates new content
+        workspace
+            .split_pane(&pane_id, SplitDirection::Horizontal, terminal("/home"))
+            .expect("split should succeed");
+        assert_eq!(workspace.tabs[0].panes.len(), 2);
+        workspace.validate().expect("valid after split");
+
+        // Close new pane — its content is destroyed
+        let new_pane_id = workspace.tabs[0].panes[1].pane_id.clone();
+        let new_content_id = workspace.tabs[0].panes[1].content_id.clone();
+        workspace
+            .close_pane(&new_pane_id)
+            .expect("close should succeed");
+
+        assert!(
+            workspace.pane_content(&new_content_id).is_none(),
+            "split pane content should be destroyed after close"
+        );
+        workspace
+            .validate()
+            .expect("no orphans after split+close sequence");
+    }
+
+    #[test]
+    fn close_last_pane_destroys_content_and_tab() {
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByOne),
+                vec![terminal("/tmp")],
+            )
+            .expect("tab should open");
+
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+        let content_id = workspace.tabs[0].panes[0].content_id.clone();
+
+        workspace
+            .close_pane(&pane_id)
+            .expect("close last pane should succeed");
+
+        assert!(workspace.tabs.is_empty(), "tab should be removed");
+        assert!(
+            workspace.pane_content(&content_id).is_none(),
+            "content should be destroyed"
+        );
+        workspace
+            .validate()
+            .expect("empty workspace should be valid");
     }
 }
