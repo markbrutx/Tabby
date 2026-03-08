@@ -5,12 +5,12 @@ import { createSettingsStore } from "./store";
 
 function makeSettingsView(overrides?: Partial<SettingsView>): SettingsView {
   return {
-    defaultLayout: "single",
+    defaultLayout: "1x1",
     defaultTerminalProfileId: "terminal",
     defaultWorkingDirectory: "~",
     defaultCustomCommand: "",
     fontSize: 14,
-    theme: "dark",
+    theme: "midnight",
     launchFullscreen: false,
     hasCompletedOnboarding: true,
     lastWorkingDirectory: null,

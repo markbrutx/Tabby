@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WorkspaceView } from "@/contracts/tauri-bindings";
 import type { WorkspaceClient } from "@/app-shell/clients";
+import type { SettingsReadModel } from "@/features/settings/domain/models";
 import { createWorkspaceStore } from "./store";
 import type { WorkspaceStoreDeps } from "./store";
 
@@ -38,12 +39,12 @@ function makeMockWorkspaceClient(
     bootstrap: vi.fn().mockResolvedValue({
       workspace: makeWorkspaceView(),
       settings: {
-        defaultLayout: "single",
+        defaultLayout: "1x1",
         defaultTerminalProfileId: "terminal",
         defaultWorkingDirectory: "~",
         defaultCustomCommand: "",
         fontSize: 14,
-        theme: "dark",
+        theme: "midnight",
         launchFullscreen: false,
         hasCompletedOnboarding: true,
         lastWorkingDirectory: null,
@@ -71,7 +72,7 @@ function makeMockDeps(
 ): WorkspaceStoreDeps {
   const settingsStore = {
     getState: () => ({
-      settings: null as { hasCompletedOnboarding: boolean } | null,
+      settings: null as SettingsReadModel | null,
       loadBootstrap: vi.fn(),
       updateSettings: vi.fn().mockResolvedValue(undefined),
     }),
@@ -171,12 +172,12 @@ describe("createWorkspaceStore", () => {
       bootstrap: vi.fn().mockResolvedValue({
         workspace: emptyView,
         settings: {
-          defaultLayout: "single",
+          defaultLayout: "1x1",
           defaultTerminalProfileId: "terminal",
           defaultWorkingDirectory: "~",
           defaultCustomCommand: "",
           fontSize: 14,
-          theme: "dark",
+          theme: "midnight",
           launchFullscreen: false,
           hasCompletedOnboarding: false,
           lastWorkingDirectory: null,

@@ -1,7 +1,7 @@
 import { shellClients } from "@/app-shell/clients";
-import { createWorkspaceStore } from "@/contexts/workspace/store";
-import { createSettingsStore } from "@/contexts/settings/store";
-import { createRuntimeStore } from "@/contexts/runtime/store";
+import { createWorkspaceStore } from "@/features/workspace/application/store";
+import { createSettingsStore } from "@/features/settings/application/store";
+import { createRuntimeStore } from "@/features/runtime/application/store";
 
 export const useSettingsStore = createSettingsStore(shellClients.settings);
 
