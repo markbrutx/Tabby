@@ -11,7 +11,7 @@ import { WorkspaceSetupWizard } from "@/features/workspace/components/WorkspaceS
 import { useConfirmAction } from "@/features/workspace/hooks/useConfirmAction";
 import { useTauriMenuEvents } from "@/features/workspace/hooks/useTauriMenuEvents";
 import { selectActivePane, selectActiveTab } from "@/features/workspace/selectors";
-import { useWorkspaceStore, useSettingsStore, useRuntimeStore } from "@/contexts/stores";
+import { useWorkspaceStore, useSettingsStore, useRuntimeStore, bootstrapCoordinator } from "@/contexts/stores";
 import type { SetupWizardConfig } from "@/features/workspace/store/types";
 import { applyResolvedTheme, useResolvedTheme } from "@/features/workspace/theme";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
@@ -23,7 +23,6 @@ function App() {
     error,
     isHydrating,
     wizardTab,
-    initialize,
     createTabFromWizard,
     openSetupWizard,
     closeSetupWizard,
@@ -41,7 +40,6 @@ function App() {
       error: state.error,
       isHydrating: state.isHydrating,
       wizardTab: state.wizardTab,
-      initialize: state.initialize,
       createTabFromWizard: state.createTabFromWizard,
       openSetupWizard: state.openSetupWizard,
       closeSetupWizard: state.closeSetupWizard,
@@ -93,8 +91,8 @@ function App() {
   });
 
   useEffect(() => {
-    void initialize();
-  }, [initialize]);
+    void bootstrapCoordinator.initialize();
+  }, []);
 
   useEffect(() => {
     applyResolvedTheme(resolvedTheme);
@@ -150,7 +148,7 @@ function App() {
       <RecoveryScreen
         title="Workspace unavailable"
         message={error ?? "Tabby could not bootstrap the workspace."}
-        onRetry={() => void initialize()}
+        onRetry={() => void bootstrapCoordinator.initialize()}
       />
     );
   }
@@ -162,7 +160,7 @@ function App() {
       <RecoveryScreen
         title="No active workspace"
         message={error ?? "All workspaces have been closed."}
-        onRetry={() => void initialize()}
+        onRetry={() => void bootstrapCoordinator.initialize()}
       />
     );
   }

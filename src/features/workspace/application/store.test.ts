@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WorkspaceView } from "@/contracts/tauri-bindings";
+import type { WorkspaceBootstrapView, WorkspaceView } from "@/contracts/tauri-bindings";
 import type { WorkspaceClient } from "@/app-shell/clients";
 import type { SettingsReadModel } from "@/features/settings/domain/models";
 import { createWorkspaceStore } from "./store";
@@ -32,35 +32,41 @@ function makeWorkspaceView(overrides?: Partial<WorkspaceView>): WorkspaceView {
   };
 }
 
+function makeBootstrapPayload(
+  workspaceOverrides?: Partial<WorkspaceView>,
+): WorkspaceBootstrapView {
+  return {
+    workspace: makeWorkspaceView(workspaceOverrides),
+    settings: {
+      defaultLayout: "1x1",
+      defaultTerminalProfileId: "terminal",
+      defaultWorkingDirectory: "~",
+      defaultCustomCommand: "",
+      fontSize: 14,
+      theme: "midnight",
+      launchFullscreen: false,
+      hasCompletedOnboarding: true,
+      lastWorkingDirectory: null,
+    },
+    profileCatalog: {
+      terminalProfiles: [
+        {
+          id: "terminal",
+          label: "Terminal",
+          description: "Default terminal",
+          startupCommandTemplate: null,
+        },
+      ],
+    },
+    runtimeProjections: [],
+  };
+}
+
 function makeMockWorkspaceClient(
   overrides?: Partial<WorkspaceClient>,
 ): WorkspaceClient {
   return {
-    bootstrap: vi.fn().mockResolvedValue({
-      workspace: makeWorkspaceView(),
-      settings: {
-        defaultLayout: "1x1",
-        defaultTerminalProfileId: "terminal",
-        defaultWorkingDirectory: "~",
-        defaultCustomCommand: "",
-        fontSize: 14,
-        theme: "midnight",
-        launchFullscreen: false,
-        hasCompletedOnboarding: true,
-        lastWorkingDirectory: null,
-      },
-      profileCatalog: {
-        terminalProfiles: [
-          {
-            id: "terminal",
-            label: "Terminal",
-            description: "Default terminal",
-            startupCommandTemplate: null,
-          },
-        ],
-      },
-      runtimeProjections: [],
-    }),
+    bootstrap: vi.fn().mockResolvedValue(makeBootstrapPayload()),
     dispatch: vi.fn().mockResolvedValue(makeWorkspaceView()),
     listenProjectionUpdated: vi.fn().mockResolvedValue(() => {}),
     ...overrides,
@@ -73,39 +79,55 @@ function makeMockDeps(
   const settingsStore = {
     getState: () => ({
       settings: null as SettingsReadModel | null,
-      loadBootstrap: vi.fn(),
       updateSettings: vi.fn().mockResolvedValue(undefined),
-    }),
-  };
-
-  const runtimeStore = {
-    getState: () => ({
-      loadBootstrap: vi.fn(),
     }),
   };
 
   return {
     workspaceClient: makeMockWorkspaceClient(clientOverrides),
     getSettingsStore: () => settingsStore,
-    getRuntimeStore: () => runtimeStore,
   };
 }
 
 describe("createWorkspaceStore", () => {
-  it("initializes workspace from bootstrap and clears hydrating state", async () => {
+  it("loadBootstrap sets workspace and clears hydrating state", async () => {
     const deps = makeMockDeps();
     const store = createWorkspaceStore(deps);
 
     expect(store.getState().isHydrating).toBe(true);
     expect(store.getState().workspace).toBeNull();
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
 
     expect(store.getState().isHydrating).toBe(false);
     expect(store.getState().workspace).not.toBeNull();
     expect(store.getState().workspace?.activeTabId).toBe("t1");
     expect(store.getState().workspace?.tabs).toHaveLength(1);
-    expect(deps.workspaceClient.bootstrap).toHaveBeenCalledOnce();
+  });
+
+  it("beginBootstrap sets hydrating true and clears error", () => {
+    const deps = makeMockDeps();
+    const store = createWorkspaceStore(deps);
+
+    store.getState().setBootstrapError("some error");
+    expect(store.getState().isHydrating).toBe(false);
+    expect(store.getState().error).toBe("some error");
+
+    store.getState().beginBootstrap();
+
+    expect(store.getState().isHydrating).toBe(true);
+    expect(store.getState().error).toBeNull();
+  });
+
+  it("setBootstrapError sets error and clears hydrating", () => {
+    const deps = makeMockDeps();
+    const store = createWorkspaceStore(deps);
+
+    store.getState().setBootstrapError("connection refused");
+
+    expect(store.getState().isHydrating).toBe(false);
+    expect(store.getState().error).toBe("connection refused");
+    expect(store.getState().workspace).toBeNull();
   });
 
   it("dispatches closeTab command through injected client", async () => {
@@ -115,7 +137,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
     await store.getState().closeTab("t1");
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
@@ -125,26 +147,13 @@ describe("createWorkspaceStore", () => {
     expect(store.getState().workspace?.tabs).toHaveLength(0);
   });
 
-  it("sets error state when bootstrap fails", async () => {
-    const deps = makeMockDeps({
-      bootstrap: vi.fn().mockRejectedValue(new Error("connection refused")),
-    });
-    const store = createWorkspaceStore(deps);
-
-    await store.getState().initialize();
-
-    expect(store.getState().isHydrating).toBe(false);
-    expect(store.getState().error).toBe("connection refused");
-    expect(store.getState().workspace).toBeNull();
-  });
-
   it("sets error state when dispatch fails", async () => {
     const deps = makeMockDeps({
       dispatch: vi.fn().mockRejectedValue(new Error("dispatch error")),
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
     await store.getState().closeTab("t1");
 
     expect(store.getState().error).toBe("dispatch error");
@@ -156,7 +165,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
     await store.getState().closeTab("t1");
 
     expect(store.getState().error).toBe("fail");
@@ -167,28 +176,12 @@ describe("createWorkspaceStore", () => {
   });
 
   it("shows wizard tab when workspace has no tabs", async () => {
-    const emptyView = makeWorkspaceView({ tabs: [], activeTabId: "" });
-    const deps = makeMockDeps({
-      bootstrap: vi.fn().mockResolvedValue({
-        workspace: emptyView,
-        settings: {
-          defaultLayout: "1x1",
-          defaultTerminalProfileId: "terminal",
-          defaultWorkingDirectory: "~",
-          defaultCustomCommand: "",
-          fontSize: 14,
-          theme: "midnight",
-          launchFullscreen: false,
-          hasCompletedOnboarding: false,
-          lastWorkingDirectory: null,
-        },
-        profileCatalog: { terminalProfiles: [] },
-        runtimeProjections: [],
-      }),
-    });
+    const deps = makeMockDeps();
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(
+      makeBootstrapPayload({ tabs: [], activeTabId: "" }),
+    );
 
     expect(store.getState().wizardTab).not.toBeNull();
     expect(store.getState().wizardTab?.title).toBe("Workspace 1");
@@ -201,7 +194,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
     await store.getState().setActiveTab("t2");
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
@@ -255,7 +248,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
     const paneSpec = {
       kind: "terminal" as const,
       launchProfileId: "default",
@@ -288,7 +281,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
 
     expect(store.getState().isWorking).toBe(false);
 
@@ -306,7 +299,7 @@ describe("createWorkspaceStore", () => {
     const deps = makeMockDeps();
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
 
     expect(store.getState().wizardTab).toBeNull();
 
@@ -320,7 +313,7 @@ describe("createWorkspaceStore", () => {
     const deps = makeMockDeps();
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
 
     store.getState().openSetupWizard();
     expect(store.getState().wizardTab).not.toBeNull();
@@ -330,28 +323,12 @@ describe("createWorkspaceStore", () => {
   });
 
   it("closeSetupWizard keeps wizard when no tabs exist", async () => {
-    const emptyView = makeWorkspaceView({ tabs: [], activeTabId: "" });
-    const deps = makeMockDeps({
-      bootstrap: vi.fn().mockResolvedValue({
-        workspace: emptyView,
-        settings: {
-          defaultLayout: "1x1",
-          defaultTerminalProfileId: "terminal",
-          defaultWorkingDirectory: "~",
-          defaultCustomCommand: "",
-          fontSize: 14,
-          theme: "midnight",
-          launchFullscreen: false,
-          hasCompletedOnboarding: false,
-          lastWorkingDirectory: null,
-        },
-        profileCatalog: { terminalProfiles: [] },
-        runtimeProjections: [],
-      }),
-    });
+    const deps = makeMockDeps();
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(
+      makeBootstrapPayload({ tabs: [], activeTabId: "" }),
+    );
     expect(store.getState().wizardTab).not.toBeNull();
 
     store.getState().closeSetupWizard();
@@ -365,7 +342,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
     await store.getState().createTabFromWizard({
       groups: [
         {
@@ -392,7 +369,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
     await store.getState().closePane("p1");
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
@@ -408,7 +385,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().initialize();
+    await store.getState().loadBootstrap(makeBootstrapPayload());
     await store.getState().swapPanes("p1", "p2");
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({

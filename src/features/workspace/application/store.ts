@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { asErrorMessage } from "@/app-shell/clients";
 import type {
   PaneSpecDto,
-  SettingsView,
+  WorkspaceBootstrapView,
   WorkspaceCommandDto,
   WorkspaceView,
 } from "@/contracts/tauri-bindings";
@@ -25,7 +25,9 @@ export interface WorkspaceStore {
   isHydrating: boolean;
   isWorking: boolean;
   wizardTab: WizardTab | null;
-  initialize: () => Promise<void>;
+  beginBootstrap: () => void;
+  loadBootstrap: (payload: WorkspaceBootstrapView) => Promise<void>;
+  setBootstrapError: (message: string) => void;
   createTabFromWizard: (config: SetupWizardConfig) => Promise<void>;
   openSetupWizard: () => void;
   closeSetupWizard: () => void;
@@ -102,13 +104,7 @@ export interface WorkspaceStoreDeps {
   getSettingsStore: () => {
     getState: () => {
       settings: SettingsReadModel | null;
-      loadBootstrap: (settings: SettingsView, profiles: readonly { id: string; label: string; description: string; startupCommandTemplate: string | null }[]) => void;
       updateSettings: (settings: SettingsReadModel) => Promise<void>;
-    };
-  };
-  getRuntimeStore: () => {
-    getState: () => {
-      loadBootstrap: (...args: any[]) => void;
     };
   };
 }
@@ -123,45 +119,37 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
     isWorking: false,
     wizardTab: null,
 
-    async initialize() {
+    beginBootstrap() {
       set({ isHydrating: true, error: null });
+    },
 
-      try {
-        const payload = await deps.workspaceClient.bootstrap();
-        deps.getSettingsStore().getState().loadBootstrap(
-          payload.settings,
-          payload.profileCatalog.terminalProfiles,
-        );
-        deps.getRuntimeStore().getState().loadBootstrap(payload.runtimeProjections);
-
-        if (!workspaceListenersReady) {
-          workspaceListenersReady = deps.workspaceClient
-            .listenProjectionUpdated((dto) => {
-              const workspace = mapWorkspaceFromDto(dto);
-              set({
-                workspace,
-                error: null,
-                wizardTab: workspace.tabs.length === 0 ? makeWizardTab(workspace) : null,
-              });
-            })
-            .then(() => undefined);
-        }
-        await workspaceListenersReady;
-
-        const workspace = mapWorkspaceFromDto(payload.workspace);
-        const shouldShowWizard = workspace.tabs.length === 0;
-        set({
-          workspace,
-          error: null,
-          isHydrating: false,
-          wizardTab: shouldShowWizard ? makeWizardTab(workspace) : null,
-        });
-      } catch (error) {
-        set({
-          error: asErrorMessage(error),
-          isHydrating: false,
-        });
+    async loadBootstrap(payload) {
+      if (!workspaceListenersReady) {
+        workspaceListenersReady = deps.workspaceClient
+          .listenProjectionUpdated((dto) => {
+            const workspace = mapWorkspaceFromDto(dto);
+            set({
+              workspace,
+              error: null,
+              wizardTab: workspace.tabs.length === 0 ? makeWizardTab(workspace) : null,
+            });
+          })
+          .then(() => undefined);
       }
+      await workspaceListenersReady;
+
+      const workspace = mapWorkspaceFromDto(payload.workspace);
+      const shouldShowWizard = workspace.tabs.length === 0;
+      set({
+        workspace,
+        error: null,
+        isHydrating: false,
+        wizardTab: shouldShowWizard ? makeWizardTab(workspace) : null,
+      });
+    },
+
+    setBootstrapError(message) {
+      set({ error: message, isHydrating: false });
     },
 
     async createTabFromWizard(config) {
