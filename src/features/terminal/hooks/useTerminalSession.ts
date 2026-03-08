@@ -3,7 +3,6 @@ import { FitAddon } from "xterm-addon-fit";
 import { WebglAddon } from "xterm-addon-webgl";
 import { Terminal } from "xterm";
 import { useRuntimeClient } from "@/app-shell/context/AppShellContext";
-import { shellClients } from "@/app-shell/clients";
 import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import { getTerminalTheme, type ResolvedTheme } from "@/features/workspace/theme";
 import { initDispatcher, registerPtyOutput, teardownDispatcher } from "@/features/terminal/ptyOutputDispatcher";
@@ -111,8 +110,8 @@ export function useTerminalSession({
         const url = new URL(data);
         const cwd = decodeURIComponent(url.pathname);
         if (cwd) {
-          void shellClients.workspace.dispatch({
-            kind: "trackTerminalWorkingDirectory",
+          void runtimeClient.dispatch({
+            kind: "observeTerminalCwd",
             pane_id: pane.id,
             working_directory: cwd,
           });

@@ -8,7 +8,9 @@ use tabby_runtime::{PaneRuntime, RuntimeRegistry, RuntimeStatus};
 use tabby_settings::{resolve_terminal_profile, SettingsError, UserPreferences};
 use tabby_workspace::PaneSpec;
 
-use crate::application::ProjectionPublisher;
+use crate::application::{
+    ProjectionPublisher, SettingsApplicationService, WorkspaceApplicationService,
+};
 use crate::shell::browser_surface;
 use crate::shell::error::ShellError;
 use crate::shell::pty::PtyManager;
@@ -146,8 +148,42 @@ impl RuntimeApplicationService {
                     self.publisher.emit_runtime_status(&runtime);
                 }
             }
+            RuntimeCommand::ObserveTerminalCwd { .. }
+            | RuntimeCommand::ObserveBrowserLocation { .. } => {
+                // Observation commands are handled by the shell layer via
+                // observe_terminal_cwd / observe_browser_location methods.
+                // They should not reach dispatch_runtime_command.
+                return Err(ShellError::Validation(String::from(
+                    "Observation commands must be routed through the shell layer",
+                )));
+            }
         }
 
+        Ok(())
+    }
+
+    pub fn observe_terminal_cwd(
+        &self,
+        pane_id: &str,
+        working_directory: &str,
+        workspace_service: &WorkspaceApplicationService,
+        settings_service: &SettingsApplicationService,
+    ) -> Result<(), ShellError> {
+        workspace_service.track_terminal_working_directory(pane_id, working_directory)?;
+        let mut preferences = settings_service.preferences()?;
+        preferences.last_working_directory = Some(String::from(working_directory));
+        settings_service.persist_preferences(&preferences)?;
+        Ok(())
+    }
+
+    pub fn observe_browser_location(&self, pane_id: &str, url: &str) -> Result<(), ShellError> {
+        let maybe_runtime = self
+            .lock_runtimes()?
+            .update_browser_location(pane_id, String::from(url))
+            .ok();
+        if let Some(runtime) = maybe_runtime {
+            self.publisher.emit_runtime_status(&runtime);
+        }
         Ok(())
     }
 

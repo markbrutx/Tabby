@@ -214,13 +214,6 @@ pub fn workspace_command_from_dto(
         WorkspaceCommandDto::RestartPaneRuntime { pane_id } => {
             WorkspaceCommand::RestartPaneRuntime { pane_id }
         }
-        WorkspaceCommandDto::TrackTerminalWorkingDirectory {
-            pane_id,
-            working_directory,
-        } => WorkspaceCommand::TrackTerminalWorkingDirectory {
-            pane_id,
-            working_directory,
-        },
     }
 }
 
@@ -249,6 +242,16 @@ pub fn runtime_command_from_dto(dto: RuntimeCommandDto) -> RuntimeCommand {
         },
         RuntimeCommandDto::NavigateBrowser { pane_id, url } => {
             RuntimeCommand::NavigateBrowser { pane_id, url }
+        }
+        RuntimeCommandDto::ObserveTerminalCwd {
+            pane_id,
+            working_directory,
+        } => RuntimeCommand::ObserveTerminalCwd {
+            pane_id,
+            working_directory,
+        },
+        RuntimeCommandDto::ObserveBrowserLocation { pane_id, url } => {
+            RuntimeCommand::ObserveBrowserLocation { pane_id, url }
         }
     }
 }
@@ -778,6 +781,41 @@ mod tests {
                 assert_eq!(url, "https://rust-lang.org");
             }
             other => panic!("Expected NavigateBrowser, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn runtime_command_observe_terminal_cwd_maps_correctly() {
+        let dto = RuntimeCommandDto::ObserveTerminalCwd {
+            pane_id: String::from("pane-t"),
+            working_directory: String::from("/tmp"),
+        };
+        let cmd = runtime_command_from_dto(dto);
+        match cmd {
+            RuntimeCommand::ObserveTerminalCwd {
+                pane_id,
+                working_directory,
+            } => {
+                assert_eq!(pane_id, "pane-t");
+                assert_eq!(working_directory, "/tmp");
+            }
+            other => panic!("Expected ObserveTerminalCwd, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn runtime_command_observe_browser_location_maps_correctly() {
+        let dto = RuntimeCommandDto::ObserveBrowserLocation {
+            pane_id: String::from("pane-b"),
+            url: String::from("https://example.com/page"),
+        };
+        let cmd = runtime_command_from_dto(dto);
+        match cmd {
+            RuntimeCommand::ObserveBrowserLocation { pane_id, url } => {
+                assert_eq!(pane_id, "pane-b");
+                assert_eq!(url, "https://example.com/page");
+            }
+            other => panic!("Expected ObserveBrowserLocation, got {other:?}"),
         }
     }
 

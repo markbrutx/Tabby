@@ -52,7 +52,6 @@ impl RuntimeCoordinator {
 
         Ok(())
     }
-
 }
 
 #[cfg(test)]

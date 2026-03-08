@@ -66,7 +66,7 @@ export type PaneSpecDto = { kind: "terminal"; launch_profile_id: string; working
 export type PaneView = { paneId: string; title: string; spec: PaneSpecDto }
 export type ProfileCatalogView = { terminalProfiles: ProfileView[] }
 export type ProfileView = { id: string; label: string; description: string; startupCommandTemplate: string | null }
-export type RuntimeCommandDto = { kind: "writeTerminalInput"; pane_id: string; input: string } | { kind: "resizeTerminal"; pane_id: string; cols: number; rows: number } | { kind: "navigateBrowser"; pane_id: string; url: string }
+export type RuntimeCommandDto = { kind: "writeTerminalInput"; pane_id: string; input: string } | { kind: "resizeTerminal"; pane_id: string; cols: number; rows: number } | { kind: "navigateBrowser"; pane_id: string; url: string } | { kind: "observeTerminalCwd"; pane_id: string; working_directory: string } | { kind: "observeBrowserLocation"; pane_id: string; url: string }
 export type RuntimeKindDto = "terminal" | "browser"
 export type RuntimeStatusChangedEvent = { runtime: PaneRuntimeView }
 export type RuntimeStatusDto = "starting" | "running" | "exited" | "failed"
@@ -80,7 +80,7 @@ export type TabView = { tabId: string; title: string; layout: SplitNodeDto; pane
 export type TerminalOutputEvent = { paneId: string; runtimeSessionId: string; chunk: string }
 export type ThemeModeDto = "system" | "dawn" | "midnight"
 export type WorkspaceBootstrapView = { workspace: WorkspaceView; settings: SettingsView; profileCatalog: ProfileCatalogView; runtimeProjections: PaneRuntimeView[] }
-export type WorkspaceCommandDto = { kind: "openTab"; layout: LayoutPresetDto | null; auto_layout: boolean; pane_specs: PaneSpecDto[] } | { kind: "closeTab"; tab_id: string } | { kind: "setActiveTab"; tab_id: string } | { kind: "focusPane"; tab_id: string; pane_id: string } | { kind: "splitPane"; pane_id: string; direction: SplitDirectionDto; pane_spec: PaneSpecDto } | { kind: "closePane"; pane_id: string } | { kind: "swapPaneSlots"; pane_id_a: string; pane_id_b: string } | { kind: "replacePaneSpec"; pane_id: string; pane_spec: PaneSpecDto } | { kind: "restartPaneRuntime"; pane_id: string } | { kind: "trackTerminalWorkingDirectory"; pane_id: string; working_directory: string }
+export type WorkspaceCommandDto = { kind: "openTab"; layout: LayoutPresetDto | null; auto_layout: boolean; pane_specs: PaneSpecDto[] } | { kind: "closeTab"; tab_id: string } | { kind: "setActiveTab"; tab_id: string } | { kind: "focusPane"; tab_id: string; pane_id: string } | { kind: "splitPane"; pane_id: string; direction: SplitDirectionDto; pane_spec: PaneSpecDto } | { kind: "closePane"; pane_id: string } | { kind: "swapPaneSlots"; pane_id_a: string; pane_id_b: string } | { kind: "replacePaneSpec"; pane_id: string; pane_spec: PaneSpecDto } | { kind: "restartPaneRuntime"; pane_id: string }
 export type WorkspaceProjectionUpdatedEvent = { workspace: WorkspaceView }
 export type WorkspaceView = { activeTabId: string; tabs: TabView[] }
 

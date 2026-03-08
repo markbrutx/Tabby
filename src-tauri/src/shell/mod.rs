@@ -25,7 +25,6 @@ pub const WORKSPACE_PROJECTION_UPDATED_EVENT: &str = "workspace_projection_updat
 pub const SETTINGS_PROJECTION_UPDATED_EVENT: &str = "settings_projection_updated";
 pub const RUNTIME_STATUS_CHANGED_EVENT: &str = "runtime_status_changed";
 pub const TERMINAL_OUTPUT_RECEIVED_EVENT: &str = "terminal_output_received";
-pub const BROWSER_LOCATION_OBSERVED_EVENT: &str = "browser_location_observed";
 
 #[derive(Debug)]
 pub struct AppShell {
@@ -107,9 +106,43 @@ impl AppShell {
         window: &tauri::Window,
         dto: RuntimeCommandDto,
     ) -> Result<(), ShellError> {
+        use crate::application::commands::RuntimeCommand;
+
         let command = dto_mappers::runtime_command_from_dto(dto);
-        self.runtime_service
-            .dispatch_runtime_command(window, command)
+        match command {
+            RuntimeCommand::ObserveTerminalCwd {
+                pane_id,
+                working_directory,
+            } => {
+                self.runtime_service.observe_terminal_cwd(
+                    &pane_id,
+                    &working_directory,
+                    &self.workspace_service,
+                    &self.settings_service,
+                )?;
+                let view = self
+                    .workspace_service
+                    .with_session(dto_mappers::workspace_view_from_session)?;
+                self.publisher.emit_workspace_projection_from_view(&view);
+            }
+            RuntimeCommand::ObserveBrowserLocation { pane_id, url } => {
+                self.runtime_service
+                    .observe_browser_location(&pane_id, &url)?;
+            }
+            other => {
+                self.runtime_service
+                    .dispatch_runtime_command(window, other)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn handle_browser_location_observation(
+        &self,
+        pane_id: &str,
+        url: &str,
+    ) -> Result<(), ShellError> {
+        self.runtime_service.observe_browser_location(pane_id, url)
     }
 
     fn execute_workspace_command(&self, command: WorkspaceCommand) -> Result<(), ShellError> {
@@ -164,16 +197,6 @@ impl AppShell {
                 let preferences = self.settings_service.preferences()?;
                 self.runtime_service
                     .restart_runtime(&pane_id, &spec, &preferences)?;
-            }
-            WorkspaceCommand::TrackTerminalWorkingDirectory {
-                pane_id,
-                working_directory,
-            } => {
-                self.workspace_service
-                    .track_terminal_working_directory(&pane_id, &working_directory)?;
-                let mut preferences = self.settings_service.preferences()?;
-                preferences.last_working_directory = Some(working_directory);
-                self.settings_service.persist_preferences(&preferences)?;
             }
         }
         Ok(())

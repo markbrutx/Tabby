@@ -1,12 +1,12 @@
-use tauri::{Emitter, Manager, Webview};
+use std::sync::Arc;
+
+use tauri::{Manager, Webview};
 use tracing::{info, warn};
 
-use tabby_contracts::{
-    BrowserLocationObservedEvent, BrowserSurfaceBoundsDto, BrowserSurfaceCommandDto,
-};
+use tabby_contracts::{BrowserSurfaceBoundsDto, BrowserSurfaceCommandDto};
 
 use crate::shell::error::ShellError;
-use crate::shell::BROWSER_LOCATION_OBSERVED_EVENT;
+use crate::shell::AppShell;
 
 pub fn execute_browser_surface_command(
     window: &tauri::Window,
@@ -89,12 +89,13 @@ fn ensure_browser_surface(
     let builder =
         tauri::webview::WebviewBuilder::new(&label, tauri::WebviewUrl::External(parsed_url))
             .on_navigation(move |next_url: &url::Url| {
-                let event = BrowserLocationObservedEvent {
-                    pane_id: pane_id_for_nav.clone(),
-                    url: next_url.to_string(),
-                };
-                if let Err(error) = app.emit(BROWSER_LOCATION_OBSERVED_EVENT, event) {
-                    warn!(?error, "Failed to emit browser-location-observed");
+                if let Some(shell) = app.try_state::<Arc<AppShell>>() {
+                    if let Err(error) = shell.handle_browser_location_observation(
+                        &pane_id_for_nav,
+                        next_url.as_ref(),
+                    ) {
+                        warn!(?error, "Failed to observe browser location");
+                    }
                 }
                 true
             });

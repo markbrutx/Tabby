@@ -187,10 +187,6 @@ pub enum WorkspaceCommandDto {
     RestartPaneRuntime {
         pane_id: String,
     },
-    TrackTerminalWorkingDirectory {
-        pane_id: String,
-        working_directory: String,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -213,6 +209,14 @@ pub enum RuntimeCommandDto {
         rows: u16,
     },
     NavigateBrowser {
+        pane_id: String,
+        url: String,
+    },
+    ObserveTerminalCwd {
+        pane_id: String,
+        working_directory: String,
+    },
+    ObserveBrowserLocation {
         pane_id: String,
         url: String,
     },

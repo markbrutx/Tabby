@@ -59,10 +59,6 @@ pub enum WorkspaceCommand {
     RestartPaneRuntime {
         pane_id: String,
     },
-    TrackTerminalWorkingDirectory {
-        pane_id: String,
-        working_directory: String,
-    },
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +95,14 @@ pub enum RuntimeCommand {
         rows: u16,
     },
     NavigateBrowser {
+        pane_id: String,
+        url: String,
+    },
+    ObserveTerminalCwd {
+        pane_id: String,
+        working_directory: String,
+    },
+    ObserveBrowserLocation {
         pane_id: String,
         url: String,
     },

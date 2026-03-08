@@ -39,7 +39,6 @@ interface WorkspaceStore {
   ) => Promise<void>;
   closePane: (paneId: string) => Promise<void>;
   swapPanes: (paneIdA: string, paneIdB: string) => Promise<void>;
-  trackTerminalWorkingDirectory: (paneId: string, workingDirectory: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -260,14 +259,6 @@ function createWorkspaceStoreState() {
           pane_id_b: paneIdB,
         } satisfies WorkspaceCommandDto),
       );
-    },
-
-    async trackTerminalWorkingDirectory(paneId, workingDirectory) {
-      await shellClients.workspace.dispatch({
-        kind: "trackTerminalWorkingDirectory",
-        pane_id: paneId,
-        working_directory: workingDirectory,
-      } satisfies WorkspaceCommandDto);
     },
 
     clearError() {
