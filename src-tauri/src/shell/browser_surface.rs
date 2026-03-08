@@ -46,13 +46,10 @@ pub fn navigate_browser(
 
 pub fn close_browser_surface(window: &tauri::Window, pane_id: &str) -> Result<(), ShellError> {
     let label = webview_label(pane_id);
-    match window.get_webview(&label) {
-        Some(webview) => {
-            if let Err(error) = webview.close() {
-                warn!(?error, label, "Failed to close browser surface");
-            }
+    if let Some(webview) = window.get_webview(&label) {
+        if let Err(error) = webview.close() {
+            warn!(?error, label, "Failed to close browser surface");
         }
-        None => {}
     }
     Ok(())
 }
@@ -133,18 +130,15 @@ fn set_browser_surface_visible(
     pane_id: &str,
     visible: bool,
 ) -> Result<(), ShellError> {
-    match window.get_webview(&webview_label(pane_id)) {
-        Some(webview) => {
-            let result = if visible {
-                webview.show()
-            } else {
-                webview.hide()
-            };
-            result.map_err(|error| {
-                ShellError::Io(format!("Failed to change browser visibility: {error}"))
-            })?;
-        }
-        None => {}
+    if let Some(webview) = window.get_webview(&webview_label(pane_id)) {
+        let result = if visible {
+            webview.show()
+        } else {
+            webview.hide()
+        };
+        result.map_err(|error| {
+            ShellError::Io(format!("Failed to change browser visibility: {error}"))
+        })?;
     }
     Ok(())
 }

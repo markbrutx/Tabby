@@ -13,7 +13,10 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "test:rust": "cd src-tauri && cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test --workspace",
+    "verify": "bun run lint && bun run typecheck && bun run test",
+    "verify:all": "bun run verify && bun run test:rust"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.16",
