@@ -1,24 +1,26 @@
 import type {
-  PaneSnapshot,
-  TabSnapshot,
-  WorkspaceSnapshot,
-} from "@/features/workspace/domain";
+  PaneSnapshotModel,
+  TabSnapshotModel,
+  WorkspaceSnapshotModel,
+} from "@/features/workspace/model/workspaceSnapshot";
 
 export function selectActiveTab(
-  workspace: WorkspaceSnapshot | null | undefined,
-): TabSnapshot | null {
+  workspace: WorkspaceSnapshotModel | null | undefined,
+): TabSnapshotModel | null {
   if (!workspace || workspace.tabs.length === 0) {
     return null;
   }
 
   return (
-    workspace.tabs.find((tab) => tab.id === workspace.activeTabId) ?? workspace.tabs[0] ?? null
+    workspace.tabs.find((tab) => tab.id === workspace.activeTabId) ??
+    workspace.tabs[0] ??
+    null
   );
 }
 
 export function selectActivePane(
-  workspace: WorkspaceSnapshot | null | undefined,
-): PaneSnapshot | null {
+  workspace: WorkspaceSnapshotModel | null | undefined,
+): PaneSnapshotModel | null {
   const activeTab = selectActiveTab(workspace);
   if (!activeTab) {
     return null;

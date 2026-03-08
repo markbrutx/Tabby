@@ -2,11 +2,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
-import {
-  CUSTOM_PROFILE_ID,
-  type PaneProfile,
-  type WorkspaceSettings,
-} from "@/features/workspace/domain";
+import { CUSTOM_PROFILE_ID, type PaneProfile, type WorkspaceSettings } from "@/features/workspace/domain";
 import type { PaneGroupConfig, SetupWizardConfig } from "@/features/workspace/store/types";
 import { LayoutPreview } from "./LayoutPreview";
 import { PaneGroupRow } from "./PaneGroupRow";
@@ -17,7 +13,7 @@ function resolveDefaultProfileId(
   settings: WorkspaceSettings,
   profiles: PaneProfile[],
 ): string {
-  const configured = settings.defaultProfileId?.trim();
+  const configured = settings.defaultTerminalProfileId?.trim();
   if (configured && profiles.some((profile) => profile.id === configured)) {
     return configured;
   }
@@ -27,24 +23,26 @@ function resolveDefaultProfileId(
     ?? "terminal";
 }
 
+function makeDefaultGroup(
+  settings: WorkspaceSettings,
+  profiles: PaneProfile[],
+): PaneGroupConfig {
+  return {
+    mode: "terminal",
+    profileId: resolveDefaultProfileId(settings, profiles),
+    workingDirectory: settings.defaultWorkingDirectory ?? "",
+    customCommand: settings.defaultCustomCommand ?? "",
+    url: "https://google.com",
+    count: 1,
+  };
+}
+
 interface WorkspaceSetupWizardProps {
   profiles: PaneProfile[];
   settings: WorkspaceSettings;
   isFirstLaunch: boolean;
   onComplete: (config: SetupWizardConfig) => void;
   onCancel?: () => void;
-}
-
-function makeDefaultGroup(
-  settings: WorkspaceSettings,
-  profiles: PaneProfile[],
-): PaneGroupConfig {
-  return {
-    profileId: resolveDefaultProfileId(settings, profiles),
-    workingDirectory: settings.defaultWorkingDirectory ?? "",
-    customCommand: settings.defaultCustomCommand ?? "",
-    count: 1,
-  };
 }
 
 export function WorkspaceSetupWizard({
@@ -60,22 +58,25 @@ export function WorkspaceSetupWizard({
 
   useEscapeKey(onCancel);
 
-  const totalPanes = groups.reduce((sum, g) => sum + g.count, 0);
+  const totalPanes = groups.reduce((sum, group) => sum + group.count, 0);
   const hasInvalidGroup = groups.some((group) =>
-    !group.profileId || (
-      group.profileId === CUSTOM_PROFILE_ID
-      && !(group.customCommand?.trim())
-    )
+    group.mode === "terminal"
+      ? !group.profileId || (
+        group.profileId === CUSTOM_PROFILE_ID && !(group.customCommand?.trim())
+      )
+      : !(group.url?.trim())
   );
 
   function handleUpdateGroup(index: number, update: Partial<PaneGroupConfig>) {
     setGroups((prev) =>
-      prev.map((g, i) => (i === index ? { ...g, ...update } : g)),
+      prev.map((group, groupIndex) =>
+        groupIndex === index ? { ...group, ...update } : group,
+      ),
     );
   }
 
   function handleRemoveGroup(index: number) {
-    setGroups((prev) => prev.filter((_, i) => i !== index));
+    setGroups((prev) => prev.filter((_, groupIndex) => groupIndex !== index));
   }
 
   function handleAddGroup() {
@@ -86,13 +87,12 @@ export function WorkspaceSetupWizard({
     if (hasInvalidGroup || totalPanes === 0) {
       return;
     }
-
     onComplete({ groups });
   }
 
   return (
     <div className="flex h-screen items-center justify-center bg-[var(--color-bg)] p-8">
-      <div className="w-full max-w-3xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-2xl">
+      <div className="w-full max-w-4xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-2xl">
         <div className="text-center">
           <h1
             data-testid="wizard-title"
@@ -101,12 +101,11 @@ export function WorkspaceSetupWizard({
             {isFirstLaunch ? "Welcome to Tabby" : "New Workspace"}
           </h1>
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-            Configure your pane groups. Layout adjusts automatically.
+            Compose explicit terminal and browser pane groups. Layout is derived from pane count.
           </p>
         </div>
 
         <div className="mt-6 flex gap-8">
-          {/* Left column: Groups */}
           <div className="flex-1 space-y-3">
             <h3 className="text-xs font-medium text-[var(--color-text-muted)]">
               Groups
@@ -136,7 +135,6 @@ export function WorkspaceSetupWizard({
             ) : null}
           </div>
 
-          {/* Right column: Preview */}
           <div className="w-[280px] shrink-0">
             <LayoutPreview groups={groups} />
           </div>

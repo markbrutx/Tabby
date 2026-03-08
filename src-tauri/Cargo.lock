@@ -3609,6 +3609,10 @@ dependencies = [
  "serde_json",
  "specta",
  "specta-typescript",
+ "tabby-contracts",
+ "tabby-runtime",
+ "tabby-settings",
+ "tabby-workspace",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -3619,6 +3623,36 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uuid",
+]
+
+[[package]]
+name = "tabby-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "specta",
+]
+
+[[package]]
+name = "tabby-runtime"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "tabby-settings"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "tabby-workspace"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.18",
  "uuid",
 ]
 

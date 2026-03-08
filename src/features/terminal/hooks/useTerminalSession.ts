@@ -2,21 +2,15 @@ import { useEffect, useRef } from "react";
 import { FitAddon } from "xterm-addon-fit";
 import { WebglAddon } from "xterm-addon-webgl";
 import { Terminal } from "xterm";
-import type { PaneSnapshot } from "@/features/workspace/domain";
-import {
-  getTerminalTheme,
-  type ResolvedTheme,
-} from "@/features/workspace/theme";
-import { useTransport } from "@/lib/bridge/TransportContext";
-import {
-  registerPtyOutput,
-  initDispatcher,
-  teardownDispatcher,
-} from "@/features/terminal/ptyOutputDispatcher";
+import { useRuntimeClient } from "@/app-shell/context/AppShellContext";
+import { shellClients } from "@/app-shell/clients";
+import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
+import { getTerminalTheme, type ResolvedTheme } from "@/features/workspace/theme";
+import { initDispatcher, registerPtyOutput, teardownDispatcher } from "@/features/terminal/ptyOutputDispatcher";
 import { isTauriRuntime } from "@/lib/runtime";
 
 interface UseTerminalSessionOptions {
-  pane: PaneSnapshot;
+  pane: PaneSnapshotModel;
   fontSize: number;
   theme: ResolvedTheme;
   active: boolean;
@@ -46,7 +40,7 @@ export function useTerminalSession({
   active,
   visible,
 }: UseTerminalSessionOptions) {
-  const bridge = useTransport();
+  const runtimeClient = useRuntimeClient();
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const webglAddonRef = useRef<WebglAddon | null>(null);
@@ -54,18 +48,19 @@ export function useTerminalSession({
   const pendingDataRef = useRef<string[]>([]);
   const initializedRef = useRef(false);
 
-  // --- Effect 1: PTY output listener (via dispatcher) ---
-  // Registers with the centralized dispatcher instead of subscribing
-  // independently. One global subscription fans out to N pane handlers.
   useEffect(() => {
-    void initDispatcher(bridge);
+    if (!pane.sessionId) {
+      return;
+    }
+
+    void initDispatcher(runtimeClient);
 
     const unregister = registerPtyOutput(pane.id, pane.sessionId, (chunk) => {
       if (terminalRef.current && initializedRef.current) {
         try {
           terminalRef.current.write(chunk);
         } catch {
-          // Terminal disposed or renderer gone — drop the chunk.
+          // Terminal disposed or renderer gone.
         }
       } else {
         pendingDataRef.current.push(chunk);
@@ -76,11 +71,8 @@ export function useTerminalSession({
       unregister();
       teardownDispatcher();
     };
-  }, [pane.id, pane.sessionId]);
+  }, [pane.id, pane.sessionId, runtimeClient]);
 
-  // --- Effect 2: Terminal lifecycle ---
-  // Creates & disposes Terminal on session/font changes.
-  // Does NOT call open() — that is deferred to Effect 3 (visibility).
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -107,20 +99,26 @@ export function useTerminalSession({
     initializedRef.current = false;
 
     const dataDisposable = terminal.onData((data) => {
-      void bridge.writePty(pane.id, data);
+      void runtimeClient.dispatch({
+        kind: "writeTerminalInput",
+        pane_id: pane.id,
+        input: data,
+      });
     });
 
-    // OSC 7 handler — tracks CWD changes reported by the shell.
-    // macOS zsh emits OSC 7 automatically. Format: "file://host/path"
     const oscDisposable = terminal.parser.registerOscHandler(7, (data) => {
       try {
         const url = new URL(data);
         const cwd = decodeURIComponent(url.pathname);
         if (cwd) {
-          void bridge.trackPaneCwd(pane.id, cwd);
+          void shellClients.workspace.dispatch({
+            kind: "trackTerminalWorkingDirectory",
+            pane_id: pane.id,
+            working_directory: cwd,
+          });
         }
       } catch {
-        // Malformed URL — ignore.
+        // Malformed URL - ignore.
       }
       return true;
     });
@@ -133,44 +131,41 @@ export function useTerminalSession({
       safeFit(fitAddon, container);
 
       if (isTauriRuntime()) {
-        try {
-          void bridge.resizePty({
-            paneId: pane.id,
-            cols: terminal.cols,
-            rows: terminal.rows,
-          });
-        } catch {
-          // Terminal may be disposed during resize.
-        }
+        void runtimeClient.dispatch({
+          kind: "resizeTerminal",
+          pane_id: pane.id,
+          cols: terminal.cols,
+          rows: terminal.rows,
+        });
       }
     });
 
     observer.observe(container);
 
     return () => {
-      // 1. Mark uninitialized FIRST — blocks all callbacks
       initializedRef.current = false;
-      // 2. Stop observing before disposal
       observer.disconnect();
-      // 3. Dispose data and OSC listeners
       dataDisposable.dispose();
       oscDisposable.dispose();
-      // 4. Dispose WebGL addon explicitly (can throw on lost context)
       if (webglAddonRef.current) {
-        try { webglAddonRef.current.dispose(); } catch { /* lost GL context */ }
+        try {
+          webglAddonRef.current.dispose();
+        } catch {
+          // lost GL context
+        }
         webglAddonRef.current = null;
       }
-      // 5. Dispose terminal
-      try { terminal.dispose(); } catch { /* already disposed */ }
+      try {
+        terminal.dispose();
+      } catch {
+        // already disposed
+      }
       terminalRef.current = null;
       fitAddonRef.current = null;
       pendingDataRef.current = [];
     };
-  }, [fontSize, pane.id, pane.sessionId]);
+  }, [fontSize, pane.id, pane.sessionId, runtimeClient, theme]);
 
-  // --- Effect 3: Renderer activation (visibility-gated) ---
-  // Opens the terminal in the DOM only when the container is visible.
-  // Hidden tabs skip this entirely — no open(), no WebGL, no renderer.
   useEffect(() => {
     const container = containerRef.current;
     const terminal = terminalRef.current;
@@ -180,27 +175,21 @@ export function useTerminalSession({
       return;
     }
 
-    // Already initialized — just fit and resize. Do NOT call terminal.focus()
-    // here: when the user mousedowns to start a text selection, onFocus fires
-    // which flips `active` → Effect reruns → focus() would steal the mousedown
-    // and break selection. xterm.js handles focus internally via mouse events.
     if (initializedRef.current) {
       if (active) {
         safeFit(fitAddon, container);
-
         if (isTauriRuntime()) {
-          void bridge.resizePty({
-            paneId: pane.id,
+          void runtimeClient.dispatch({
+            kind: "resizeTerminal",
+            pane_id: pane.id,
             cols: terminal.cols,
             rows: terminal.rows,
           });
         }
       }
-
       return;
     }
 
-    // First time visible — activate renderer.
     const rafId = requestAnimationFrame(() => {
       if (!terminalRef.current || initializedRef.current) {
         return;
@@ -209,7 +198,6 @@ export function useTerminalSession({
       try {
         terminal.open(container);
       } catch {
-        // open() can fail on detached or zero-size containers.
         return;
       }
 
@@ -218,26 +206,20 @@ export function useTerminalSession({
         terminal.loadAddon(webgl);
         webglAddonRef.current = webgl;
       } catch {
-        // WebGL is optional; canvas renderer continues to work.
+        // WebGL is optional.
       }
 
-      // Fit BEFORE marking initialized so the resize event uses correct dims.
       safeFit(fitAddon, container);
 
       if (isTauriRuntime()) {
-        // Resize the PTY to actual container size. The shell will reprint
-        // its prompt at the correct dimensions via SIGWINCH.
-        void bridge.resizePty({
-          paneId: pane.id,
+        void runtimeClient.dispatch({
+          kind: "resizeTerminal",
+          pane_id: pane.id,
           cols: terminal.cols,
           rows: terminal.rows,
         });
-
-        // Drop buffered output — it was rendered at default 80×24 and will
-        // garble in the real viewport. The resize above triggers a redraw.
         pendingDataRef.current = [];
       } else {
-        // Dev/mock mode: flush buffer so welcome text is visible.
         const pending = pendingDataRef.current.splice(0);
         for (const chunk of pending) {
           try {
@@ -251,12 +233,9 @@ export function useTerminalSession({
       initializedRef.current = true;
     });
 
-    return () => {
-      cancelAnimationFrame(rafId);
-    };
-  }, [pane.id, visible]);
+    return () => cancelAnimationFrame(rafId);
+  }, [pane.id, runtimeClient, visible, active]);
 
-  // --- Effect 4: Theme ---
   useEffect(() => {
     if (!terminalRef.current || !initializedRef.current) {
       return;
@@ -265,14 +244,10 @@ export function useTerminalSession({
     try {
       terminalRef.current.options.theme = getTerminalTheme(theme);
     } catch {
-      // Theme update can fail if renderer is in a bad state.
+      // Renderer may be in a bad state.
     }
   }, [theme]);
 
-  // --- Effect 5: Focus on keyboard navigation ---
-  // When the user switches panes via Cmd+Alt+Arrow / Cmd+[/], the store
-  // updates `activePaneId` but xterm doesn't receive `.focus()`. This effect
-  // detects the false→true transition and programmatically focuses the terminal.
   const prevActiveRef = useRef(false);
   useEffect(() => {
     const wasActive = prevActiveRef.current;

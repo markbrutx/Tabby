@@ -4,12 +4,7 @@ import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import {
-  CUSTOM_PROFILE_ID,
-  type LayoutPreset,
-  type PaneProfile,
-  type WorkspaceSettings,
-} from "@/features/workspace/domain";
+import { CUSTOM_PROFILE_ID, type LayoutPreset, type PaneProfile, type WorkspaceSettings } from "@/features/workspace/domain";
 import { pickDirectory } from "@/lib/pickDirectory";
 
 const LAYOUT_OPTIONS: { value: LayoutPreset; label: string }[] = [
@@ -125,11 +120,11 @@ export function SettingsModal({
             </span>
             <Select
               data-testid="settings-profile"
-              value={draft.defaultProfileId}
+              value={draft.defaultTerminalProfileId}
               onChange={(event) =>
                 setDraft((current) => ({
                   ...current,
-                  defaultProfileId: event.target.value,
+                  defaultTerminalProfileId: event.target.value,
                 }))
               }
             >
@@ -141,7 +136,7 @@ export function SettingsModal({
             </Select>
           </label>
 
-          {draft.defaultProfileId === CUSTOM_PROFILE_ID ? (
+          {draft.defaultTerminalProfileId === CUSTOM_PROFILE_ID ? (
             <label className="block">
               <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
                 Default custom command

@@ -5,22 +5,26 @@ import {
   initDispatcher,
   teardownDispatcher,
 } from "./ptyOutputDispatcher";
-import type { PtyOutputEvent } from "@/features/workspace/domain";
-import type { WorkspaceTransport, UnlistenFn } from "@/lib/bridge/shared";
+import type { RuntimeClient, UnlistenFn } from "@/app-shell/clients";
+import type { TerminalOutputEvent } from "@/features/workspace/domain";
 
-let captured: ((event: PtyOutputEvent) => void) | null = null;
+let captured: ((event: TerminalOutputEvent) => void) | null = null;
 
-function makeMockTransport(): WorkspaceTransport {
+function makeMockTransport(): RuntimeClient {
   return {
-    listenToPtyOutput: vi.fn(async (handler) => {
+    dispatch: vi.fn(async () => undefined),
+    dispatchBrowserSurface: vi.fn(async () => undefined),
+    listenStatusChanged: vi.fn(async () => () => undefined),
+    listenBrowserLocationObserved: vi.fn(async () => () => undefined),
+    listenTerminalOutput: vi.fn(async (handler) => {
       captured = handler;
       return (() => { captured = null; }) as UnlistenFn;
     }),
-  } as unknown as WorkspaceTransport;
+  };
 }
 
 function emit(paneId: string, sessionId: string, chunk: string) {
-  captured?.({ paneId, sessionId, chunk });
+  captured?.({ paneId, runtimeSessionId: sessionId, chunk });
 }
 
 beforeEach(() => {
@@ -101,21 +105,25 @@ describe("ptyOutputDispatcher", () => {
     let callCount = 0;
 
     const transport = {
-      listenToPtyOutput: vi.fn(() => {
+      dispatch: vi.fn(async () => undefined),
+      dispatchBrowserSurface: vi.fn(async () => undefined),
+      listenStatusChanged: vi.fn(async () => () => undefined),
+      listenBrowserLocationObserved: vi.fn(async () => () => undefined),
+      listenTerminalOutput: vi.fn(() => {
         callCount += 1;
         if (callCount === 1) {
           return new Promise<UnlistenFn>((r) => { resolveFirst = r; });
         }
         return new Promise<UnlistenFn>((r) => { resolveSecond = r; });
       }),
-    } as unknown as WorkspaceTransport;
+    } satisfies RuntimeClient;
 
     // Start two concurrent inits (simulates StrictMode mount-unmount-mount)
     const p1 = initDispatcher(transport);
     const p2 = initDispatcher(transport);
 
     // Only one listenToPtyOutput call should have been made
-    expect(transport.listenToPtyOutput).toHaveBeenCalledTimes(1);
+    expect(transport.listenTerminalOutput).toHaveBeenCalledTimes(1);
 
     resolveFirst(unlisten1);
     await p1;
@@ -130,10 +138,14 @@ describe("ptyOutputDispatcher", () => {
     const unlisten = vi.fn();
 
     const transport = {
-      listenToPtyOutput: vi.fn(() => {
+      dispatch: vi.fn(async () => undefined),
+      dispatchBrowserSurface: vi.fn(async () => undefined),
+      listenStatusChanged: vi.fn(async () => () => undefined),
+      listenBrowserLocationObserved: vi.fn(async () => () => undefined),
+      listenTerminalOutput: vi.fn(() => {
         return new Promise<UnlistenFn>((r) => { resolveListener = r; });
       }),
-    } as unknown as WorkspaceTransport;
+    } satisfies RuntimeClient;
 
     const p = initDispatcher(transport);
 

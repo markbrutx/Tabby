@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PaneSnapshot } from "@/features/workspace/domain";
-import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain";
-import type { BrowserBounds } from "@/lib/bridge";
-import { useTransport } from "@/lib/bridge/TransportContext";
+import { useRuntimeClient } from "@/app-shell/context/AppShellContext";
+import { DEFAULT_BROWSER_URL, type BrowserBounds } from "@/features/workspace/domain";
+import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import { isTauriRuntime } from "@/lib/runtime";
 
 interface UseBrowserWebviewOptions {
-  pane: PaneSnapshot;
+  pane: PaneSnapshotModel;
   visible: boolean;
   onUrlChange?: (url: string) => void;
 }
@@ -60,7 +59,7 @@ export function useBrowserWebview({
   visible,
   onUrlChange,
 }: UseBrowserWebviewOptions): UseBrowserWebviewResult {
-  const bridge = useTransport();
+  const runtimeClient = useRuntimeClient();
   const containerRef = useRef<HTMLDivElement>(null);
   const [currentUrl, setCurrentUrl] = useState(pane.url ?? DEFAULT_BROWSER_URL);
   const createdRef = useRef(false);
@@ -86,10 +85,14 @@ export function useBrowserWebview({
         lastBoundsRef.current = null;
         // Browser panes can transiently unmount during layout changes (for example split/remount).
         // Hide instead of closing so the native webview survives those React tree moves.
-        void bridge.setBrowserWebviewVisible(pane.id, false).catch(() => undefined);
+        void runtimeClient.dispatchBrowserSurface({
+          kind: "setVisible",
+          pane_id: pane.id,
+          visible: false,
+        }).catch(() => undefined);
       }
     };
-  }, [pane.id, isTauri]);
+  }, [pane.id, isTauri, runtimeClient]);
 
   // Effect 2: Lazily create the native webview the first time the pane is shown.
   useEffect(() => {
@@ -108,11 +111,12 @@ export function useBrowserWebview({
 
       createdRef.current = true;
       lastBoundsRef.current = bounds;
-      void bridge.createBrowserWebview(
-        pane.id,
-        normalizeUrl(currentUrlRef.current),
+      void runtimeClient.dispatchBrowserSurface({
+        kind: "ensure",
+        pane_id: pane.id,
+        url: normalizeUrl(currentUrlRef.current),
         bounds,
-      ).catch(() => {
+      }).catch(() => {
         createdRef.current = false;
         lastBoundsRef.current = null;
       });
@@ -122,7 +126,7 @@ export function useBrowserWebview({
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [pane.id, visible, isTauri]);
+  }, [pane.id, visible, isTauri, runtimeClient]);
 
   // Effect 3: Resize sync via ResizeObserver
   useEffect(() => {
@@ -145,7 +149,11 @@ export function useBrowserWebview({
         }
 
         lastBoundsRef.current = bounds;
-        void bridge.setBrowserWebviewBounds(pane.id, bounds).catch(() => undefined);
+        void runtimeClient.dispatchBrowserSurface({
+          kind: "setBounds",
+          pane_id: pane.id,
+          bounds,
+        }).catch(() => undefined);
       });
     });
 
@@ -156,13 +164,17 @@ export function useBrowserWebview({
       observer.disconnect();
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [pane.id, isTauri]);
+  }, [pane.id, isTauri, runtimeClient]);
 
   // Effect 4: Visibility sync
   useEffect(() => {
     if (!isTauri || !createdRef.current) return;
-    void bridge.setBrowserWebviewVisible(pane.id, visible).catch(() => undefined);
-  }, [pane.id, visible, isTauri]);
+    void runtimeClient.dispatchBrowserSurface({
+      kind: "setVisible",
+      pane_id: pane.id,
+      visible,
+    }).catch(() => undefined);
+  }, [pane.id, visible, isTauri, runtimeClient]);
 
   // Effect 5: URL change events from native webview
   useEffect(() => {
@@ -171,7 +183,7 @@ export function useBrowserWebview({
     let cancelled = false;
     let unlisten: (() => void) | null = null;
 
-    void bridge.listenToBrowserUrlChanged((event) => {
+    void runtimeClient.listenBrowserLocationObserved((event) => {
       if (cancelled) return;
       if (event.paneId === pane.id) {
         setCurrentUrl(event.url);
@@ -189,7 +201,7 @@ export function useBrowserWebview({
       cancelled = true;
       unlisten?.();
     };
-  }, [pane.id, isTauri]);
+  }, [pane.id, isTauri, runtimeClient]);
 
   const navigate = useCallback(
     (url: string) => {
@@ -197,10 +209,14 @@ export function useBrowserWebview({
       setCurrentUrl(normalized);
 
       if (isTauri && createdRef.current) {
-        void bridge.navigateBrowser(pane.id, normalized).catch(() => undefined);
+        void runtimeClient.dispatch({
+          kind: "navigateBrowser",
+          pane_id: pane.id,
+          url: normalized,
+        }).catch(() => undefined);
       }
     },
-    [pane.id, isTauri],
+    [pane.id, isTauri, runtimeClient],
   );
 
   return { containerRef, currentUrl, navigate };

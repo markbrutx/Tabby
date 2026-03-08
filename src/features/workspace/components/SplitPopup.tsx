@@ -1,46 +1,45 @@
 import { FolderOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
-import {
-  CUSTOM_PROFILE_ID,
-  BROWSER_PROFILE_ID,
-  type PaneProfile,
-  type SplitDirection,
-} from "@/features/workspace/domain";
+import { Select } from "@/components/ui/Select";
+import { CUSTOM_PROFILE_ID, type PaneProfile, type PaneSpecDto, type SplitDirection } from "@/features/workspace/domain";
 import { pickDirectory } from "@/lib/pickDirectory";
 
 interface SplitPopupProps {
   direction: SplitDirection;
   profiles: PaneProfile[];
-  defaultProfileId: string;
-  defaultCwd: string;
-  onConfirm: (profileId: string, cwd: string, startupCommand: string | null) => void;
+  defaultSpec: PaneSpecDto;
+  onConfirm: (paneSpec: PaneSpecDto) => void;
   onCancel: () => void;
 }
 
 export function SplitPopup({
   direction,
   profiles,
-  defaultProfileId,
-  defaultCwd,
+  defaultSpec,
   onConfirm,
   onCancel,
 }: SplitPopupProps) {
-  const resolvedDefaultProfileId = profiles.some((profile) => profile.id === defaultProfileId)
-    ? defaultProfileId
-    : (profiles.find((profile) => profile.id === "terminal")?.id ?? "terminal");
-  const [profileId, setProfileId] = useState(resolvedDefaultProfileId);
-  const [cwd, setCwd] = useState(defaultCwd);
-  const [customCommand, setCustomCommand] = useState("");
-  const isCustomProfileInvalid =
-    profileId === CUSTOM_PROFILE_ID && !customCommand.trim();
+  const initialMode = defaultSpec.kind === "browser" ? "browser" : "terminal";
+  const [mode, setMode] = useState<"terminal" | "browser">(initialMode);
+  const [profileId, setProfileId] = useState(
+    defaultSpec.kind === "terminal" ? defaultSpec.launch_profile_id : "terminal",
+  );
+  const [cwd, setCwd] = useState(
+    defaultSpec.kind === "terminal" ? defaultSpec.working_directory : "~",
+  );
+  const [customCommand, setCustomCommand] = useState(
+    defaultSpec.kind === "terminal" ? defaultSpec.command_override ?? "" : "",
+  );
+  const [url, setUrl] = useState(
+    defaultSpec.kind === "browser" ? defaultSpec.initial_url : "https://google.com",
+  );
 
-  const stateRef = useRef({ profileId, cwd, customCommand });
+  const stateRef = useRef({ mode, profileId, cwd, customCommand, url });
   useEffect(() => {
-    stateRef.current = { profileId, cwd, customCommand };
-  });
+    stateRef.current = { mode, profileId, cwd, customCommand, url };
+  }, [mode, profileId, cwd, customCommand, url]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -48,19 +47,26 @@ export function SplitPopup({
         event.preventDefault();
         onCancel();
       } else if (event.key === "Enter") {
-        const { profileId: pid, cwd: dir, customCommand: cmd } = stateRef.current;
-        if (pid === CUSTOM_PROFILE_ID && !cmd.trim()) {
+        event.preventDefault();
+        const { mode: nextMode, profileId: nextProfileId, cwd: nextCwd, customCommand: nextCommand, url: nextUrl } = stateRef.current;
+        if (nextMode === "terminal" && nextProfileId === CUSTOM_PROFILE_ID && !nextCommand.trim()) {
           return;
         }
 
-        event.preventDefault();
         onConfirm(
-          pid,
-          dir,
-          pid === CUSTOM_PROFILE_ID ? cmd.trim() || null : null,
+          nextMode === "browser"
+            ? { kind: "browser", initial_url: nextUrl.trim() || "https://google.com" }
+            : {
+                kind: "terminal",
+                launch_profile_id: nextProfileId,
+                working_directory: nextCwd,
+                command_override:
+                  nextProfileId === CUSTOM_PROFILE_ID ? nextCommand.trim() || null : null,
+              },
         );
       }
     }
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onCancel, onConfirm]);
@@ -73,14 +79,19 @@ export function SplitPopup({
   }
 
   function handleConfirm() {
-    if (isCustomProfileInvalid) {
+    if (mode === "terminal" && profileId === CUSTOM_PROFILE_ID && !customCommand.trim()) {
       return;
     }
 
     onConfirm(
-      profileId,
-      cwd,
-      profileId === CUSTOM_PROFILE_ID ? customCommand.trim() || null : null,
+      mode === "browser"
+        ? { kind: "browser", initial_url: url.trim() || "https://google.com" }
+        : {
+            kind: "terminal",
+            launch_profile_id: profileId,
+            working_directory: cwd,
+            command_override: profileId === CUSTOM_PROFILE_ID ? customCommand.trim() || null : null,
+          },
     );
   }
 
@@ -94,54 +105,77 @@ export function SplitPopup({
       }}
       role="dialog"
     >
-      <div className="w-full max-w-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl">
+      <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl">
         <p className="mb-3 text-sm font-medium">
           Split {dirLabel}
         </p>
 
         <div className="space-y-3">
           <Select
-            value={profileId}
-            onChange={(event) => setProfileId(event.target.value)}
+            value={mode}
+            onChange={(event) => setMode(event.target.value as "terminal" | "browser")}
             className="text-sm"
           >
-            {profiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.label}
-              </option>
-            ))}
+            <option value="terminal">Terminal</option>
+            <option value="browser">Browser</option>
           </Select>
 
-          {profileId === CUSTOM_PROFILE_ID ? (
+          {mode === "browser" ? (
             <Input
-              value={customCommand}
-              onChange={(event) => setCustomCommand(event.target.value)}
-              placeholder="Custom command"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://google.com"
               className="text-sm"
               autoFocus
             />
-          ) : null}
-
-          {profileId !== BROWSER_PROFILE_ID ? (
-            <div className="flex gap-2">
-              <Input
-                value={cwd}
-                onChange={(event) => setCwd(event.target.value)}
-                placeholder="Working directory"
+          ) : (
+            <>
+              <Select
+                value={profileId}
+                onChange={(event) => setProfileId(event.target.value)}
                 className="text-sm"
-              />
-              <Button variant="secondary" size="sm" onClick={() => void handlePickDirectory()}>
-                <FolderOpen size={14} />
-              </Button>
-            </div>
-          ) : null}
+              >
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.label}
+                  </option>
+                ))}
+              </Select>
+
+              {profileId === CUSTOM_PROFILE_ID ? (
+                <Input
+                  value={customCommand}
+                  onChange={(event) => setCustomCommand(event.target.value)}
+                  placeholder="Custom command"
+                  className="text-sm"
+                  autoFocus
+                />
+              ) : null}
+
+              <div className="flex gap-2">
+                <Input
+                  value={cwd}
+                  onChange={(event) => setCwd(event.target.value)}
+                  placeholder="Working directory"
+                  className="text-sm"
+                />
+                <Button variant="secondary" size="sm" onClick={() => void handlePickDirectory()}>
+                  <FolderOpen size={14} />
+                </Button>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mt-3 flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onCancel}>
             Cancel
           </Button>
-          <Button size="sm" disabled={isCustomProfileInvalid} onClick={handleConfirm}>
+          <Button
+            size="sm"
+            disabled={mode === "terminal" && profileId === CUSTOM_PROFILE_ID && !customCommand.trim()}
+            onClick={handleConfirm}
+          >
             Split
           </Button>
         </div>

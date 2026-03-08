@@ -1,5 +1,5 @@
-import type { PtyOutputEvent } from "@/features/workspace/domain";
-import type { UnlistenFn, WorkspaceTransport } from "@/lib/bridge/shared";
+import type { RuntimeClient, UnlistenFn } from "@/app-shell/clients";
+import type { TerminalOutputEvent } from "@/features/workspace/domain";
 
 type OutputHandler = (chunk: string) => void;
 
@@ -14,10 +14,13 @@ let globalUnlisten: UnlistenFn | null = null;
 let subscriberCount = 0;
 let pending = false;
 
-function dispatch(event: PtyOutputEvent) {
-  for (const reg of registrations) {
-    if (reg.paneId === event.paneId && reg.sessionId === event.sessionId) {
-      reg.handler(event.chunk);
+function dispatch(event: TerminalOutputEvent) {
+  for (const registration of registrations) {
+    if (
+      registration.paneId === event.paneId &&
+      registration.sessionId === event.runtimeSessionId
+    ) {
+      registration.handler(event.chunk);
     }
   }
 }
@@ -31,26 +34,25 @@ export function registerPtyOutput(
   registrations = [...registrations, registration];
 
   return () => {
-    registrations = registrations.filter((r) => r !== registration);
+    registrations = registrations.filter((candidate) => candidate !== registration);
   };
 }
 
-export async function initDispatcher(transport: WorkspaceTransport): Promise<void> {
+export async function initDispatcher(runtimeClient: RuntimeClient): Promise<void> {
   subscriberCount += 1;
   if (globalUnlisten || pending) {
     return;
   }
+
   pending = true;
-  const unlisten = await transport.listenToPtyOutput(dispatch);
+  const unlisten = await runtimeClient.listenTerminalOutput(dispatch);
   pending = false;
 
-  // Teardown ran while we were awaiting — immediately clean up
   if (subscriberCount <= 0) {
     unlisten();
     return;
   }
 
-  // Another init completed first (shouldn't happen with pending guard, but be safe)
   if (globalUnlisten) {
     unlisten();
     return;
@@ -68,7 +70,6 @@ export function teardownDispatcher(): void {
   }
 }
 
-/** Reset all state — for testing only. */
 export function resetDispatcher(): void {
   registrations = [];
   globalUnlisten?.();

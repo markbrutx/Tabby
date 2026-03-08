@@ -2,7 +2,7 @@ import { FolderOpen, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { BROWSER_PROFILE_ID, CUSTOM_PROFILE_ID, type PaneProfile } from "@/features/workspace/domain";
+import { CUSTOM_PROFILE_ID, type PaneProfile } from "@/features/workspace/domain";
 import type { PaneGroupConfig } from "@/features/workspace/store/types";
 import { pickDirectory } from "@/lib/pickDirectory";
 
@@ -10,8 +10,8 @@ const GROUP_DOT_COLORS = [
   "bg-[var(--color-accent)]",
   "bg-blue-500",
   "bg-emerald-500",
-  "bg-purple-500",
   "bg-amber-500",
+  "bg-rose-500",
 ];
 
 interface PaneGroupRowProps {
@@ -41,11 +41,12 @@ export function PaneGroupRow({
   }
 
   const dotColor = GROUP_DOT_COLORS[index % GROUP_DOT_COLORS.length];
+  const isBrowser = group.mode === "browser";
 
   return (
     <div
       data-testid={`pane-group-${index}`}
-      className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-4 space-y-3"
+      className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-4"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -65,21 +66,39 @@ export function PaneGroupRow({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="flex-1">
+      <div className="grid gap-3 sm:grid-cols-[140px_minmax(0,1fr)_auto]">
+        <Select
+          value={group.mode}
+          onChange={(event) =>
+            onChange({
+              mode: event.target.value as PaneGroupConfig["mode"],
+            })
+          }
+          className="text-sm"
+        >
+          <option value="terminal">Terminal</option>
+          <option value="browser">Browser</option>
+        </Select>
+
+        {isBrowser ? (
+          <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+            Embedded browser pane
+          </div>
+        ) : (
           <Select
             data-testid={`group-profile-${index}`}
             value={group.profileId}
-            onChange={(e) => onChange({ profileId: e.target.value })}
+            onChange={(event) => onChange({ profileId: event.target.value })}
             className="text-sm"
           >
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.label}
               </option>
             ))}
           </Select>
-        </div>
+        )}
+
         <div className="flex items-center gap-0.5 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-overlay)] px-1">
           <button
             data-testid={`group-decrement-${index}`}
@@ -106,11 +125,11 @@ export function PaneGroupRow({
         </div>
       </div>
 
-      {group.profileId === BROWSER_PROFILE_ID ? (
+      {isBrowser ? (
         <Input
           data-testid={`group-url-${index}`}
           value={group.url ?? ""}
-          onChange={(e) => onChange({ url: e.target.value })}
+          onChange={(event) => onChange({ url: event.target.value })}
           placeholder="https://google.com"
           className="text-sm"
         />
@@ -120,7 +139,7 @@ export function PaneGroupRow({
             <Input
               data-testid={`group-dir-${index}`}
               value={group.workingDirectory}
-              onChange={(e) => onChange({ workingDirectory: e.target.value })}
+              onChange={(event) => onChange({ workingDirectory: event.target.value })}
               placeholder="Working directory"
               className="text-sm"
             />
@@ -138,7 +157,7 @@ export function PaneGroupRow({
             <Input
               data-testid={`group-command-${index}`}
               value={group.customCommand ?? ""}
-              onChange={(e) => onChange({ customCommand: e.target.value })}
+              onChange={(event) => onChange({ customCommand: event.target.value })}
               placeholder="Custom command (e.g. npm run dev)"
               className="text-sm"
             />

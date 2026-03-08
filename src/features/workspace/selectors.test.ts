@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SplitNode, WorkspaceSnapshot } from "@/features/workspace/domain";
+import type { SplitNode } from "@/features/workspace/domain";
+import type { WorkspaceSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import {
   selectActivePane,
   selectActiveTab,
@@ -21,7 +22,7 @@ const layout2pane: SplitNode = {
   second: { type: "pane", paneId: "pane-4" },
 };
 
-const workspace: WorkspaceSnapshot = {
+const workspace: WorkspaceSnapshotModel = {
   activeTabId: "tab-2",
   tabs: [
     {
@@ -41,6 +42,13 @@ const workspace: WorkspaceSnapshot = {
           status: "running",
           paneKind: "terminal",
           url: null,
+          spec: {
+            kind: "terminal",
+            launch_profile_id: "terminal",
+            working_directory: "/tmp/alpha",
+            command_override: null,
+          },
+          runtime: null,
         },
         {
           id: "pane-2",
@@ -53,6 +61,13 @@ const workspace: WorkspaceSnapshot = {
           status: "running",
           paneKind: "terminal",
           url: null,
+          spec: {
+            kind: "terminal",
+            launch_profile_id: "claude",
+            working_directory: "/tmp/bravo",
+            command_override: "claude",
+          },
+          runtime: null,
         },
       ],
     },
@@ -73,6 +88,13 @@ const workspace: WorkspaceSnapshot = {
           status: "starting",
           paneKind: "terminal",
           url: null,
+          spec: {
+            kind: "terminal",
+            launch_profile_id: "terminal",
+            working_directory: "/tmp/charlie",
+            command_override: null,
+          },
+          runtime: null,
         },
         {
           id: "pane-4",
@@ -85,6 +107,13 @@ const workspace: WorkspaceSnapshot = {
           status: "running",
           paneKind: "terminal",
           url: null,
+          spec: {
+            kind: "terminal",
+            launch_profile_id: "codex",
+            working_directory: "/tmp/delta",
+            command_override: "codex",
+          },
+          runtime: null,
         },
       ],
     },

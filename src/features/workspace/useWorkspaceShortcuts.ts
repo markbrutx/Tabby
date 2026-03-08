@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
-import type { WorkspaceSnapshot } from "@/features/workspace/domain";
+import type { WorkspaceSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import { selectActivePane, selectActiveTab } from "@/features/workspace/selectors";
 import {
   findAdjacentPane,
@@ -10,7 +10,7 @@ import {
 import { isTauriRuntime } from "@/lib/runtime";
 
 interface WorkspaceShortcutsProps {
-  workspace: WorkspaceSnapshot | null;
+  workspace: WorkspaceSnapshotModel | null;
   onCreateTab: () => void | Promise<void>;
   onCloseTab: (tabId: string) => void | Promise<void>;
   onClosePane: (paneId: string) => void | Promise<void>;

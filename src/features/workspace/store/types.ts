@@ -1,4 +1,5 @@
 export interface PaneGroupConfig {
+  mode: "terminal" | "browser";
   profileId: string;
   workingDirectory: string;
   customCommand?: string;

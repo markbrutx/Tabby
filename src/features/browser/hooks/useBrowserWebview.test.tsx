@@ -1,9 +1,11 @@
 import { act, render } from "@testing-library/react";
 import { useEffect, useState } from "react";
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RuntimeClient } from "@/app-shell/clients";
+import { AppShellContext } from "@/app-shell/context/AppShellContext";
+import type { BrowserSurfaceCommandDto } from "@/features/workspace/domain";
 import { normalizeUrl, useBrowserWebview } from "./useBrowserWebview";
-import type { PaneSnapshot } from "@/features/workspace/domain";
-import type { WorkspaceTransport } from "@/lib/bridge/shared";
+import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 
 describe("normalizeUrl", () => {
   it("returns default URL for empty input", () => {
@@ -45,20 +47,19 @@ vi.mock("@/lib/runtime", () => ({
   isTauriRuntime: () => true,
 }));
 
+const browserSurfaceCommands: BrowserSurfaceCommandDto[] = [];
+
 const mockBridge = {
-  setBrowserWebviewVisible: vi.fn(() => Promise.resolve()),
-  createBrowserWebview: vi.fn(() => Promise.resolve()),
-  closeBrowserWebview: vi.fn(() => Promise.resolve()),
-  navigateBrowser: vi.fn(() => Promise.resolve()),
-  listenToBrowserUrlChanged: vi.fn(() => Promise.resolve(() => {})),
-  setBrowserWebviewBounds: vi.fn(() => Promise.resolve()),
-} as unknown as WorkspaceTransport;
+  dispatch: vi.fn(() => Promise.resolve()),
+  dispatchBrowserSurface: vi.fn(async (command: BrowserSurfaceCommandDto) => {
+    browserSurfaceCommands.push(command);
+  }),
+  listenStatusChanged: vi.fn(() => Promise.resolve(() => {})),
+  listenTerminalOutput: vi.fn(() => Promise.resolve(() => {})),
+  listenBrowserLocationObserved: vi.fn(() => Promise.resolve(() => {})),
+} satisfies RuntimeClient;
 
-vi.mock("@/lib/bridge/TransportContext", () => ({
-  useTransport: () => mockBridge,
-}));
-
-function makePaneSnapshot(id = "pane-1"): PaneSnapshot {
+function makePaneSnapshot(id = "pane-1"): PaneSnapshotModel {
   return {
     id,
     sessionId: "session-1",
@@ -70,6 +71,18 @@ function makePaneSnapshot(id = "pane-1"): PaneSnapshot {
     status: "running",
     paneKind: "browser",
     url: "https://example.com",
+    spec: {
+      kind: "browser",
+      initial_url: "https://example.com",
+    },
+    runtime: {
+      paneId: id,
+      runtimeSessionId: "session-1",
+      kind: "browser",
+      status: "running",
+      lastError: null,
+      browserLocation: "https://example.com",
+    },
   };
 }
 
@@ -82,7 +95,7 @@ function HookHarness({
   modalOpen,
   onSetModal,
 }: {
-  pane: PaneSnapshot;
+  pane: PaneSnapshotModel;
   visible: boolean;
   modalOpen: boolean;
   onSetModal?: (setter: (v: boolean) => void) => void;
@@ -97,13 +110,39 @@ function HookHarness({
   return <div ref={containerRef} style={{ width: 800, height: 600 }} />;
 }
 
+function renderHarness(props: {
+  pane: PaneSnapshotModel;
+  visible: boolean;
+  modalOpen: boolean;
+  onSetModal?: (setter: (v: boolean) => void) => void;
+}) {
+  return render(
+    <AppShellContext.Provider
+      value={{
+        workspace: {
+          bootstrap: vi.fn(),
+          dispatch: vi.fn(),
+          listenProjectionUpdated: vi.fn(),
+        },
+        settings: {
+          dispatch: vi.fn(),
+          listenProjectionUpdated: vi.fn(),
+        },
+        runtime: mockBridge,
+      }}
+    >
+      <HookHarness {...props} />
+    </AppShellContext.Provider>,
+  );
+}
+
 describe("useBrowserWebview — visibility with modal overlay", () => {
-  const mockSetVisible = mockBridge.setBrowserWebviewVisible as Mock;
-  const mockCreateWebview = mockBridge.createBrowserWebview as Mock;
+  const mockDispatchBrowserSurface = mockBridge.dispatchBrowserSurface;
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    browserSurfaceCommands.length = 0;
     vi.spyOn(HTMLDivElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0, y: 0, width: 800, height: 600,
       top: 0, left: 0, right: 800, bottom: 600,
@@ -120,14 +159,12 @@ describe("useBrowserWebview — visibility with modal overlay", () => {
     const pane = makePaneSnapshot();
     let toggle: (v: boolean) => void = () => {};
 
-    render(
-      <HookHarness
-        pane={pane}
-        visible={true}
-        modalOpen={false}
-        onSetModal={(s) => { toggle = s; }}
-      />,
-    );
+    renderHarness({
+      pane,
+      visible: true,
+      modalOpen: false,
+      onSetModal: (s) => { toggle = s; },
+    });
 
     // Flush rAF so Effect 1 sets createdRef=true, then re-run effects
     await act(async () => { vi.advanceTimersByTime(16); });
@@ -135,162 +172,225 @@ describe("useBrowserWebview — visibility with modal overlay", () => {
     // After creation, Effect 3 fires with visible=true
     // Open modal → effectiveVisible becomes false → triggers new Effect 3
     act(() => { toggle(true); });
-    expect(mockSetVisible).toHaveBeenLastCalledWith(pane.id, false);
+    expect(mockDispatchBrowserSurface).toHaveBeenLastCalledWith({
+      kind: "setVisible",
+      pane_id: pane.id,
+      visible: false,
+    });
   });
 
   it("restores visibility when modal closes", async () => {
     const pane = makePaneSnapshot();
     let toggle: (v: boolean) => void = () => {};
 
-    render(
-      <HookHarness
-        pane={pane}
-        visible={true}
-        modalOpen={true}
-        onSetModal={(s) => { toggle = s; }}
-      />,
-    );
+    renderHarness({
+      pane,
+      visible: true,
+      modalOpen: true,
+      onSetModal: (s) => { toggle = s; },
+    });
 
     await act(async () => { vi.advanceTimersByTime(16); });
-    mockCreateWebview.mockClear();
+    mockDispatchBrowserSurface.mockClear();
 
     // Close modal → effectiveVisible becomes true
     act(() => { toggle(false); });
     await act(async () => { vi.advanceTimersByTime(16); });
 
-    expect(mockCreateWebview).toHaveBeenCalledTimes(1);
-    expect(mockSetVisible).not.toHaveBeenCalled();
+    expect(mockDispatchBrowserSurface).toHaveBeenCalledWith({
+      kind: "ensure",
+      pane_id: pane.id,
+      url: "https://example.com",
+      bounds: expect.objectContaining({ width: 800, height: 600 }),
+    });
   });
 
   it("hides then shows on modal toggle cycle", async () => {
     const pane = makePaneSnapshot();
     let toggle: (v: boolean) => void = () => {};
 
-    render(
-      <HookHarness
-        pane={pane}
-        visible={true}
-        modalOpen={false}
-        onSetModal={(s) => { toggle = s; }}
-      />,
-    );
+    renderHarness({
+      pane,
+      visible: true,
+      modalOpen: false,
+      onSetModal: (s) => { toggle = s; },
+    });
 
     await act(async () => { vi.advanceTimersByTime(16); });
 
     // Open modal → hidden
     act(() => { toggle(true); });
-    expect(mockSetVisible).toHaveBeenLastCalledWith(pane.id, false);
+    expect(mockDispatchBrowserSurface).toHaveBeenLastCalledWith({
+      kind: "setVisible",
+      pane_id: pane.id,
+      visible: false,
+    });
 
     // Close modal → visible again
     act(() => { toggle(false); });
-    expect(mockSetVisible).toHaveBeenLastCalledWith(pane.id, true);
+    expect(mockDispatchBrowserSurface).toHaveBeenLastCalledWith({
+      kind: "setVisible",
+      pane_id: pane.id,
+      visible: true,
+    });
   });
 
   it("toggling modal on non-visible pane does not call bridge", async () => {
     const pane = makePaneSnapshot();
     let toggle: (v: boolean) => void = () => {};
 
-    render(
-      <HookHarness
-        pane={pane}
-        visible={false}
-        modalOpen={false}
-        onSetModal={(s) => { toggle = s; }}
-      />,
-    );
+    renderHarness({
+      pane,
+      visible: false,
+      modalOpen: false,
+      onSetModal: (s) => { toggle = s; },
+    });
 
     await act(async () => { vi.advanceTimersByTime(16); });
-    mockSetVisible.mockClear();
+    mockDispatchBrowserSurface.mockClear();
 
     // Toggle modal — effectiveVisible stays false either way
     act(() => { toggle(true); });
 
     // No call since visible=false && !modalOpen was already false
     // and visible=false && modalOpen=true is still false — no dep change for hook
-    expect(mockSetVisible).not.toHaveBeenCalled();
+    expect(mockDispatchBrowserSurface).not.toHaveBeenCalled();
   });
 
   it("creates the native webview when a previously hidden pane becomes visible", async () => {
     const pane = makePaneSnapshot();
-    const { rerender } = render(
-      <HookHarness
-        pane={pane}
-        visible={false}
-        modalOpen={false}
-      />,
-    );
+    const { rerender } = renderHarness({
+      pane,
+      visible: false,
+      modalOpen: false,
+    });
 
     await act(async () => { vi.advanceTimersByTime(16); });
-    expect(mockCreateWebview).not.toHaveBeenCalled();
+    expect(mockDispatchBrowserSurface).not.toHaveBeenCalled();
 
     rerender(
-      <HookHarness
-        pane={pane}
-        visible={true}
-        modalOpen={false}
-      />,
+      <AppShellContext.Provider
+        value={{
+          workspace: {
+            bootstrap: vi.fn(),
+            dispatch: vi.fn(),
+            listenProjectionUpdated: vi.fn(),
+          },
+          settings: {
+            dispatch: vi.fn(),
+            listenProjectionUpdated: vi.fn(),
+          },
+          runtime: mockBridge,
+        }}
+      >
+        <HookHarness
+          pane={pane}
+          visible={true}
+          modalOpen={false}
+        />
+      </AppShellContext.Provider>,
     );
 
     await act(async () => { vi.advanceTimersByTime(16); });
-    expect(mockCreateWebview).toHaveBeenCalledTimes(1);
-    expect(mockCreateWebview).toHaveBeenCalledWith(
-      pane.id,
-      "https://example.com",
-      expect.objectContaining({ width: 800, height: 600 }),
-    );
+    expect(mockDispatchBrowserSurface).toHaveBeenCalledWith({
+      kind: "ensure",
+      pane_id: pane.id,
+      url: "https://example.com",
+      bounds: expect.objectContaining({ width: 800, height: 600 }),
+    });
   });
 
   it("does not recreate the native webview after the first successful mount", async () => {
     const pane = makePaneSnapshot();
-    const { rerender } = render(
-      <HookHarness
-        pane={pane}
-        visible={true}
-        modalOpen={false}
-      />,
+    const { rerender } = renderHarness({
+      pane,
+      visible: true,
+      modalOpen: false,
+    });
+
+    await act(async () => { vi.advanceTimersByTime(16); });
+    expect(mockDispatchBrowserSurface).toHaveBeenCalledWith({
+      kind: "ensure",
+      pane_id: pane.id,
+      url: "https://example.com",
+      bounds: expect.objectContaining({ width: 800, height: 600 }),
+    });
+
+    rerender(
+      <AppShellContext.Provider
+        value={{
+          workspace: {
+            bootstrap: vi.fn(),
+            dispatch: vi.fn(),
+            listenProjectionUpdated: vi.fn(),
+          },
+          settings: {
+            dispatch: vi.fn(),
+            listenProjectionUpdated: vi.fn(),
+          },
+          runtime: mockBridge,
+        }}
+      >
+        <HookHarness
+          pane={pane}
+          visible={false}
+          modalOpen={false}
+        />
+      </AppShellContext.Provider>,
+    );
+    rerender(
+      <AppShellContext.Provider
+        value={{
+          workspace: {
+            bootstrap: vi.fn(),
+            dispatch: vi.fn(),
+            listenProjectionUpdated: vi.fn(),
+          },
+          settings: {
+            dispatch: vi.fn(),
+            listenProjectionUpdated: vi.fn(),
+          },
+          runtime: mockBridge,
+        }}
+      >
+        <HookHarness
+          pane={pane}
+          visible={true}
+          modalOpen={false}
+        />
+      </AppShellContext.Provider>,
     );
 
     await act(async () => { vi.advanceTimersByTime(16); });
-    expect(mockCreateWebview).toHaveBeenCalledTimes(1);
-
-    rerender(
-      <HookHarness
-        pane={pane}
-        visible={false}
-        modalOpen={false}
-      />,
-    );
-    rerender(
-      <HookHarness
-        pane={pane}
-        visible={true}
-        modalOpen={false}
-      />,
-    );
-
-    await act(async () => { vi.advanceTimersByTime(16); });
-    expect(mockCreateWebview).toHaveBeenCalledTimes(1);
+    expect(
+      browserSurfaceCommands.filter((command) => command.kind === "ensure"),
+    ).toHaveLength(1);
   });
 
   it("hides instead of closing the native webview during unmount cleanup", async () => {
     const pane = makePaneSnapshot();
-    const { unmount } = render(
-      <HookHarness
-        pane={pane}
-        visible={true}
-        modalOpen={false}
-      />,
-    );
+    const { unmount } = renderHarness({
+      pane,
+      visible: true,
+      modalOpen: false,
+    });
 
     await act(async () => { vi.advanceTimersByTime(16); });
-    expect(mockCreateWebview).toHaveBeenCalledTimes(1);
+    expect(mockDispatchBrowserSurface).toHaveBeenCalledWith({
+      kind: "ensure",
+      pane_id: pane.id,
+      url: "https://example.com",
+      bounds: expect.objectContaining({ width: 800, height: 600 }),
+    });
 
-    mockSetVisible.mockClear();
-    (mockBridge.closeBrowserWebview as Mock).mockClear();
+    mockDispatchBrowserSurface.mockClear();
 
     unmount();
 
-    expect(mockSetVisible).toHaveBeenCalledWith(pane.id, false);
-    expect(mockBridge.closeBrowserWebview).not.toHaveBeenCalled();
+    expect(mockDispatchBrowserSurface).toHaveBeenCalledWith({
+      kind: "setVisible",
+      pane_id: pane.id,
+      visible: false,
+    });
   });
 });

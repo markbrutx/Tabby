@@ -1,72 +1,63 @@
-mod application;
-mod browser;
 pub mod cli;
+
 mod menu;
-mod settings;
-mod shared;
-mod terminal;
-mod workspace;
+mod shell;
 
 pub use cli::CliArgs;
 
 use std::sync::Arc;
 
 use specta_typescript::Typescript;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, Wry};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 use tracing::{error, warn};
 use tracing_subscriber::EnvFilter;
 
-use crate::application::coordinator::Coordinator;
-use crate::settings::repository::settings_repository::SettingsManager;
-use crate::shared::events::{
-    BrowserUrlChangedEvent, PaneLifecycleEvent, PtyOutputEvent, WorkspaceChangedEvent,
+use tabby_contracts::{
+    BrowserLocationObservedEvent, BrowserSurfaceBoundsDto, BrowserSurfaceCommandDto,
+    LayoutPresetDto, PaneRuntimeView, PaneSpecDto, ProfileCatalogView, RuntimeCommandDto,
+    RuntimeStatusChangedEvent, SettingsCommandDto, SettingsProjectionUpdatedEvent, SettingsView,
+    SplitDirectionDto, SplitNodeDto, TerminalOutputEvent, WorkspaceBootstrapView,
+    WorkspaceCommandDto, WorkspaceProjectionUpdatedEvent, WorkspaceView,
 };
-use crate::terminal::service::pty_service::PtyManager;
-use crate::workspace::commands::workspace_commands::{apply_cli_launch_request, LaunchOverrides};
-use crate::workspace::domain::layout::SplitNode;
-use crate::workspace::domain::pane::PaneKind;
-use crate::workspace::service::tab_service::TabManager;
+
+use crate::shell::AppShell;
 
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("tabby=info,tao=warn,wry=warn"));
-
     let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
 }
 
-fn specta_builder() -> SpectaBuilder<tauri::Wry> {
-    SpectaBuilder::<tauri::Wry>::new()
+fn specta_builder() -> SpectaBuilder<Wry> {
+    SpectaBuilder::<Wry>::new()
         .commands(collect_commands![
-            settings::commands::get_app_settings,
-            settings::commands::update_app_settings,
-            settings::commands::reset_app_settings,
-            workspace::commands::workspace_commands::bootstrap_workspace,
-            workspace::commands::workspace_commands::create_tab,
-            workspace::commands::workspace_commands::close_tab,
-            workspace::commands::workspace_commands::set_active_tab,
-            workspace::commands::workspace_commands::focus_pane,
-            workspace::commands::workspace_commands::restart_pane,
-            workspace::commands::workspace_commands::update_pane_profile,
-            workspace::commands::workspace_commands::update_pane_cwd,
-            workspace::commands::workspace_commands::split_pane,
-            workspace::commands::workspace_commands::close_pane,
-            workspace::commands::workspace_commands::track_pane_cwd,
-            workspace::commands::workspace_commands::swap_panes,
-            browser::commands::create_browser_webview,
-            browser::commands::navigate_browser,
-            browser::commands::close_browser_webview,
-            browser::commands::set_browser_webview_bounds,
-            browser::commands::set_browser_webview_visible,
-            terminal::commands::write_pty,
-            terminal::commands::resize_pty,
+            shell::bootstrap_shell,
+            shell::dispatch_workspace_command,
+            shell::dispatch_settings_command,
+            shell::dispatch_runtime_command,
+            shell::dispatch_browser_surface_command,
         ])
-        .typ::<SplitNode>()
-        .typ::<PaneKind>()
-        .typ::<PtyOutputEvent>()
-        .typ::<PaneLifecycleEvent>()
-        .typ::<WorkspaceChangedEvent>()
-        .typ::<BrowserUrlChangedEvent>()
+        .typ::<WorkspaceBootstrapView>()
+        .typ::<WorkspaceCommandDto>()
+        .typ::<WorkspaceView>()
+        .typ::<WorkspaceProjectionUpdatedEvent>()
+        .typ::<SettingsCommandDto>()
+        .typ::<SettingsView>()
+        .typ::<SettingsProjectionUpdatedEvent>()
+        .typ::<RuntimeCommandDto>()
+        .typ::<PaneRuntimeView>()
+        .typ::<RuntimeStatusChangedEvent>()
+        .typ::<TerminalOutputEvent>()
+        .typ::<BrowserLocationObservedEvent>()
+        .typ::<BrowserSurfaceCommandDto>()
+        .typ::<BrowserSurfaceBoundsDto>()
+        .typ::<PaneSpecDto>()
+        .typ::<ProfileCatalogView>()
+        .typ::<SplitNodeDto>()
+        .typ::<SplitDirectionDto>()
+        .typ::<LayoutPresetDto>()
+        .typ::<shell::error::ShellError>()
 }
 
 fn focus_main_window(app: &tauri::AppHandle) {
@@ -88,7 +79,7 @@ pub fn run(cli_args: CliArgs) {
 
     #[cfg(debug_assertions)]
     if let Err(export_error) =
-        specta_builder.export(Typescript::default(), "../src/lib/tauri-bindings.ts")
+        specta_builder.export(Typescript::default(), "../src/contracts/tauri-bindings.ts")
     {
         error!(?export_error, "Failed to export Typescript bindings");
     }
@@ -99,8 +90,10 @@ pub fn run(cli_args: CliArgs) {
 
             match CliArgs::from_argv(&argv) {
                 Ok(parsed_args) => {
-                    if let Err(error) = apply_cli_launch_request(app, parsed_args) {
-                        error!(?error, "Failed to apply routed CLI launch request");
+                    if let Some(shell) = app.try_state::<Arc<AppShell>>() {
+                        if let Err(error) = shell.apply_cli_launch_request(parsed_args) {
+                            error!(?error, "Failed to apply routed CLI launch request");
+                        }
                     }
                 }
                 Err(error) => {
@@ -120,30 +113,25 @@ pub fn run(cli_args: CliArgs) {
         })
         .setup(move |app| {
             let app_handle = app.handle().clone();
-            let settings_manager = Arc::new(SettingsManager::new(app_handle.clone()));
-            let tab_manager = Arc::new(TabManager::new());
-            let pty_manager = Arc::new(PtyManager::new(app_handle.clone()));
-            let coordinator = Arc::new(Coordinator::new(
-                app_handle,
-                tab_manager.clone(),
-                pty_manager.clone(),
-            ));
-            let settings = settings_manager
-                .get_settings()
-                .map_err(|error| -> Box<dyn std::error::Error> { Box::new(error) })?;
+            let shell = Arc::new(AppShell::new(app_handle.clone(), cli_args.clone()).map_err(
+                |error| -> Box<dyn std::error::Error> {
+                    Box::new(std::io::Error::other(error.to_string()))
+                },
+            )?);
 
-            app.manage(settings_manager);
-            app.manage(tab_manager);
-            app.manage(pty_manager);
-            app.manage(coordinator);
-            app.manage(LaunchOverrides(std::sync::Mutex::new(Some(
-                cli_args.clone(),
-            ))));
+            let settings = shell
+                .bootstrap()
+                .map_err(|error| -> Box<dyn std::error::Error> {
+                    Box::new(std::io::Error::other(error.to_string()))
+                })?
+                .settings;
+
+            app.manage(shell);
 
             if settings.launch_fullscreen {
                 if let Some(window) = app.get_webview_window("main") {
                     if let Err(error) = window.set_fullscreen(true) {
-                        error!(?error, "Failed to enable fullscreen on startup");
+                        warn!(?error, "Failed to enable fullscreen on startup");
                     }
                 }
             }
@@ -165,7 +153,7 @@ mod tests {
     #[test]
     fn exports_typescript_bindings() {
         specta_builder()
-            .export(Typescript::default(), "../src/lib/tauri-bindings.ts")
+            .export(Typescript::default(), "../src/contracts/tauri-bindings.ts")
             .expect("bindings should export");
     }
 }

@@ -1,10 +1,10 @@
 import { forwardRef, useImperativeHandle } from "react";
-import type { PaneSnapshot } from "@/features/workspace/domain";
 import { useBrowserWebview } from "@/features/browser/hooks/useBrowserWebview";
+import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import { isTauriRuntime } from "@/lib/runtime";
 
 interface BrowserPaneProps {
-  pane: PaneSnapshot;
+  pane: PaneSnapshotModel;
   active: boolean;
   visible: boolean;
   modalOpen?: boolean;

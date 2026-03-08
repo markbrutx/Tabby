@@ -7,8 +7,12 @@ import {
 import { RefreshCw } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui/Button";
-import type { PaneSnapshot, SplitNode, TabSnapshot } from "@/features/workspace/domain";
 import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain";
+import type {
+  PaneSnapshotModel,
+  TabSnapshotModel,
+} from "@/features/workspace/model/workspaceSnapshot";
+import type { SplitNode } from "@/features/workspace/domain";
 import type { ResolvedTheme } from "@/features/workspace/theme";
 import { BrowserPane, type BrowserPaneHandle } from "@/features/browser/components/BrowserPane";
 import { BrowserToolbar } from "@/features/browser/components/BrowserToolbar";
@@ -20,7 +24,7 @@ import { TerminalPane } from "@/features/terminal/components/TerminalPane";
 // ---------------------------------------------------------------------------
 
 interface SplitTreeCtx {
-  tab: TabSnapshot;
+  tab: TabSnapshotModel;
   fontSize: number;
   theme: ResolvedTheme;
   visible: boolean;
@@ -47,7 +51,7 @@ function useTreeContext(): SplitTreeCtx {
 // ---------------------------------------------------------------------------
 
 interface SplitTreeRendererProps {
-  tab: TabSnapshot;
+  tab: TabSnapshotModel;
   fontSize: number;
   theme: ResolvedTheme;
   visible: boolean;
@@ -62,7 +66,7 @@ interface SplitTreeRendererProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function findPaneById(tab: TabSnapshot, paneId: string): PaneSnapshot | undefined {
+function findPaneById(tab: TabSnapshotModel, paneId: string): PaneSnapshotModel | undefined {
   return tab.panes.find((p) => p.id === paneId);
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { RecoveryScreen } from "@/components/RecoveryScreen";
 import { ConfirmDialog } from "@/features/workspace/components/ConfirmDialog";
@@ -10,16 +10,14 @@ import { SplitPopup } from "@/features/workspace/components/SplitPopup";
 import { WorkspaceSetupWizard } from "@/features/workspace/components/WorkspaceSetupWizard";
 import { useConfirmAction } from "@/features/workspace/hooks/useConfirmAction";
 import { useTauriMenuEvents } from "@/features/workspace/hooks/useTauriMenuEvents";
-import { selectActiveTab, selectActivePane } from "@/features/workspace/selectors";
-import { useWorkspaceStore } from "@/features/workspace/store/workspaceStore";
-import { useSettingsStore } from "@/features/settings/store/settingsStore";
-import type { SplitDirection } from "@/features/workspace/domain";
+import { selectActivePane, selectActiveTab } from "@/features/workspace/selectors";
+import { useWorkspaceStore } from "@/contexts/workspace/store";
+import { useSettingsStore } from "@/contexts/settings/store";
+import { useRuntimeStore } from "@/contexts/runtime/store";
 import type { SetupWizardConfig } from "@/features/workspace/store/types";
-import {
-  applyResolvedTheme,
-  useResolvedTheme,
-} from "@/features/workspace/theme";
+import { applyResolvedTheme, useResolvedTheme } from "@/features/workspace/theme";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
+import { buildWorkspaceSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 
 function App() {
   const {
@@ -34,7 +32,7 @@ function App() {
     closeTab,
     setActiveTab,
     focusPane,
-    restartPane,
+    restartPaneRuntime,
     splitPane,
     closePane,
     swapPanes,
@@ -52,13 +50,15 @@ function App() {
       closeTab: state.closeTab,
       setActiveTab: state.setActiveTab,
       focusPane: state.focusPane,
-      restartPane: state.restartPane,
+      restartPaneRuntime: state.restartPaneRuntime,
       splitPane: state.splitPane,
       closePane: state.closePane,
       swapPanes: state.swapPanes,
       clearError: state.clearError,
     })),
   );
+
+  const runtimes = useRuntimeStore((state) => state.runtimes);
 
   const {
     settings,
@@ -74,17 +74,22 @@ function App() {
     })),
   );
 
+  const workspaceModel = useMemo(
+    () => buildWorkspaceSnapshotModel(workspace, runtimes, profiles),
+    [workspace, runtimes, profiles],
+  );
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [splitPopup, setSplitPopup] = useState<{
     paneId: string;
-    direction: SplitDirection;
+    direction: "horizontal" | "vertical";
   } | null>(null);
 
   const resolvedTheme = useResolvedTheme(settings?.theme);
 
   const confirmDialog = useConfirmAction({
-    workspace: workspace ?? { tabs: [] },
+    workspace: workspaceModel ?? { tabs: [] },
     closePane,
     closeTab,
   });
@@ -121,13 +126,13 @@ function App() {
   );
 
   useWorkspaceShortcuts({
-    workspace,
+    workspace: workspaceModel,
     onCreateTab: openSetupWizard,
     onCloseTab: confirmDialog.requestCloseTab,
     onClosePane: confirmDialog.requestClosePane,
     onSelectTab: setActiveTab,
     onFocusPane: focusPane,
-    onRestartPane: restartPane,
+    onRestartPane: restartPaneRuntime,
     onSplitRight: handleSplitRight,
     onSplitDown: handleSplitDown,
     onOpenSettings: handleOpenSettings,
@@ -142,7 +147,7 @@ function App() {
     );
   }
 
-  if (!workspace || !settings) {
+  if (!workspaceModel || !settings) {
     return (
       <RecoveryScreen
         title="Workspace unavailable"
@@ -152,7 +157,7 @@ function App() {
     );
   }
 
-  const activeTab = selectActiveTab(workspace);
+  const activeTab = selectActiveTab(workspaceModel);
 
   if (!activeTab && !wizardTab) {
     return (
@@ -164,7 +169,7 @@ function App() {
     );
   }
 
-  const activePane = selectActivePane(workspace);
+  const activePane = selectActivePane(workspaceModel);
   const modalOpen =
     splitPopup !== null ||
     confirmDialog.action !== null ||
@@ -172,12 +177,12 @@ function App() {
     shortcutsOpen;
 
   const displayTabs = wizardTab
-    ? [...workspace.tabs, { id: wizardTab.id, title: wizardTab.title }]
-    : workspace.tabs;
+    ? [...workspaceModel.tabs, { id: wizardTab.id, title: wizardTab.title }]
+    : workspaceModel.tabs;
 
   const displayActiveTabId = wizardTab
     ? wizardTab.id
-    : workspace.activeTabId;
+    : workspaceModel.activeTabId;
 
   const isWizardActive = wizardTab !== null;
 
@@ -219,8 +224,8 @@ function App() {
       ) : null}
 
       <div className="min-h-0 flex-1">
-        {workspace.tabs.map((tab) => {
-          const isActive = tab.id === workspace.activeTabId && !isWizardActive;
+        {workspaceModel.tabs.map((tab) => {
+          const isActive = tab.id === workspaceModel.activeTabId && !isWizardActive;
 
           return (
             <div key={tab.id} className={`h-full ${isActive ? "block" : "hidden"}`}>
@@ -231,7 +236,7 @@ function App() {
                 visible={isActive}
                 modalOpen={modalOpen}
                 onFocus={focusPane}
-                onRestart={restartPane}
+                onRestart={restartPaneRuntime}
                 onClosePane={confirmDialog.requestClosePane}
                 onSwapPanes={handleSwapPanes}
               />
@@ -243,11 +248,13 @@ function App() {
           <WorkspaceSetupWizard
             profiles={profiles}
             settings={settings}
-            isFirstLaunch={workspace.tabs.length === 0 && !settings.hasCompletedOnboarding}
+            isFirstLaunch={
+              workspaceModel.tabs.length === 0 && !settings.hasCompletedOnboarding
+            }
             onComplete={(config: SetupWizardConfig) => {
               void createTabFromWizard(config);
             }}
-            onCancel={workspace.tabs.length > 0 ? closeSetupWizard : undefined}
+            onCancel={workspaceModel.tabs.length > 0 ? closeSetupWizard : undefined}
           />
         ) : null}
       </div>
@@ -270,16 +277,9 @@ function App() {
         <SplitPopup
           direction={splitPopup.direction}
           profiles={profiles}
-          defaultProfileId={activePane.profileId}
-          defaultCwd={activePane.cwd}
-          onConfirm={(profileId, cwd, startupCommand) => {
-            void splitPane({
-              paneId: splitPopup.paneId,
-              direction: splitPopup.direction,
-              profileId,
-              cwd,
-              startupCommand,
-            });
+          defaultSpec={activePane.spec}
+          onConfirm={(paneSpec) => {
+            void splitPane(splitPopup.paneId, splitPopup.direction, paneSpec);
             setSplitPopup(null);
           }}
           onCancel={() => setSplitPopup(null)}

@@ -8,8 +8,8 @@ vi.mock("@/lib/pickDirectory", () => ({
 }));
 
 const profiles: PaneProfile[] = [
-  { id: "terminal", label: "Terminal", description: "Shell", startupCommand: null },
-  { id: "custom", label: "Custom", description: "Run any command", startupCommand: null },
+  { id: "terminal", label: "Terminal", description: "Shell", startupCommandTemplate: null },
+  { id: "custom", label: "Custom", description: "Run any command", startupCommandTemplate: null },
 ];
 
 describe("SplitPopup", () => {
@@ -18,14 +18,18 @@ describe("SplitPopup", () => {
       <SplitPopup
         direction="horizontal"
         profiles={profiles}
-        defaultProfileId=""
-        defaultCwd="/tmp"
+        defaultSpec={{
+          kind: "terminal",
+          launch_profile_id: "",
+          working_directory: "/tmp",
+          command_override: null,
+        }}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
-    expect(screen.getByRole("combobox")).toHaveValue("terminal");
+    expect(screen.getAllByRole("combobox")[1]).toHaveValue("terminal");
   });
 
   it("disables split for custom profile without a command", () => {
@@ -33,8 +37,12 @@ describe("SplitPopup", () => {
       <SplitPopup
         direction="horizontal"
         profiles={profiles}
-        defaultProfileId="custom"
-        defaultCwd="/tmp"
+        defaultSpec={{
+          kind: "terminal",
+          launch_profile_id: "custom",
+          working_directory: "/tmp",
+          command_override: null,
+        }}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -49,8 +57,12 @@ describe("SplitPopup", () => {
       <SplitPopup
         direction="horizontal"
         profiles={profiles}
-        defaultProfileId="custom"
-        defaultCwd="/tmp"
+        defaultSpec={{
+          kind: "terminal",
+          launch_profile_id: "custom",
+          working_directory: "/tmp",
+          command_override: null,
+        }}
         onConfirm={onConfirm}
         onCancel={vi.fn()}
       />,
@@ -67,8 +79,12 @@ describe("SplitPopup", () => {
       <SplitPopup
         direction="horizontal"
         profiles={profiles}
-        defaultProfileId="custom"
-        defaultCwd="/tmp"
+        defaultSpec={{
+          kind: "terminal",
+          launch_profile_id: "custom",
+          working_directory: "/tmp",
+          command_override: null,
+        }}
         onConfirm={onConfirm}
         onCancel={vi.fn()}
       />,
@@ -79,6 +95,11 @@ describe("SplitPopup", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Split" }));
 
-    expect(onConfirm).toHaveBeenCalledWith("custom", "/tmp", "npm run dev");
+    expect(onConfirm).toHaveBeenCalledWith({
+      kind: "terminal",
+      launch_profile_id: "custom",
+      working_directory: "/tmp",
+      command_override: "npm run dev",
+    });
   });
 });

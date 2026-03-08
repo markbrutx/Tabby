@@ -8,20 +8,21 @@ vi.mock("@/lib/pickDirectory", () => ({
 }));
 
 const profiles: PaneProfile[] = [
-  { id: "terminal", label: "Terminal", description: "Shell", startupCommand: null },
-  { id: "claude", label: "Claude Code", description: "AI assistant", startupCommand: "claude" },
-  { id: "custom", label: "Custom", description: "Run any command", startupCommand: null },
+  { id: "terminal", label: "Terminal", description: "Shell", startupCommandTemplate: null },
+  { id: "claude", label: "Claude Code", description: "AI assistant", startupCommandTemplate: "claude" },
+  { id: "custom", label: "Custom", description: "Run any command", startupCommandTemplate: null },
 ];
 
 const settings: WorkspaceSettings = {
   defaultLayout: "1x1",
-  defaultProfileId: "terminal",
+  defaultTerminalProfileId: "terminal",
   defaultWorkingDirectory: "/Users/test",
   defaultCustomCommand: "",
   fontSize: 13,
   theme: "system",
   launchFullscreen: true,
   hasCompletedOnboarding: false,
+  lastWorkingDirectory: null,
 };
 
 describe("WorkspaceSetupWizard", () => {
@@ -67,7 +68,7 @@ describe("WorkspaceSetupWizard", () => {
     render(
       <WorkspaceSetupWizard
         profiles={profiles}
-        settings={{ ...settings, defaultProfileId: "" }}
+        settings={{ ...settings, defaultTerminalProfileId: "" }}
         isFirstLaunch={true}
         onComplete={vi.fn()}
       />,
@@ -215,10 +216,12 @@ describe("WorkspaceSetupWizard", () => {
     expect(onComplete).toHaveBeenCalledWith({
       groups: [
         {
+          mode: "terminal",
           profileId: "terminal",
           workingDirectory: "/Users/test",
           customCommand: "",
           count: 1,
+          url: "https://google.com",
         },
       ],
     });
