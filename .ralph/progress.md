@@ -3,6 +3,44 @@
 ## Codebase Patterns
 - (add reusable patterns here)
 
+## 2026-03-08 23:35 - US-015: Introduce PreferencesRepository port and move Tauri Store to infra adapter
+Thread:
+Run: 20260308-215923-84117 (iteration 16)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-16.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-16.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 5f155ff feat: introduce PreferencesRepository port and move Tauri Store to infra adapter (US-015)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (133 Rust tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (162 frontend tests)
+- Files changed:
+  - src-tauri/src/application/ports.rs (NEW — PreferencesRepository trait)
+  - src-tauri/src/application/mod.rs (register ports module)
+  - src-tauri/src/application/settings_service.rs (accept Box<dyn PreferencesRepository>, add 4 mock-based tests)
+  - src-tauri/src/infrastructure/mod.rs (NEW — infrastructure module)
+  - src-tauri/src/infrastructure/tauri_store_preferences_repository.rs (NEW — Tauri Store adapter)
+  - src-tauri/src/shell/mod.rs (inject TauriStorePreferencesRepository into service)
+  - src-tauri/src/lib.rs (register infrastructure module)
+- What was implemented:
+  - Defined `PreferencesRepository` trait as application-layer port with `load()` and `save()` methods
+  - Created `TauriStorePreferencesRepository` in new `infrastructure/` module, implementing the trait using `tauri_plugin_store`
+  - Refactored `SettingsApplicationService` to accept `Box<dyn PreferencesRepository>` instead of `AppHandle`
+  - Removed all `tauri_plugin_store` imports from settings_service.rs
+  - Added 4 tests using a `MockPreferencesRepository`: empty load, persisted load, update dispatch, reset dispatch
+  - Updated `AppShell::new()` to construct the repository and inject it into the service
+- **Learnings for future iterations:**
+  - The `PreferencesRepository` trait requires `Send + Sync` since it's stored in `Box<dyn ...>` inside a service that's shared across threads
+  - Mock repositories in tests must use `Mutex` (not `RefCell`) to satisfy `Sync` bound
+  - The port returns raw `Option<serde_json::Value>` from `load()` to keep deserialization logic in the service layer where validation/normalization happens
+  - The `infrastructure/` directory is now established for future infra adapters
+---
+
 ---
 
 ## 2026-03-08T22:00 - US-001: Document verification baseline and current architecture state
