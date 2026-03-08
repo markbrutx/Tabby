@@ -1,3 +1,13 @@
+/**
+ * @deprecated This re-export facade is deprecated. Use the internal domain
+ * models from `@/features/workspace/domain/models`,
+ * `@/features/runtime/domain/models`, and `@/features/settings/domain/models`
+ * instead. Transport DTO types should be imported directly from
+ * `@/contracts/tauri-bindings` at the boundary layer only.
+ *
+ * This file will be removed once all consumers have migrated to the new
+ * domain models and snapshot mappers (see US-013).
+ */
 export type {
   BrowserLocationObservedEvent,
   BrowserSurfaceBoundsDto as BrowserBounds,
