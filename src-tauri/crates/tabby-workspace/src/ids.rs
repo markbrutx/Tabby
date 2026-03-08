@@ -36,6 +36,12 @@ id_newtype!(
     PaneId
 );
 
+id_newtype!(
+    /// Type-safe identifier for a pane's content definition.
+    /// Each PaneContentId belongs to exactly one PaneSlot — never shared, never reused after destruction.
+    PaneContentId
+);
+
 #[cfg(test)]
 mod tests {
     use super::{PaneId, TabId};

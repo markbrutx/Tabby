@@ -1,10 +1,12 @@
+pub mod content;
 pub mod ids;
 pub mod layout;
 
 use thiserror::Error;
 use uuid::Uuid;
 
-pub use ids::{PaneId, TabId};
+pub use content::{BrowserUrl, PaneContentDefinition};
+pub use ids::{PaneContentId, PaneId, TabId};
 
 use crate::layout::{
     close_pane as close_pane_layout, split_pane as split_pane_layout, swap_panes, tree_from_count,

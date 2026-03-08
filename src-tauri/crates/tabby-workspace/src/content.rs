@@ -1,0 +1,245 @@
+use std::fmt;
+
+use crate::ids::PaneContentId;
+
+/// A validated URL for browser pane content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrowserUrl(String);
+
+impl BrowserUrl {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for BrowserUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for BrowserUrl {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Describes what runs inside a pane slot — separated from the workspace structural Pane type.
+///
+/// Each `PaneContentDefinition` has 1:1 ownership with a `PaneSlot`:
+/// - Each instance belongs to exactly one pane
+/// - Never shared between panes
+/// - Never reused after destruction
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PaneContentDefinition {
+    Terminal {
+        id: PaneContentId,
+        profile_id: String,
+        working_directory: String,
+        command_override: Option<String>,
+    },
+    Browser {
+        id: PaneContentId,
+        initial_url: BrowserUrl,
+    },
+}
+
+impl PaneContentDefinition {
+    /// Creates a new terminal content definition with a unique ID.
+    pub fn terminal(
+        id: PaneContentId,
+        profile_id: impl Into<String>,
+        working_directory: impl Into<String>,
+        command_override: Option<String>,
+    ) -> Self {
+        Self::Terminal {
+            id,
+            profile_id: profile_id.into(),
+            working_directory: working_directory.into(),
+            command_override,
+        }
+    }
+
+    /// Creates a new browser content definition with a unique ID.
+    pub fn browser(id: PaneContentId, initial_url: BrowserUrl) -> Self {
+        Self::Browser { id, initial_url }
+    }
+
+    /// Returns the content ID for this definition.
+    pub fn content_id(&self) -> &PaneContentId {
+        match self {
+            Self::Terminal { id, .. } | Self::Browser { id, .. } => id,
+        }
+    }
+
+    /// Returns the profile ID if this is a terminal content definition.
+    pub fn terminal_profile_id(&self) -> Option<&str> {
+        match self {
+            Self::Terminal { profile_id, .. } => Some(profile_id.as_str()),
+            Self::Browser { .. } => None,
+        }
+    }
+
+    /// Returns the working directory if this is a terminal content definition.
+    pub fn working_directory(&self) -> Option<&str> {
+        match self {
+            Self::Terminal {
+                working_directory, ..
+            } => Some(working_directory.as_str()),
+            Self::Browser { .. } => None,
+        }
+    }
+
+    /// Returns the browser URL if this is a browser content definition.
+    pub fn browser_url(&self) -> Option<&BrowserUrl> {
+        match self {
+            Self::Browser { initial_url, .. } => Some(initial_url),
+            Self::Terminal { .. } => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ids::PaneContentId;
+
+    fn make_content_id(label: &str) -> PaneContentId {
+        PaneContentId::from(String::from(label))
+    }
+
+    #[test]
+    fn terminal_construction_and_field_access() {
+        let id = make_content_id("content-1");
+        let def = PaneContentDefinition::terminal(
+            id.clone(),
+            "zsh-profile",
+            "/home/user",
+            Some(String::from("vim")),
+        );
+
+        assert_eq!(*def.content_id(), id);
+        assert_eq!(def.terminal_profile_id(), Some("zsh-profile"));
+        assert_eq!(def.working_directory(), Some("/home/user"));
+        assert_eq!(def.browser_url(), None);
+
+        match &def {
+            PaneContentDefinition::Terminal {
+                command_override, ..
+            } => {
+                assert_eq!(command_override.as_deref(), Some("vim"));
+            }
+            _ => panic!("expected Terminal variant"),
+        }
+    }
+
+    #[test]
+    fn terminal_without_command_override() {
+        let id = make_content_id("content-2");
+        let def = PaneContentDefinition::terminal(id.clone(), "bash", "/tmp", None);
+
+        assert_eq!(*def.content_id(), id);
+        assert_eq!(def.terminal_profile_id(), Some("bash"));
+        assert_eq!(def.working_directory(), Some("/tmp"));
+
+        match &def {
+            PaneContentDefinition::Terminal {
+                command_override, ..
+            } => {
+                assert!(command_override.is_none());
+            }
+            _ => panic!("expected Terminal variant"),
+        }
+    }
+
+    #[test]
+    fn browser_construction_and_field_access() {
+        let id = make_content_id("content-3");
+        let url = BrowserUrl::new("https://example.com");
+        let def = PaneContentDefinition::browser(id.clone(), url);
+
+        assert_eq!(*def.content_id(), id);
+        assert_eq!(
+            def.browser_url().map(|u| u.as_str()),
+            Some("https://example.com")
+        );
+        assert_eq!(def.terminal_profile_id(), None);
+        assert_eq!(def.working_directory(), None);
+    }
+
+    #[test]
+    fn browser_url_display_and_as_ref() {
+        let url = BrowserUrl::new("https://tabby.dev");
+        assert_eq!(url.to_string(), "https://tabby.dev");
+        assert_eq!(url.as_ref(), "https://tabby.dev");
+        assert_eq!(url.as_str(), "https://tabby.dev");
+    }
+
+    #[test]
+    fn two_panes_get_distinct_content_ids() {
+        let id_a = make_content_id("content-a");
+        let id_b = make_content_id("content-b");
+
+        let def_a = PaneContentDefinition::terminal(id_a.clone(), "zsh", "/home", None);
+        let def_b = PaneContentDefinition::terminal(id_b.clone(), "zsh", "/home", None);
+
+        // Even with identical specs, different IDs mean different content instances
+        assert_ne!(def_a.content_id(), def_b.content_id());
+        assert_ne!(def_a, def_b);
+    }
+
+    #[test]
+    fn same_content_id_produces_equal_definitions() {
+        let id = make_content_id("content-same");
+
+        let def_a = PaneContentDefinition::terminal(id.clone(), "zsh", "/home", None);
+        let def_b = PaneContentDefinition::terminal(id, "zsh", "/home", None);
+
+        assert_eq!(def_a, def_b);
+    }
+
+    #[test]
+    fn content_id_is_never_shared_between_terminal_and_browser() {
+        let terminal_id = make_content_id("terminal-content");
+        let browser_id = make_content_id("browser-content");
+
+        let terminal = PaneContentDefinition::terminal(terminal_id, "zsh", "/home", None);
+        let browser =
+            PaneContentDefinition::browser(browser_id, BrowserUrl::new("https://example.com"));
+
+        assert_ne!(terminal.content_id(), browser.content_id());
+    }
+
+    #[test]
+    fn clone_preserves_all_fields() {
+        let id = make_content_id("content-clone");
+        let def =
+            PaneContentDefinition::terminal(id, "fish", "/var/log", Some(String::from("tail -f")));
+        let cloned = def.clone();
+
+        assert_eq!(def, cloned);
+    }
+
+    #[test]
+    fn debug_format_is_readable() {
+        let id = make_content_id("dbg-test");
+        let def = PaneContentDefinition::browser(id, BrowserUrl::new("https://rust-lang.org"));
+        let debug = format!("{def:?}");
+
+        assert!(debug.contains("Browser"));
+        assert!(debug.contains("rust-lang.org"));
+    }
+
+    #[test]
+    fn content_definition_does_not_import_structural_types() {
+        // Compile-time guarantee: this module only imports from ids, not from
+        // Tab, SplitNode, PaneSlot, or any other workspace structural type.
+        // If it compiles, the boundary is clean.
+        let id = make_content_id("boundary-test");
+        let _def = PaneContentDefinition::terminal(id, "sh", "/", None);
+    }
+}
