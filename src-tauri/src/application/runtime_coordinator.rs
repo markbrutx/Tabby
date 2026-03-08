@@ -453,6 +453,122 @@ mod tests {
         );
     }
 
+    // --- AC#5: Full lifecycle integration test ---
+    // split pane → runtime started, close pane → runtime stopped,
+    // replace spec → old stopped + new started
+
+    #[test]
+    fn full_lifecycle_split_close_replace() {
+        let mut registry = RuntimeRegistry::default();
+
+        // === Phase 1: Initial tab with one terminal pane ===
+        registry.register_terminal("pane-1", sid("pty-1"));
+        assert_eq!(registry.snapshot().len(), 1);
+
+        // === Phase 2: Split pane → new runtime started ===
+        // WorkspaceService.split_pane() emits PaneAdded for the new pane.
+        // RuntimeCoordinator handles PaneAdded → start_runtime.
+        let split_event = WorkspaceDomainEvent::PaneAdded {
+            pane_id: PaneId::from(String::from("pane-2")),
+            spec: terminal_spec("default"),
+        };
+        if let WorkspaceDomainEvent::PaneAdded {
+            ref pane_id,
+            ref spec,
+        } = split_event
+        {
+            if matches!(spec, tabby_workspace::PaneSpec::Terminal(_)) {
+                registry.register_terminal(pane_id.as_ref(), sid("pty-2"));
+            }
+        }
+        assert_eq!(
+            registry.snapshot().len(),
+            2,
+            "split should add a second runtime"
+        );
+        assert!(
+            registry.terminal_session_id("pane-2").is_some(),
+            "new pane should have a terminal session"
+        );
+
+        // === Phase 3: Close pane → runtime stopped ===
+        // WorkspaceService.close_pane() emits PaneRemoved.
+        // RuntimeCoordinator handles PaneRemoved → stop_runtime.
+        let close_event = WorkspaceDomainEvent::PaneRemoved {
+            pane_id: PaneId::from(String::from("pane-2")),
+            spec: terminal_spec("default"),
+        };
+        if let WorkspaceDomainEvent::PaneRemoved { ref pane_id, .. } = close_event {
+            let removed = registry.remove(pane_id.as_ref());
+            assert!(removed.is_some(), "closed pane runtime should be removed");
+        }
+        assert_eq!(
+            registry.snapshot().len(),
+            1,
+            "only original pane runtime should remain after close"
+        );
+        assert!(
+            registry.terminal_session_id("pane-2").is_none(),
+            "closed pane should have no session"
+        );
+        assert!(
+            registry.terminal_session_id("pane-1").is_some(),
+            "original pane should still have its session"
+        );
+
+        // === Phase 4: Replace spec → old stopped + new started ===
+        // WorkspaceService.replace_pane_spec() emits PaneSpecReplaced.
+        // RuntimeCoordinator handles PaneSpecReplaced → stop old + start new.
+        let replace_event = WorkspaceDomainEvent::PaneSpecReplaced {
+            pane_id: PaneId::from(String::from("pane-1")),
+            spec: browser_spec("https://example.com"),
+        };
+        if let WorkspaceDomainEvent::PaneSpecReplaced {
+            ref pane_id,
+            ref spec,
+        } = replace_event
+        {
+            // Coordinator stops old runtime
+            let removed = registry.remove(pane_id.as_ref());
+            assert!(removed.is_some(), "old runtime should be stopped");
+            let removed = removed.expect("already asserted");
+            assert!(
+                matches!(removed.kind, RuntimeKind::Terminal),
+                "removed runtime should be the old terminal"
+            );
+
+            // Coordinator starts new runtime with replaced spec
+            if let tabby_workspace::PaneSpec::Browser(browser) = spec {
+                registry.register_browser(
+                    pane_id.as_ref(),
+                    sid("browser-new"),
+                    browser.initial_url.clone(),
+                );
+            }
+        }
+
+        // Final assertions: exactly one runtime, browser kind, correct pane
+        assert_eq!(
+            registry.snapshot().len(),
+            1,
+            "should have exactly one runtime after replace"
+        );
+        let final_runtime = &registry.snapshot()[0];
+        assert_eq!(final_runtime.pane_id, "pane-1");
+        assert!(
+            matches!(final_runtime.kind, RuntimeKind::Browser),
+            "pane-1 should now be a browser runtime"
+        );
+        assert!(
+            matches!(final_runtime.status, RuntimeStatus::Running),
+            "new browser runtime should be Running"
+        );
+        assert_eq!(
+            final_runtime.browser_location.as_deref(),
+            Some("https://example.com"),
+        );
+    }
+
     // --- Failure path tests ---
 
     #[test]
