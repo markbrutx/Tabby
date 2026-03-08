@@ -249,29 +249,36 @@ pub fn settings_command_from_dto(
 pub fn runtime_command_from_dto(dto: RuntimeCommandDto) -> RuntimeCommand {
     match dto {
         RuntimeCommandDto::WriteTerminalInput { pane_id, input } => {
-            RuntimeCommand::WriteTerminalInput { pane_id, input }
+            RuntimeCommand::WriteTerminalInput {
+                pane_id: PaneId::from(pane_id),
+                input,
+            }
         }
         RuntimeCommandDto::ResizeTerminal {
             pane_id,
             cols,
             rows,
         } => RuntimeCommand::ResizeTerminal {
-            pane_id,
+            pane_id: PaneId::from(pane_id),
             cols,
             rows,
         },
-        RuntimeCommandDto::NavigateBrowser { pane_id, url } => {
-            RuntimeCommand::NavigateBrowser { pane_id, url }
-        }
+        RuntimeCommandDto::NavigateBrowser { pane_id, url } => RuntimeCommand::NavigateBrowser {
+            pane_id: PaneId::from(pane_id),
+            url,
+        },
         RuntimeCommandDto::ObserveTerminalCwd {
             pane_id,
             working_directory,
         } => RuntimeCommand::ObserveTerminalCwd {
-            pane_id,
+            pane_id: PaneId::from(pane_id),
             working_directory,
         },
         RuntimeCommandDto::ObserveBrowserLocation { pane_id, url } => {
-            RuntimeCommand::ObserveBrowserLocation { pane_id, url }
+            RuntimeCommand::ObserveBrowserLocation {
+                pane_id: PaneId::from(pane_id),
+                url,
+            }
         }
     }
 }
@@ -775,7 +782,7 @@ mod tests {
         let cmd = runtime_command_from_dto(dto);
         match cmd {
             RuntimeCommand::WriteTerminalInput { pane_id, input } => {
-                assert_eq!(pane_id, "pane-1");
+                assert_eq!(pane_id.as_ref(), "pane-1");
                 assert_eq!(input, "ls\n");
             }
             other => panic!("Expected WriteTerminalInput, got {other:?}"),
@@ -796,7 +803,7 @@ mod tests {
                 cols,
                 rows,
             } => {
-                assert_eq!(pane_id, "pane-1");
+                assert_eq!(pane_id.as_ref(), "pane-1");
                 assert_eq!(cols, 120);
                 assert_eq!(rows, 40);
             }
@@ -813,7 +820,7 @@ mod tests {
         let cmd = runtime_command_from_dto(dto);
         match cmd {
             RuntimeCommand::NavigateBrowser { pane_id, url } => {
-                assert_eq!(pane_id, "pane-b");
+                assert_eq!(pane_id.as_ref(), "pane-b");
                 assert_eq!(url, "https://rust-lang.org");
             }
             other => panic!("Expected NavigateBrowser, got {other:?}"),
@@ -832,7 +839,7 @@ mod tests {
                 pane_id,
                 working_directory,
             } => {
-                assert_eq!(pane_id, "pane-t");
+                assert_eq!(pane_id.as_ref(), "pane-t");
                 assert_eq!(working_directory, "/tmp");
             }
             other => panic!("Expected ObserveTerminalCwd, got {other:?}"),
@@ -848,11 +855,128 @@ mod tests {
         let cmd = runtime_command_from_dto(dto);
         match cmd {
             RuntimeCommand::ObserveBrowserLocation { pane_id, url } => {
-                assert_eq!(pane_id, "pane-b");
+                assert_eq!(pane_id.as_ref(), "pane-b");
                 assert_eq!(url, "https://example.com/page");
             }
             other => panic!("Expected ObserveBrowserLocation, got {other:?}"),
         }
+    }
+
+    // -- Round-trip conversion tests for new value types ----------------------
+
+    #[test]
+    fn runtime_command_pane_id_converts_string_to_pane_id() {
+        let wire_id = String::from("pane-round-trip");
+        let dto = RuntimeCommandDto::WriteTerminalInput {
+            pane_id: wire_id.clone(),
+            input: String::from("echo hi"),
+        };
+        let cmd = runtime_command_from_dto(dto);
+        match cmd {
+            RuntimeCommand::WriteTerminalInput { pane_id, .. } => {
+                assert_eq!(pane_id, PaneId::from(wire_id));
+                assert_eq!(pane_id.to_string(), "pane-round-trip");
+            }
+            other => panic!("Expected WriteTerminalInput, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn workspace_command_tab_id_round_trips_through_string() {
+        let wire_id = String::from("tab-round-trip");
+        let dto = WorkspaceCommandDto::CloseTab {
+            tab_id: wire_id.clone(),
+        };
+        let cmd = workspace_command_from_dto(dto, LayoutPreset::OneByOne);
+        match cmd {
+            WorkspaceCommand::CloseTab(close) => {
+                assert_eq!(close.tab_id, TabId::from(wire_id));
+                assert_eq!(close.tab_id.to_string(), "tab-round-trip");
+            }
+            other => panic!("Expected CloseTab, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn workspace_command_pane_id_round_trips_through_string() {
+        let wire_id = String::from("pane-round-trip");
+        let dto = WorkspaceCommandDto::ClosePane {
+            pane_id: wire_id.clone(),
+        };
+        let cmd = workspace_command_from_dto(dto, LayoutPreset::OneByOne);
+        match cmd {
+            WorkspaceCommand::ClosePane { pane_id } => {
+                assert_eq!(pane_id, PaneId::from(wire_id));
+                assert_eq!(pane_id.to_string(), "pane-round-trip");
+            }
+            other => panic!("Expected ClosePane, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn settings_font_size_round_trips_through_u16() {
+        let wire_size: u16 = 20;
+        let preferences = UserPreferences {
+            font_size: FontSize::new(wire_size).expect("valid size"),
+            ..default_preferences()
+        };
+        let view = settings_view_from_preferences(&preferences);
+        assert_eq!(view.font_size, wire_size);
+
+        let restored = preferences_from_settings_view(&view).expect("should round-trip");
+        assert_eq!(restored.font_size.value(), wire_size);
+    }
+
+    #[test]
+    fn settings_working_directory_round_trips_through_string() {
+        let wire_dir = String::from("/usr/local/bin");
+        let preferences = UserPreferences {
+            default_working_directory: WorkingDirectory::new(wire_dir.clone()).expect("valid path"),
+            ..default_preferences()
+        };
+        let view = settings_view_from_preferences(&preferences);
+        assert_eq!(view.default_working_directory, wire_dir);
+
+        let restored = preferences_from_settings_view(&view).expect("should round-trip");
+        assert_eq!(
+            restored.default_working_directory.as_str(),
+            wire_dir.as_str()
+        );
+    }
+
+    #[test]
+    fn settings_profile_id_round_trips_through_string() {
+        let wire_id = String::from("custom-profile");
+        let preferences = UserPreferences {
+            default_terminal_profile_id: ProfileId::new(&wire_id),
+            ..default_preferences()
+        };
+        let view = settings_view_from_preferences(&preferences);
+        assert_eq!(view.default_terminal_profile_id, wire_id);
+
+        let restored = preferences_from_settings_view(&view).expect("should round-trip");
+        assert_eq!(
+            restored.default_terminal_profile_id.as_str(),
+            wire_id.as_str()
+        );
+    }
+
+    #[test]
+    fn pane_runtime_session_id_round_trips_through_string() {
+        let wire_session = String::from("pty-session-round-trip");
+        let runtime = PaneRuntime {
+            pane_id: String::from("pane-1"),
+            runtime_session_id: Some(RuntimeSessionId::from(wire_session.clone())),
+            kind: RuntimeKind::Terminal,
+            status: RuntimeStatus::Running,
+            last_error: None,
+            browser_location: None,
+        };
+        let view = pane_runtime_to_view(&runtime);
+        assert_eq!(
+            view.runtime_session_id.as_deref(),
+            Some(wire_session.as_str())
+        );
     }
 
     // -- Persistence helpers ------------------------------------------------

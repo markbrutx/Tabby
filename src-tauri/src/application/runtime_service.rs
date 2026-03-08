@@ -123,7 +123,7 @@ impl RuntimeApplicationService {
             RuntimeCommand::WriteTerminalInput { pane_id, input } => {
                 let runtime_session_id = self
                     .lock_runtimes()?
-                    .terminal_session_id(&pane_id)
+                    .terminal_session_id(pane_id.as_ref())
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
                 self.pty_manager
                     .write(runtime_session_id.as_ref(), &input)?;
@@ -135,16 +135,16 @@ impl RuntimeApplicationService {
             } => {
                 let runtime_session_id = self
                     .lock_runtimes()?
-                    .terminal_session_id(&pane_id)
+                    .terminal_session_id(pane_id.as_ref())
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
                 self.pty_manager
                     .resize(runtime_session_id.as_ref(), cols, rows)?;
             }
             RuntimeCommand::NavigateBrowser { pane_id, url } => {
-                browser_surface::navigate_browser(window, &pane_id, &url)?;
+                browser_surface::navigate_browser(window, pane_id.as_ref(), &url)?;
                 let maybe_runtime = self
                     .lock_runtimes()?
-                    .update_browser_location(&pane_id, url)
+                    .update_browser_location(pane_id.as_ref(), url)
                     .ok();
                 if let Some(runtime) = maybe_runtime {
                     self.publisher.emit_runtime_status(&runtime);

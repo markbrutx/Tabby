@@ -86,24 +86,24 @@ pub enum SettingsCommand {
 #[derive(Debug, Clone)]
 pub enum RuntimeCommand {
     WriteTerminalInput {
-        pane_id: String,
+        pane_id: PaneId,
         input: String,
     },
     ResizeTerminal {
-        pane_id: String,
+        pane_id: PaneId,
         cols: u16,
         rows: u16,
     },
     NavigateBrowser {
-        pane_id: String,
+        pane_id: PaneId,
         url: String,
     },
     ObserveTerminalCwd {
-        pane_id: String,
+        pane_id: PaneId,
         working_directory: String,
     },
     ObserveBrowserLocation {
-        pane_id: String,
+        pane_id: PaneId,
         url: String,
     },
 }

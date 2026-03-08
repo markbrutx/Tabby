@@ -10,7 +10,7 @@ use tabby_contracts::{
 };
 use tabby_settings::{built_in_profile_catalog, default_preferences};
 use tabby_workspace::layout::LayoutPreset;
-use tabby_workspace::{PaneId, WorkspaceDomainEvent};
+use tabby_workspace::WorkspaceDomainEvent;
 
 use crate::application::commands::WorkspaceCommand;
 use crate::application::{
@@ -116,7 +116,6 @@ impl AppShell {
                 pane_id,
                 working_directory,
             } => {
-                let pane_id = PaneId::from(pane_id);
                 self.runtime_service.observe_terminal_cwd(
                     &pane_id,
                     &working_directory,
@@ -130,7 +129,7 @@ impl AppShell {
             }
             RuntimeCommand::ObserveBrowserLocation { pane_id, url } => {
                 self.runtime_service
-                    .observe_browser_location(&pane_id, &url)?;
+                    .observe_browser_location(pane_id.as_ref(), &url)?;
             }
             other => {
                 self.runtime_service
