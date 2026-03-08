@@ -162,3 +162,42 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - The trait must be Send + Sync for Arc<dyn RuntimeObservationReceiver> usage by infra threads
   - Terminal output uses raw bytes (&[u8]) while exit uses domain-friendly Option<i32> exit codes
 ---
+
+## 2026-03-08 22:27 - US-005: Stop PTY infrastructure from directly emitting runtime status events
+Thread:
+Run: 20260308-215923-84117 (iteration 6)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-6.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-6.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 117b4cd feat: wire PTY exit to RuntimeObservationReceiver instead of direct event emit (US-005)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (162 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (109 app tests + 61 crate tests = 170 total)
+- Files changed:
+  - src-tauri/src/shell/pty.rs (PTY read thread now calls observation_receiver.on_terminal_exited() instead of emitting RuntimeStatusChangedEvent)
+  - src-tauri/src/application/runtime_service.rs (start_runtime/restart_runtime accept Arc<dyn RuntimeObservationReceiver>)
+  - src-tauri/src/application/runtime_observation_receiver.rs (removed dead_code allow, added 3 integration tests)
+  - src-tauri/src/application/runtime_coordinator.rs (passes observation_receiver through to start_runtime)
+  - src-tauri/src/application/bootstrap_service.rs (passes observation_receiver through to coordinator)
+  - src-tauri/src/shell/mod.rs (AppShell stores Arc<RuntimeApplicationService>, adds observation_receiver() helper)
+- What was implemented:
+  - PTY read thread no longer builds RuntimeStatusChangedEvent DTOs or emits via app.emit(RUNTIME_STATUS_CHANGED_EVENT)
+  - Instead, PTY thread resolves exit code and calls RuntimeObservationReceiver.on_terminal_exited(pane_id, exit_code)
+  - RuntimeApplicationService (which implements the trait) receives the observation, updates registry, emits projection
+  - Terminal output (TERMINAL_OUTPUT_RECEIVED_EVENT) remains as direct emit — it's raw I/O, not domain state
+  - Removed build_terminal_exit_event function, replaced with simpler resolve_exit_code
+  - Removed unused imports: PaneRuntimeView, RuntimeKindDto, RuntimeStatusChangedEvent, RuntimeStatusDto from pty.rs
+  - AppShell now stores runtime_service as Arc<RuntimeApplicationService> for trait object coercion
+  - 3 new integration-style tests: normal exit → Exited, non-zero exit → Failed with error message, unknown exit → Exited
+- **Learnings for future iterations:**
+  - Arc<ConcreteType> does not auto-coerce to Arc<dyn Trait> via Arc::clone — need explicit cast: `Arc::clone(&x) as Arc<dyn Trait>`
+  - Created observation_receiver() helper method on AppShell to centralize the coercion
+  - The observation_receiver parameter threads through: AppShell → BootstrapService → RuntimeCoordinator → RuntimeApplicationService → PtyManager::spawn
+  - portable_pty exit_code() returns u32, converted via i32::try_from with unwrap_or(i32::MAX) fallback
+---
