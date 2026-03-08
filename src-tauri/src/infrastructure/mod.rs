@@ -1,0 +1,3 @@
+mod tauri_store_preferences_repository;
+
+pub use tauri_store_preferences_repository::TauriStorePreferencesRepository;

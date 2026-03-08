@@ -21,6 +21,7 @@ use crate::application::{
     SettingsApplicationService, WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
+use crate::infrastructure::TauriStorePreferencesRepository;
 use crate::mapping::dto_mappers;
 use crate::shell::error::ShellError;
 
@@ -40,7 +41,8 @@ pub struct AppShell {
 
 impl AppShell {
     pub fn new(app: AppHandle, cli_args: CliArgs) -> Result<Self, ShellError> {
-        let settings_service = SettingsApplicationService::new(app.clone())?;
+        let preferences_repository = TauriStorePreferencesRepository::new(app.clone());
+        let settings_service = SettingsApplicationService::new(Box::new(preferences_repository))?;
         Ok(Self {
             bootstrap_service: BootstrapService::new(cli_args),
             workspace_service: WorkspaceApplicationService::new(),

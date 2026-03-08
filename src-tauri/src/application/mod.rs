@@ -1,5 +1,6 @@
 mod bootstrap_service;
 pub mod commands;
+pub mod ports;
 mod projection_publisher;
 mod runtime_coordinator;
 #[cfg(test)]

@@ -498,3 +498,35 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - The is_runtime_relevant() method centralizes classification logic that was previously duplicated in test helpers
   - replace_all Edit flag is effective for bulk renames across a single file
 ---
+
+## [2026-03-08 23:30] - US-014: Add tests for workspace structural invariants without runtime coupling
+Thread: 
+Run: 20260308-215923-84117 (iteration 15)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-15.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-15.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 4a7e8b8 test: add workspace structural invariant tests without runtime coupling (US-014)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (162 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (217 tests total, 51 in tabby-workspace)
+- Files changed:
+  - src-tauri/crates/tabby-workspace/src/lib.rs
+- What was implemented:
+  - Added 5 new tests to the tabby-workspace crate (51 total, up from 46):
+    1. `full_lifecycle_without_runtime_dependency` - exercises open_tab, close_tab, split_pane, focus_pane, swap_pane_slots, replace_pane_spec all without runtime
+    2. `events_carry_structural_and_content_ref_data_only` - exhaustively verifies all 5 WorkspaceDomainEvent variants carry only PaneId/TabId/PaneContentDefinition, never RuntimeStatus/RuntimeSessionId/terminal_cwd/browser_location
+    3. `workspace_projection_is_complete_without_runtime_data` - proves tab_summaries + pane_content provide complete structural view; working_directory is launch config not runtime cwd
+    4. `workspace_model_instantiation_requires_no_runtime_types` - compile-time proof that all workspace API surface uses only workspace-local types
+    5. `workspace_crate_has_no_runtime_dependency` - documents Cargo.toml boundary (only thiserror + uuid)
+  - Confirmed zero imports of RuntimeRegistry, PaneRuntime, RuntimeStatus, RuntimeSessionId in workspace crate
+- **Learnings for future iterations:**
+  - The workspace crate was already fully decoupled from runtime (US-012/US-013 did the heavy lifting). US-014 only needed to add proof tests.
+  - Debug format assertions are a lightweight way to verify enum variants don't carry unexpected fields
+  - Compile-time type annotation tests (let _: Type = ...) are effective for proving API boundary purity
+---

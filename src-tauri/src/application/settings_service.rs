@@ -1,7 +1,5 @@
 use std::sync::Mutex;
 
-use tauri::AppHandle;
-use tauri_plugin_store::StoreExt;
 use tracing::warn;
 
 use tabby_settings::{
@@ -10,11 +8,9 @@ use tabby_settings::{
 };
 
 use crate::application::commands::SettingsCommand;
+use crate::application::ports::PreferencesRepository;
 use crate::mapping::dto_mappers;
 use crate::shell::error::ShellError;
-
-const STORE_PATH: &str = "tabby-settings.json";
-const SETTINGS_KEY: &str = "settings";
 
 #[derive(Debug, Clone)]
 struct LoadedPreferences {
@@ -24,16 +20,16 @@ struct LoadedPreferences {
 
 #[derive(Debug)]
 pub struct SettingsApplicationService {
-    app: AppHandle,
+    repository: Box<dyn PreferencesRepository>,
     preferences: Mutex<UserPreferences>,
 }
 
 impl SettingsApplicationService {
-    pub fn new(app: AppHandle) -> Result<Self, ShellError> {
-        let preferences = load_preferences(&app)?;
+    pub fn new(repository: Box<dyn PreferencesRepository>) -> Result<Self, ShellError> {
+        let loaded = load_preferences(&*repository)?;
         Ok(Self {
-            app,
-            preferences: Mutex::new(preferences),
+            repository,
+            preferences: Mutex::new(loaded),
         })
     }
 
@@ -65,13 +61,7 @@ impl SettingsApplicationService {
         &self,
         next_preferences: &UserPreferences,
     ) -> Result<(), ShellError> {
-        let store = self
-            .app
-            .store(STORE_PATH)
-            .map_err(|error| ShellError::Store(error.to_string()))?;
-        let value = dto_mappers::serialize_preferences(next_preferences)
-            .map_err(|error| ShellError::Serialization(error.to_string()))?;
-        store.set(SETTINGS_KEY, value);
+        self.repository.save(next_preferences)?;
 
         let mut preferences = self
             .preferences
@@ -82,16 +72,12 @@ impl SettingsApplicationService {
     }
 }
 
-fn load_preferences(app: &AppHandle) -> Result<UserPreferences, ShellError> {
-    let store = app
-        .store(STORE_PATH)
-        .map_err(|error| ShellError::Store(error.to_string()))?;
+fn load_preferences(repository: &dyn PreferencesRepository) -> Result<UserPreferences, ShellError> {
+    let raw_value = repository.load()?;
+    let loaded = decode_preferences(raw_value)?;
 
-    let loaded = decode_preferences(store.get(SETTINGS_KEY))?;
     if loaded.should_persist {
-        let value = dto_mappers::serialize_preferences(&loaded.preferences)
-            .map_err(|error| ShellError::Serialization(error.to_string()))?;
-        store.set(SETTINGS_KEY, value);
+        repository.save(&loaded.preferences)?;
     }
 
     Ok(loaded.preferences)
@@ -135,8 +121,59 @@ fn settings_error_to_shell(error: SettingsError) -> ShellError {
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_preferences, settings_error_to_shell};
+    use super::*;
+    use crate::application::commands::UpdateSettingsCommand;
     use serde_json::json;
+    use std::sync::Mutex;
+    use tabby_settings::FontSize;
+
+    // ------------------------------------------------------------------
+    // Mock PreferencesRepository for unit tests
+    // ------------------------------------------------------------------
+
+    #[derive(Debug)]
+    struct MockPreferencesRepository {
+        stored: Mutex<Option<serde_json::Value>>,
+    }
+
+    impl MockPreferencesRepository {
+        fn empty() -> Self {
+            Self {
+                stored: Mutex::new(None),
+            }
+        }
+
+        fn with_value(value: serde_json::Value) -> Self {
+            Self {
+                stored: Mutex::new(Some(value)),
+            }
+        }
+    }
+
+    impl PreferencesRepository for MockPreferencesRepository {
+        fn load(&self) -> Result<Option<serde_json::Value>, ShellError> {
+            let guard = self
+                .stored
+                .lock()
+                .map_err(|_| ShellError::State(String::from("Mock lock poisoned")))?;
+            Ok(guard.clone())
+        }
+
+        fn save(&self, preferences: &UserPreferences) -> Result<(), ShellError> {
+            let value = dto_mappers::serialize_preferences(preferences)
+                .map_err(|e| ShellError::Serialization(e.to_string()))?;
+            let mut guard = self
+                .stored
+                .lock()
+                .map_err(|_| ShellError::State(String::from("Mock lock poisoned")))?;
+            *guard = Some(value);
+            Ok(())
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Existing decode_preferences tests (kept intact)
+    // ------------------------------------------------------------------
 
     #[test]
     fn loads_default_preferences_when_store_is_empty() {
@@ -147,7 +184,6 @@ mod tests {
 
     #[test]
     fn updates_preferences_via_dispatch() {
-        // Validates decode + normalize round-trip for the Update path.
         let valid_json = json!({
             "defaultLayout": "2x2",
             "defaultTerminalProfileId": "claude",
@@ -195,8 +231,6 @@ mod tests {
 
     #[test]
     fn reset_returns_default_preferences() {
-        // Validates the Reset branch of decode_preferences / dispatch logic.
-        // When SettingsCommand::Reset is dispatched, it should return default_preferences().
         let defaults = tabby_settings::default_preferences();
         assert_eq!(defaults.default_terminal_profile_id, "terminal");
         assert_eq!(defaults.font_size.value(), 13);
@@ -209,7 +243,6 @@ mod tests {
 
     #[test]
     fn decode_preferences_with_malformed_json_falls_back_to_defaults() {
-        // Completely wrong structure should fall back to defaults
         let loaded =
             decode_preferences(Some(json!("just a string"))).expect("should fall back to defaults");
         assert!(
@@ -257,7 +290,6 @@ mod tests {
 
     #[test]
     fn decode_preferences_normalizes_out_of_range_font_size() {
-        // Font size outside valid range should be normalized to default
         let json_with_bad_font = json!({
             "defaultLayout": "1x1",
             "defaultTerminalProfileId": "terminal",
@@ -270,12 +302,96 @@ mod tests {
             "lastWorkingDirectory": null
         });
 
-        // This should either normalize or fall back to defaults
         let result = decode_preferences(Some(json_with_bad_font));
-        // Either it normalizes or falls back — both are valid
         assert!(
             result.is_ok(),
             "should handle out-of-range font size gracefully"
         );
+    }
+
+    // ------------------------------------------------------------------
+    // New: SettingsApplicationService with mock PreferencesRepository
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn service_loads_defaults_from_empty_repository() {
+        let repo = MockPreferencesRepository::empty();
+        let service =
+            SettingsApplicationService::new(Box::new(repo)).expect("should construct service");
+        let prefs = service.preferences().expect("should read preferences");
+        assert_eq!(prefs.default_terminal_profile_id, "terminal");
+        assert_eq!(prefs.font_size.value(), 13);
+    }
+
+    #[test]
+    fn service_loads_persisted_preferences_from_repository() {
+        let stored = json!({
+            "defaultLayout": "2x2",
+            "defaultTerminalProfileId": "claude",
+            "defaultWorkingDirectory": "/projects",
+            "defaultCustomCommand": "",
+            "fontSize": 16,
+            "theme": "midnight",
+            "launchFullscreen": false,
+            "hasCompletedOnboarding": true,
+            "lastWorkingDirectory": null
+        });
+        let repo = MockPreferencesRepository::with_value(stored);
+        let service =
+            SettingsApplicationService::new(Box::new(repo)).expect("should construct service");
+        let prefs = service.preferences().expect("should read preferences");
+        assert_eq!(prefs.default_terminal_profile_id, "claude");
+        assert_eq!(prefs.font_size.value(), 16);
+        assert!(!prefs.launch_fullscreen);
+    }
+
+    #[test]
+    fn service_update_persists_via_repository() {
+        let repo = MockPreferencesRepository::empty();
+        let service =
+            SettingsApplicationService::new(Box::new(repo)).expect("should construct service");
+
+        let mut updated = default_preferences();
+        updated.font_size = FontSize::new(20).expect("valid font size");
+
+        let result = service
+            .dispatch_settings_command(SettingsCommand::Update(UpdateSettingsCommand {
+                preferences: updated,
+            }))
+            .expect("should dispatch update");
+
+        assert_eq!(result.font_size.value(), 20);
+
+        // Verify in-memory state is also updated
+        let current = service.preferences().expect("should read preferences");
+        assert_eq!(current.font_size.value(), 20);
+    }
+
+    #[test]
+    fn service_reset_returns_defaults_and_persists() {
+        let stored = json!({
+            "defaultLayout": "2x2",
+            "defaultTerminalProfileId": "claude",
+            "defaultWorkingDirectory": "/projects",
+            "defaultCustomCommand": "",
+            "fontSize": 16,
+            "theme": "midnight",
+            "launchFullscreen": false,
+            "hasCompletedOnboarding": true,
+            "lastWorkingDirectory": null
+        });
+        let repo = MockPreferencesRepository::with_value(stored);
+        let service =
+            SettingsApplicationService::new(Box::new(repo)).expect("should construct service");
+
+        let result = service
+            .dispatch_settings_command(SettingsCommand::Reset)
+            .expect("should dispatch reset");
+
+        assert_eq!(result.default_terminal_profile_id, "terminal");
+        assert_eq!(result.font_size.value(), 13);
+
+        let current = service.preferences().expect("should read preferences");
+        assert_eq!(current.default_terminal_profile_id, "terminal");
     }
 }

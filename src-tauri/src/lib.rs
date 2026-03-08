@@ -2,6 +2,7 @@ pub mod cli;
 
 mod application;
 mod commands;
+mod infrastructure;
 mod mapping;
 mod menu;
 mod shell;
