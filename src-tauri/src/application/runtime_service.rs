@@ -4,9 +4,9 @@ use tauri::{AppHandle, Manager};
 use tracing::warn;
 
 use crate::application::commands::RuntimeCommand;
-use tabby_runtime::{PaneRuntime, RuntimeRegistry, RuntimeStatus};
+use tabby_runtime::{PaneRuntime, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
 use tabby_settings::{resolve_terminal_profile, SettingsError, UserPreferences};
-use tabby_workspace::PaneSpec;
+use tabby_workspace::{PaneId, PaneSpec};
 
 use crate::application::{
     ProjectionPublisher, SettingsApplicationService, WorkspaceApplicationService,
@@ -47,17 +47,17 @@ impl RuntimeApplicationService {
                     &preferences.default_custom_command,
                 )
                 .map_err(settings_error_to_shell)?;
-                let runtime_session_id = self.pty_manager.spawn(
+                let pty_session_id = self.pty_manager.spawn(
                     pane_id,
                     &spec.working_directory,
                     resolved.command.as_deref(),
                 )?;
                 self.lock_runtimes()?
-                    .register_terminal(pane_id, runtime_session_id)
+                    .register_terminal(pane_id, RuntimeSessionId::from(pty_session_id))
             }
             PaneSpec::Browser(spec) => self.lock_runtimes()?.register_browser(
                 pane_id,
-                format!("browser-{}", uuid::Uuid::new_v4()),
+                RuntimeSessionId::from(format!("browser-{}", uuid::Uuid::new_v4())),
                 spec.initial_url.clone(),
             ),
         };
@@ -78,10 +78,10 @@ impl RuntimeApplicationService {
             return;
         };
 
-        if let Some(runtime_session_id) = runtime.runtime_session_id.clone() {
+        if let Some(runtime_session_id) = &runtime.runtime_session_id {
             match runtime.kind {
                 tabby_runtime::RuntimeKind::Terminal => {
-                    if let Err(error) = self.pty_manager.kill(&runtime_session_id) {
+                    if let Err(error) = self.pty_manager.kill(runtime_session_id.as_ref()) {
                         warn!(?error, pane_id, "Failed to kill terminal runtime");
                     }
                 }
@@ -125,7 +125,8 @@ impl RuntimeApplicationService {
                     .lock_runtimes()?
                     .terminal_session_id(&pane_id)
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
-                self.pty_manager.write(&runtime_session_id, &input)?;
+                self.pty_manager
+                    .write(runtime_session_id.as_ref(), &input)?;
             }
             RuntimeCommand::ResizeTerminal {
                 pane_id,
@@ -136,7 +137,8 @@ impl RuntimeApplicationService {
                     .lock_runtimes()?
                     .terminal_session_id(&pane_id)
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
-                self.pty_manager.resize(&runtime_session_id, cols, rows)?;
+                self.pty_manager
+                    .resize(runtime_session_id.as_ref(), cols, rows)?;
             }
             RuntimeCommand::NavigateBrowser { pane_id, url } => {
                 browser_surface::navigate_browser(window, &pane_id, &url)?;
@@ -164,7 +166,7 @@ impl RuntimeApplicationService {
 
     pub fn observe_terminal_cwd(
         &self,
-        pane_id: &str,
+        pane_id: &PaneId,
         working_directory: &str,
         workspace_service: &WorkspaceApplicationService,
         settings_service: &SettingsApplicationService,
@@ -206,22 +208,20 @@ fn settings_error_to_shell(error: SettingsError) -> ShellError {
 
 #[cfg(test)]
 mod tests {
-    use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeStatus};
+    use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
 
-    /// Tests the registry interactions that underpin `start_runtime`.
-    /// Verifies that registering a terminal runtime makes it visible in the snapshot
-    /// and correctly tracks the runtime session ID.
+    fn sid(s: &str) -> RuntimeSessionId {
+        RuntimeSessionId::from(String::from(s))
+    }
+
     #[test]
     fn start_runtime_registers_terminal_in_registry() {
         let mut registry = RuntimeRegistry::default();
 
-        let runtime = registry.register_terminal("pane-1", String::from("pty-session-abc"));
+        let runtime = registry.register_terminal("pane-1", sid("pty-session-abc"));
 
         assert_eq!(runtime.pane_id, "pane-1");
-        assert_eq!(
-            runtime.runtime_session_id,
-            Some(String::from("pty-session-abc"))
-        );
+        assert_eq!(runtime.runtime_session_id, Some(sid("pty-session-abc")));
         assert!(matches!(runtime.kind, RuntimeKind::Terminal));
         assert!(matches!(runtime.status, RuntimeStatus::Running));
 
@@ -230,19 +230,16 @@ mod tests {
         assert_eq!(snapshot[0].pane_id, "pane-1");
 
         let session_id = registry.terminal_session_id("pane-1");
-        assert_eq!(session_id, Some(String::from("pty-session-abc")));
+        assert_eq!(session_id, Some(sid("pty-session-abc")));
     }
 
-    /// Tests the registry interactions that underpin `stop_runtime`.
-    /// Verifies that removing a runtime clears it from the registry and
-    /// returns the runtime data for cleanup (PTY kill, status emit).
     #[test]
     fn stop_runtime_removes_from_registry() {
         let mut registry = RuntimeRegistry::default();
-        registry.register_terminal("pane-1", String::from("pty-session-abc"));
+        registry.register_terminal("pane-1", sid("pty-session-abc"));
         registry.register_browser(
             "pane-2",
-            String::from("browser-xyz"),
+            sid("browser-xyz"),
             String::from("https://example.com"),
         );
 
@@ -261,14 +258,13 @@ mod tests {
         assert!(not_found.is_none(), "removing twice should return None");
     }
 
-    /// Tests browser runtime registration that underpins `start_runtime` for browser panes.
     #[test]
     fn start_runtime_registers_browser_in_registry() {
         let mut registry = RuntimeRegistry::default();
 
         let runtime = registry.register_browser(
             "pane-b",
-            String::from("browser-session-1"),
+            sid("browser-session-1"),
             String::from("https://example.com"),
         );
 

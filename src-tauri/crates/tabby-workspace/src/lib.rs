@@ -1,7 +1,10 @@
+pub mod ids;
 pub mod layout;
 
 use thiserror::Error;
 use uuid::Uuid;
+
+pub use ids::{PaneId, TabId};
 
 use crate::layout::{
     close_pane as close_pane_layout, split_pane as split_pane_layout, swap_panes, tree_from_count,
@@ -37,24 +40,24 @@ impl PaneSpec {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaneSlot {
-    pub pane_id: String,
+    pub pane_id: PaneId,
     pub title: String,
     pub spec: PaneSpec,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tab {
-    pub tab_id: String,
+    pub tab_id: TabId,
     pub title: String,
     pub layout: SplitNode,
     pub panes: Vec<PaneSlot>,
-    pub active_pane_id: String,
+    pub active_pane_id: PaneId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceSession {
     pub tabs: Vec<Tab>,
-    pub active_tab_id: Option<String>,
+    pub active_tab_id: Option<TabId>,
     next_tab_index: usize,
 }
 
@@ -66,11 +69,11 @@ pub enum TabLayoutStrategy {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceDomainEvent {
-    PaneAdded { pane_id: String, spec: PaneSpec },
-    PaneRemoved { pane_id: String, spec: PaneSpec },
-    PaneSpecReplaced { pane_id: String, spec: PaneSpec },
-    ActivePaneChanged { pane_id: String, tab_id: String },
-    ActiveTabChanged { tab_id: String },
+    PaneAdded { pane_id: PaneId, spec: PaneSpec },
+    PaneRemoved { pane_id: PaneId, spec: PaneSpec },
+    PaneSpecReplaced { pane_id: PaneId, spec: PaneSpec },
+    ActivePaneChanged { pane_id: PaneId, tab_id: TabId },
+    ActiveTabChanged { tab_id: TabId },
 }
 
 #[derive(Debug, Error)]
@@ -162,14 +165,17 @@ impl WorkspaceSession {
         Ok(events)
     }
 
-    pub fn close_tab(&mut self, tab_id: &str) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
+    pub fn close_tab(
+        &mut self,
+        tab_id: &TabId,
+    ) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
         let index = self
             .tabs
             .iter()
-            .position(|tab| tab.tab_id == tab_id)
+            .position(|tab| tab.tab_id == *tab_id)
             .ok_or_else(|| WorkspaceError::NotFound(format!("tab {tab_id}")))?;
 
-        let was_active = self.active_tab_id.as_deref() == Some(tab_id);
+        let was_active = self.active_tab_id.as_ref() == Some(tab_id);
         let removed = self.tabs.remove(index);
         self.active_tab_id = if self.tabs.is_empty() {
             None
@@ -202,35 +208,35 @@ impl WorkspaceSession {
 
     pub fn focus_pane(
         &mut self,
-        tab_id: &str,
-        pane_id: &str,
+        tab_id: &TabId,
+        pane_id: &PaneId,
     ) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
         let tab = self
             .tabs
             .iter_mut()
-            .find(|tab| tab.tab_id == tab_id)
+            .find(|tab| tab.tab_id == *tab_id)
             .ok_or_else(|| WorkspaceError::NotFound(format!("tab {tab_id}")))?;
-        if !tab.panes.iter().any(|pane| pane.pane_id == pane_id) {
+        if !tab.panes.iter().any(|pane| pane.pane_id == *pane_id) {
             return Err(WorkspaceError::NotFound(format!("pane {pane_id}")));
         }
 
         let mut events = Vec::new();
-        let tab_changed = self.active_tab_id.as_deref() != Some(tab_id);
-        let pane_changed = tab.active_pane_id != pane_id;
+        let tab_changed = self.active_tab_id.as_ref() != Some(tab_id);
+        let pane_changed = tab.active_pane_id != *pane_id;
 
-        tab.active_pane_id = String::from(pane_id);
-        self.active_tab_id = Some(String::from(tab_id));
+        tab.active_pane_id = pane_id.clone();
+        self.active_tab_id = Some(tab_id.clone());
         self.validate()?;
 
         if tab_changed {
             events.push(WorkspaceDomainEvent::ActiveTabChanged {
-                tab_id: String::from(tab_id),
+                tab_id: tab_id.clone(),
             });
         }
         if pane_changed || tab_changed {
             events.push(WorkspaceDomainEvent::ActivePaneChanged {
-                pane_id: String::from(pane_id),
-                tab_id: String::from(tab_id),
+                pane_id: pane_id.clone(),
+                tab_id: tab_id.clone(),
             });
         }
         Ok(events)
@@ -238,18 +244,18 @@ impl WorkspaceSession {
 
     pub fn set_active_tab(
         &mut self,
-        tab_id: &str,
+        tab_id: &TabId,
     ) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
-        if !self.tabs.iter().any(|tab| tab.tab_id == tab_id) {
+        if !self.tabs.iter().any(|tab| tab.tab_id == *tab_id) {
             return Err(WorkspaceError::NotFound(format!("tab {tab_id}")));
         }
-        let changed = self.active_tab_id.as_deref() != Some(tab_id);
-        self.active_tab_id = Some(String::from(tab_id));
+        let changed = self.active_tab_id.as_ref() != Some(tab_id);
+        self.active_tab_id = Some(tab_id.clone());
         self.validate()?;
 
         if changed {
             Ok(vec![WorkspaceDomainEvent::ActiveTabChanged {
-                tab_id: String::from(tab_id),
+                tab_id: tab_id.clone(),
             }])
         } else {
             Ok(vec![])
@@ -258,7 +264,7 @@ impl WorkspaceSession {
 
     pub fn split_pane(
         &mut self,
-        pane_id: &str,
+        pane_id: &PaneId,
         direction: SplitDirection,
         spec: PaneSpec,
     ) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
@@ -291,14 +297,14 @@ impl WorkspaceSession {
 
     pub fn close_pane(
         &mut self,
-        pane_id: &str,
+        pane_id: &PaneId,
     ) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
         let (tab_index, pane_index) = self.locate_pane(pane_id)?;
         let close_result =
             close_pane_layout(&self.tabs[tab_index].layout, pane_id).ok_or_else(|| {
                 WorkspaceError::State(format!("failed to close pane {pane_id} in layout"))
             })?;
-        let was_active_pane = self.tabs[tab_index].active_pane_id == pane_id;
+        let was_active_pane = self.tabs[tab_index].active_pane_id == *pane_id;
         let removed = self.tabs[tab_index].panes.remove(pane_index);
 
         let mut extra_events = Vec::new();
@@ -311,7 +317,7 @@ impl WorkspaceSession {
                         .panes
                         .first()
                         .map(|pane| pane.pane_id.clone())
-                        .unwrap_or_default();
+                        .unwrap_or_else(|| PaneId::from(String::new()));
                     self.tabs[tab_index].active_pane_id = new_active.clone();
                     let tab_id = self.tabs[tab_index].tab_id.clone();
                     extra_events.push(WorkspaceDomainEvent::ActivePaneChanged {
@@ -322,7 +328,7 @@ impl WorkspaceSession {
             }
             None => {
                 let removed_tab_id = self.tabs[tab_index].tab_id.clone();
-                let was_active_tab = self.active_tab_id.as_deref() == Some(&removed_tab_id);
+                let was_active_tab = self.active_tab_id.as_ref() == Some(&removed_tab_id);
                 self.tabs.remove(tab_index);
                 self.active_tab_id = if self.tabs.is_empty() {
                     None
@@ -352,15 +358,15 @@ impl WorkspaceSession {
 
     pub fn swap_pane_slots(
         &mut self,
-        pane_id_a: &str,
-        pane_id_b: &str,
+        pane_id_a: &PaneId,
+        pane_id_b: &PaneId,
     ) -> Result<(), WorkspaceError> {
         let tab = self
             .tabs
             .iter_mut()
             .find(|tab| {
-                tab.panes.iter().any(|pane| pane.pane_id == pane_id_a)
-                    && tab.panes.iter().any(|pane| pane.pane_id == pane_id_b)
+                tab.panes.iter().any(|pane| pane.pane_id == *pane_id_a)
+                    && tab.panes.iter().any(|pane| pane.pane_id == *pane_id_b)
             })
             .ok_or_else(|| {
                 WorkspaceError::NotFound(format!(
@@ -377,7 +383,7 @@ impl WorkspaceSession {
 
     pub fn replace_pane_spec(
         &mut self,
-        pane_id: &str,
+        pane_id: &PaneId,
         spec: PaneSpec,
     ) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
         let (_, pane_index) = self.locate_pane(pane_id)?;
@@ -385,28 +391,28 @@ impl WorkspaceSession {
             .tabs
             .iter_mut()
             .flat_map(|tab| tab.panes.iter_mut())
-            .find(|pane| pane.pane_id == pane_id)
+            .find(|pane| pane.pane_id == *pane_id)
             .ok_or_else(|| WorkspaceError::NotFound(format!("pane {pane_id}")))?;
         pane.spec = spec.clone();
         let _ = pane_index;
         self.validate()?;
 
         Ok(vec![WorkspaceDomainEvent::PaneSpecReplaced {
-            pane_id: String::from(pane_id),
+            pane_id: pane_id.clone(),
             spec,
         }])
     }
 
     pub fn track_terminal_working_directory(
         &mut self,
-        pane_id: &str,
+        pane_id: &PaneId,
         working_directory: &str,
     ) -> Result<(), WorkspaceError> {
         let pane = self
             .tabs
             .iter_mut()
             .flat_map(|tab| tab.panes.iter_mut())
-            .find(|pane| pane.pane_id == pane_id)
+            .find(|pane| pane.pane_id == *pane_id)
             .ok_or_else(|| WorkspaceError::NotFound(format!("pane {pane_id}")))?;
 
         match &mut pane.spec {
@@ -422,11 +428,11 @@ impl WorkspaceSession {
         self.validate()
     }
 
-    pub fn pane_spec(&self, pane_id: &str) -> Option<PaneSpec> {
+    pub fn pane_spec(&self, pane_id: &PaneId) -> Option<PaneSpec> {
         self.tabs
             .iter()
             .flat_map(|tab| tab.panes.iter())
-            .find(|pane| pane.pane_id == pane_id)
+            .find(|pane| pane.pane_id == *pane_id)
             .map(|pane| pane.spec.clone())
     }
 
@@ -448,7 +454,7 @@ impl WorkspaceSession {
             WorkspaceError::State(String::from("workspace is missing an active tab"))
         })?;
 
-        if !self.tabs.iter().any(|tab| &tab.tab_id == active_tab_id) {
+        if !self.tabs.iter().any(|tab| tab.tab_id == *active_tab_id) {
             return Err(WorkspaceError::State(String::from(
                 "active tab does not exist in workspace",
             )));
@@ -484,9 +490,9 @@ impl WorkspaceSession {
         Ok(())
     }
 
-    fn locate_pane(&self, pane_id: &str) -> Result<(usize, usize), WorkspaceError> {
+    fn locate_pane(&self, pane_id: &PaneId) -> Result<(usize, usize), WorkspaceError> {
         for (tab_index, tab) in self.tabs.iter().enumerate() {
-            if let Some(pane_index) = tab.panes.iter().position(|pane| pane.pane_id == pane_id) {
+            if let Some(pane_index) = tab.panes.iter().position(|pane| pane.pane_id == *pane_id) {
                 return Ok((tab_index, pane_index));
             }
         }
@@ -497,7 +503,7 @@ impl WorkspaceSession {
 
 fn resolve_layout(
     layout_strategy: &TabLayoutStrategy,
-    pane_ids: &[String],
+    pane_ids: &[PaneId],
 ) -> Result<SplitNode, WorkspaceError> {
     match layout_strategy {
         TabLayoutStrategy::Preset(preset) => {
@@ -515,24 +521,24 @@ fn resolve_layout(
     }
 }
 
-pub fn create_pane_id() -> String {
-    Uuid::new_v4().to_string()
+pub fn create_pane_id() -> PaneId {
+    PaneId::from(Uuid::new_v4().to_string())
 }
 
-pub fn create_tab_id() -> String {
-    Uuid::new_v4().to_string()
+pub fn create_tab_id() -> TabId {
+    TabId::from(Uuid::new_v4().to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         layout::{LayoutPreset, SplitDirection},
-        BrowserPaneSpec, PaneSpec, TabLayoutStrategy, TerminalPaneSpec, WorkspaceDomainEvent,
+        BrowserPaneSpec, PaneId, PaneSpec, TabId, TabLayoutStrategy, WorkspaceDomainEvent,
         WorkspaceSession,
     };
 
     fn terminal(cwd: &str) -> PaneSpec {
-        PaneSpec::Terminal(TerminalPaneSpec {
+        PaneSpec::Terminal(super::TerminalPaneSpec {
             launch_profile_id: String::from("terminal"),
             working_directory: String::from(cwd),
             command_override: None,
@@ -793,23 +799,59 @@ mod tests {
 
     #[test]
     fn events_carry_no_transport_types() {
-        // Negative case: WorkspaceDomainEvent only uses domain types (String, PaneSpec).
+        // Negative case: WorkspaceDomainEvent only uses domain types (newtypes, PaneSpec).
         // This test verifies that events can be constructed without any Tauri/transport imports.
         let event = WorkspaceDomainEvent::PaneAdded {
-            pane_id: String::from("p1"),
+            pane_id: PaneId::from(String::from("p1")),
             spec: terminal("/tmp"),
         };
         let event2 = WorkspaceDomainEvent::ActivePaneChanged {
-            pane_id: String::from("p1"),
-            tab_id: String::from("t1"),
+            pane_id: PaneId::from(String::from("p1")),
+            tab_id: TabId::from(String::from("t1")),
         };
         let event3 = WorkspaceDomainEvent::ActiveTabChanged {
-            tab_id: String::from("t1"),
+            tab_id: TabId::from(String::from("t1")),
         };
 
         // If these compile and are Debug-printable, they are transport-free
         assert!(!format!("{event:?}").is_empty());
         assert!(!format!("{event2:?}").is_empty());
         assert!(!format!("{event3:?}").is_empty());
+    }
+
+    /// Negative case: domain functions no longer accept raw String for tab/pane ids.
+    /// This is a compile-time guarantee — these tests verify the type system enforces it.
+    #[test]
+    fn domain_functions_require_typed_ids() {
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByOne),
+                vec![terminal("/tmp")],
+            )
+            .expect("tab should open");
+
+        let tab_id: TabId = workspace.tabs[0].tab_id.clone();
+        let _pane_id: PaneId = workspace.tabs[0].panes[0].pane_id.clone();
+
+        // These calls prove that TabId/PaneId are required (not String)
+        workspace.close_tab(&tab_id).ok();
+
+        let mut workspace2 = WorkspaceSession::default();
+        workspace2
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByTwo),
+                vec![terminal("/a"), terminal("/b")],
+            )
+            .expect("tab");
+        let tab_id2 = workspace2.tabs[0].tab_id.clone();
+        let pane_id2 = workspace2.tabs[0].panes[0].pane_id.clone();
+
+        workspace2.focus_pane(&tab_id2, &pane_id2).ok();
+        workspace2
+            .split_pane(&pane_id2, SplitDirection::Horizontal, terminal("/c"))
+            .ok();
+        workspace2.set_active_tab(&tab_id2).ok();
+        workspace2.pane_spec(&pane_id2);
     }
 }

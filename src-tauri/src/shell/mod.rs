@@ -10,7 +10,7 @@ use tabby_contracts::{
 };
 use tabby_settings::{built_in_profile_catalog, default_preferences};
 use tabby_workspace::layout::LayoutPreset;
-use tabby_workspace::WorkspaceDomainEvent;
+use tabby_workspace::{PaneId, WorkspaceDomainEvent};
 
 use crate::application::commands::WorkspaceCommand;
 use crate::application::{
@@ -114,6 +114,7 @@ impl AppShell {
                 pane_id,
                 working_directory,
             } => {
+                let pane_id = PaneId::from(pane_id);
                 self.runtime_service.observe_terminal_cwd(
                     &pane_id,
                     &working_directory,
@@ -183,7 +184,7 @@ impl AppShell {
                     .swap_pane_slots(&pane_id_a, &pane_id_b)?;
             }
             WorkspaceCommand::ReplacePaneSpec(cmd) => {
-                self.runtime_service.stop_runtime(&cmd.pane_id);
+                self.runtime_service.stop_runtime(cmd.pane_id.as_ref());
                 let events = self
                     .workspace_service
                     .replace_pane_spec(&cmd.pane_id, cmd.spec)?;
@@ -196,7 +197,7 @@ impl AppShell {
                     .ok_or_else(|| ShellError::NotFound(format!("pane {pane_id}")))?;
                 let preferences = self.settings_service.preferences()?;
                 self.runtime_service
-                    .restart_runtime(&pane_id, &spec, &preferences)?;
+                    .restart_runtime(pane_id.as_ref(), &spec, &preferences)?;
             }
         }
         Ok(())

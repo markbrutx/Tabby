@@ -1,6 +1,6 @@
 use tabby_settings::UserPreferences;
 use tabby_workspace::layout::{LayoutPreset, SplitDirection};
-use tabby_workspace::PaneSpec;
+use tabby_workspace::{PaneId, PaneSpec, TabId};
 
 // ---------------------------------------------------------------------------
 // Workspace commands
@@ -17,13 +17,13 @@ pub struct OpenTabCommand {
 /// Internal command to close an existing tab.
 #[derive(Debug, Clone)]
 pub struct CloseTabCommand {
-    pub tab_id: String,
+    pub tab_id: TabId,
 }
 
 /// Internal command to split an existing pane in the given direction.
 #[derive(Debug, Clone)]
 pub struct SplitPaneCommand {
-    pub pane_id: String,
+    pub pane_id: PaneId,
     pub direction: SplitDirection,
     pub spec: PaneSpec,
 }
@@ -31,7 +31,7 @@ pub struct SplitPaneCommand {
 /// Internal command to replace the spec of an existing pane (e.g. swap terminal for browser).
 #[derive(Debug, Clone)]
 pub struct ReplacePaneSpecCommand {
-    pub pane_id: String,
+    pub pane_id: PaneId,
     pub spec: PaneSpec,
 }
 
@@ -41,23 +41,23 @@ pub enum WorkspaceCommand {
     OpenTab(OpenTabCommand),
     CloseTab(CloseTabCommand),
     SetActiveTab {
-        tab_id: String,
+        tab_id: TabId,
     },
     FocusPane {
-        tab_id: String,
-        pane_id: String,
+        tab_id: TabId,
+        pane_id: PaneId,
     },
     SplitPane(SplitPaneCommand),
     ClosePane {
-        pane_id: String,
+        pane_id: PaneId,
     },
     SwapPaneSlots {
-        pane_id_a: String,
-        pane_id_b: String,
+        pane_id_a: PaneId,
+        pane_id_b: PaneId,
     },
     ReplacePaneSpec(ReplacePaneSpecCommand),
     RestartPaneRuntime {
-        pane_id: String,
+        pane_id: PaneId,
     },
 }
 

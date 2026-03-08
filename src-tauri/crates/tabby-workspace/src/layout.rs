@@ -2,6 +2,8 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
+use crate::ids::PaneId;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayoutPreset {
     OneByOne,
@@ -53,7 +55,7 @@ pub enum SplitDirection {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SplitNode {
     Pane {
-        pane_id: String,
+        pane_id: PaneId,
     },
     Split {
         direction: SplitDirection,
@@ -73,7 +75,7 @@ pub enum LayoutError {
     OrphanPane,
 }
 
-pub fn tree_from_preset(preset: LayoutPreset, pane_ids: &[String]) -> SplitNode {
+pub fn tree_from_preset(preset: LayoutPreset, pane_ids: &[PaneId]) -> SplitNode {
     match preset {
         LayoutPreset::OneByOne => leaf(&pane_ids[0]),
         LayoutPreset::OneByTwo => hsplit(&pane_ids[0], &pane_ids[1]),
@@ -103,7 +105,7 @@ pub fn tree_from_preset(preset: LayoutPreset, pane_ids: &[String]) -> SplitNode 
     }
 }
 
-pub fn tree_from_count(pane_ids: &[String]) -> Result<SplitNode, LayoutError> {
+pub fn tree_from_count(pane_ids: &[PaneId]) -> Result<SplitNode, LayoutError> {
     let tree = match pane_ids.len() {
         1 => leaf(&pane_ids[0]),
         2 => hsplit(&pane_ids[0], &pane_ids[1]),
@@ -177,19 +179,19 @@ pub fn tree_from_count(pane_ids: &[String]) -> Result<SplitNode, LayoutError> {
 
 pub fn split_pane(
     root: &SplitNode,
-    target_pane_id: &str,
+    target_pane_id: &PaneId,
     direction: SplitDirection,
-    new_pane_id: &str,
+    new_pane_id: &PaneId,
 ) -> Option<SplitNode> {
     match root {
-        SplitNode::Pane { pane_id } if pane_id == target_pane_id => Some(SplitNode::Split {
+        SplitNode::Pane { pane_id } if *pane_id == *target_pane_id => Some(SplitNode::Split {
             direction,
             ratio: 500,
             first: Box::new(SplitNode::Pane {
                 pane_id: pane_id.clone(),
             }),
             second: Box::new(SplitNode::Pane {
-                pane_id: String::from(new_pane_id),
+                pane_id: new_pane_id.clone(),
             }),
         }),
         SplitNode::Pane { .. } => None,
@@ -222,9 +224,9 @@ pub fn split_pane(
     }
 }
 
-pub fn close_pane(root: &SplitNode, target_pane_id: &str) -> Option<Option<SplitNode>> {
+pub fn close_pane(root: &SplitNode, target_pane_id: &PaneId) -> Option<Option<SplitNode>> {
     match root {
-        SplitNode::Pane { pane_id } if pane_id == target_pane_id => Some(None),
+        SplitNode::Pane { pane_id } if *pane_id == *target_pane_id => Some(None),
         SplitNode::Pane { .. } => None,
         SplitNode::Split {
             direction,
@@ -261,23 +263,22 @@ pub fn close_pane(root: &SplitNode, target_pane_id: &str) -> Option<Option<Split
     }
 }
 
-pub fn swap_panes(root: &SplitNode, pane_id_a: &str, pane_id_b: &str) -> Option<SplitNode> {
+pub fn swap_panes(root: &SplitNode, pane_id_a: &PaneId, pane_id_b: &PaneId) -> Option<SplitNode> {
     let pane_ids = collect_pane_ids(root);
-    if !pane_ids.contains(&String::from(pane_id_a)) || !pane_ids.contains(&String::from(pane_id_b))
-    {
+    if !pane_ids.contains(pane_id_a) || !pane_ids.contains(pane_id_b) {
         return None;
     }
 
     Some(swap_panes_inner(root, pane_id_a, pane_id_b))
 }
 
-pub fn collect_pane_ids(root: &SplitNode) -> Vec<String> {
+pub fn collect_pane_ids(root: &SplitNode) -> Vec<PaneId> {
     let mut pane_ids = Vec::new();
     collect_pane_ids_inner(root, &mut pane_ids);
     pane_ids
 }
 
-pub fn validate_layout(root: &SplitNode, pane_ids: &[String]) -> Result<(), LayoutError> {
+pub fn validate_layout(root: &SplitNode, pane_ids: &[PaneId]) -> Result<(), LayoutError> {
     let tree_ids = collect_pane_ids(root).into_iter().collect::<BTreeSet<_>>();
     let slot_ids = pane_ids.iter().cloned().collect::<BTreeSet<_>>();
     if tree_ids != slot_ids {
@@ -286,13 +287,13 @@ pub fn validate_layout(root: &SplitNode, pane_ids: &[String]) -> Result<(), Layo
     Ok(())
 }
 
-fn swap_panes_inner(root: &SplitNode, pane_id_a: &str, pane_id_b: &str) -> SplitNode {
+fn swap_panes_inner(root: &SplitNode, pane_id_a: &PaneId, pane_id_b: &PaneId) -> SplitNode {
     match root {
-        SplitNode::Pane { pane_id } if pane_id == pane_id_a => SplitNode::Pane {
-            pane_id: String::from(pane_id_b),
+        SplitNode::Pane { pane_id } if *pane_id == *pane_id_a => SplitNode::Pane {
+            pane_id: pane_id_b.clone(),
         },
-        SplitNode::Pane { pane_id } if pane_id == pane_id_b => SplitNode::Pane {
-            pane_id: String::from(pane_id_a),
+        SplitNode::Pane { pane_id } if *pane_id == *pane_id_b => SplitNode::Pane {
+            pane_id: pane_id_a.clone(),
         },
         SplitNode::Pane { .. } => root.clone(),
         SplitNode::Split {
@@ -309,7 +310,7 @@ fn swap_panes_inner(root: &SplitNode, pane_id_a: &str, pane_id_b: &str) -> Split
     }
 }
 
-fn collect_pane_ids_inner(node: &SplitNode, pane_ids: &mut Vec<String>) {
+fn collect_pane_ids_inner(node: &SplitNode, pane_ids: &mut Vec<PaneId>) {
     match node {
         SplitNode::Pane { pane_id } => pane_ids.push(pane_id.clone()),
         SplitNode::Split { first, second, .. } => {
@@ -319,13 +320,13 @@ fn collect_pane_ids_inner(node: &SplitNode, pane_ids: &mut Vec<String>) {
     }
 }
 
-fn leaf(id: &str) -> SplitNode {
+fn leaf(id: &PaneId) -> SplitNode {
     SplitNode::Pane {
-        pane_id: String::from(id),
+        pane_id: id.clone(),
     }
 }
 
-fn hsplit(a: &str, b: &str) -> SplitNode {
+fn hsplit(a: &PaneId, b: &PaneId) -> SplitNode {
     SplitNode::Split {
         direction: SplitDirection::Horizontal,
         ratio: 500,
@@ -334,7 +335,7 @@ fn hsplit(a: &str, b: &str) -> SplitNode {
     }
 }
 
-fn hsplit3(a: &str, b: &str, c: &str) -> SplitNode {
+fn hsplit3(a: &PaneId, b: &PaneId, c: &PaneId) -> SplitNode {
     SplitNode::Split {
         direction: SplitDirection::Horizontal,
         ratio: 333,
@@ -348,7 +349,7 @@ fn hsplit3(a: &str, b: &str, c: &str) -> SplitNode {
     }
 }
 
-fn hsplit4(a: &str, b: &str, c: &str, d: &str) -> SplitNode {
+fn hsplit4(a: &PaneId, b: &PaneId, c: &PaneId, d: &PaneId) -> SplitNode {
     SplitNode::Split {
         direction: SplitDirection::Horizontal,
         ratio: 500,
@@ -363,34 +364,44 @@ mod tests {
         close_pane, collect_pane_ids, split_pane, swap_panes, tree_from_count, LayoutPreset,
         SplitDirection,
     };
+    use crate::ids::PaneId;
 
-    fn ids(n: usize) -> Vec<String> {
-        (1..=n).map(|index| format!("p{index}")).collect()
+    fn ids(n: usize) -> Vec<PaneId> {
+        (1..=n)
+            .map(|index| PaneId::from(format!("p{index}")))
+            .collect()
+    }
+
+    fn pid(s: &str) -> PaneId {
+        PaneId::from(String::from(s))
     }
 
     #[test]
     fn builds_tree_from_count() {
         let tree = tree_from_count(&ids(4)).expect("tree should build");
-        assert_eq!(collect_pane_ids(&tree), vec!["p1", "p2", "p3", "p4"]);
+        assert_eq!(
+            collect_pane_ids(&tree),
+            vec![pid("p1"), pid("p2"), pid("p3"), pid("p4")]
+        );
     }
 
     #[test]
     fn splits_and_closes_panes() {
         let tree = super::tree_from_preset(LayoutPreset::OneByOne, &ids(1));
-        let split = split_pane(&tree, "p1", SplitDirection::Horizontal, "p2")
+        let split = split_pane(&tree, &pid("p1"), SplitDirection::Horizontal, &pid("p2"))
             .expect("split should succeed");
-        assert_eq!(collect_pane_ids(&split), vec!["p1", "p2"]);
+        assert_eq!(collect_pane_ids(&split), vec![pid("p1"), pid("p2")]);
 
-        let collapsed = close_pane(&split, "p2")
+        let collapsed = close_pane(&split, &pid("p2"))
             .expect("close should succeed")
             .expect("tree should remain");
-        assert_eq!(collect_pane_ids(&collapsed), vec!["p1"]);
+        assert_eq!(collect_pane_ids(&collapsed), vec![pid("p1")]);
     }
 
     #[test]
     fn swaps_panes() {
         let tree = tree_from_count(&ids(2)).expect("tree should build");
-        let swapped = swap_panes(&tree, "p1", "p2").expect("swap should succeed");
-        assert_eq!(collect_pane_ids(&swapped), vec!["p2", "p1"]);
+        let swapped = swap_panes(&tree, &pid("p1"), &pid("p2")).expect("swap should succeed");
+        assert_eq!(collect_pane_ids(&swapped), vec![pid("p2"), pid("p1")]);
     }
 }

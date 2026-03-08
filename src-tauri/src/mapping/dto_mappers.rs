@@ -7,7 +7,7 @@ use tabby_contracts::{
 use tabby_runtime::{PaneRuntime, RuntimeKind, RuntimeStatus};
 use tabby_settings::{ProfileCatalog, ThemeMode, UserPreferences};
 use tabby_workspace::layout::{LayoutPreset, SplitDirection, SplitNode};
-use tabby_workspace::{PaneSpec, WorkspaceSession};
+use tabby_workspace::{PaneId, PaneSpec, TabId, WorkspaceSession};
 
 use crate::application::commands::{
     CloseTabCommand, OpenTabCommand, ReplacePaneSpecCommand, RuntimeCommand, SettingsCommand,
@@ -65,24 +65,28 @@ pub fn profile_catalog_view_from_catalog(catalog: &ProfileCatalog) -> ProfileCat
 
 pub fn workspace_view_from_session(session: &WorkspaceSession) -> WorkspaceView {
     WorkspaceView {
-        active_tab_id: session.active_tab_id.clone().unwrap_or_default(),
+        active_tab_id: session
+            .active_tab_id
+            .as_ref()
+            .map(|id| id.to_string())
+            .unwrap_or_default(),
         tabs: session
             .tab_summaries()
             .iter()
             .map(|tab| TabView {
-                tab_id: tab.tab_id.clone(),
+                tab_id: tab.tab_id.to_string(),
                 title: tab.title.clone(),
                 layout: split_node_to_dto(&tab.layout),
                 panes: tab
                     .panes
                     .iter()
                     .map(|pane| PaneView {
-                        pane_id: pane.pane_id.clone(),
+                        pane_id: pane.pane_id.to_string(),
                         title: pane.title.clone(),
                         spec: pane_spec_to_dto(&pane.spec),
                     })
                     .collect(),
-                active_pane_id: tab.active_pane_id.clone(),
+                active_pane_id: tab.active_pane_id.to_string(),
             })
             .collect(),
     }
@@ -104,7 +108,7 @@ pub fn pane_spec_to_dto(value: &PaneSpec) -> PaneSpecDto {
 pub fn pane_runtime_to_view(runtime: &PaneRuntime) -> PaneRuntimeView {
     PaneRuntimeView {
         pane_id: runtime.pane_id.clone(),
-        runtime_session_id: runtime.runtime_session_id.clone(),
+        runtime_session_id: runtime.runtime_session_id.as_ref().map(|id| id.to_string()),
         kind: runtime_kind_to_dto(runtime.kind),
         status: runtime_status_to_dto(runtime.status),
         last_error: runtime.last_error.clone(),
@@ -181,38 +185,45 @@ pub fn workspace_command_from_dto(
                 pane_specs: pane_specs.into_iter().map(pane_spec_from_dto).collect(),
             })
         }
-        WorkspaceCommandDto::CloseTab { tab_id } => {
-            WorkspaceCommand::CloseTab(CloseTabCommand { tab_id })
-        }
-        WorkspaceCommandDto::SetActiveTab { tab_id } => WorkspaceCommand::SetActiveTab { tab_id },
-        WorkspaceCommandDto::FocusPane { tab_id, pane_id } => {
-            WorkspaceCommand::FocusPane { tab_id, pane_id }
-        }
+        WorkspaceCommandDto::CloseTab { tab_id } => WorkspaceCommand::CloseTab(CloseTabCommand {
+            tab_id: TabId::from(tab_id),
+        }),
+        WorkspaceCommandDto::SetActiveTab { tab_id } => WorkspaceCommand::SetActiveTab {
+            tab_id: TabId::from(tab_id),
+        },
+        WorkspaceCommandDto::FocusPane { tab_id, pane_id } => WorkspaceCommand::FocusPane {
+            tab_id: TabId::from(tab_id),
+            pane_id: PaneId::from(pane_id),
+        },
         WorkspaceCommandDto::SplitPane {
             pane_id,
             direction,
             pane_spec,
         } => WorkspaceCommand::SplitPane(SplitPaneCommand {
-            pane_id,
+            pane_id: PaneId::from(pane_id),
             direction: split_direction_from_dto(direction),
             spec: pane_spec_from_dto(pane_spec),
         }),
-        WorkspaceCommandDto::ClosePane { pane_id } => WorkspaceCommand::ClosePane { pane_id },
+        WorkspaceCommandDto::ClosePane { pane_id } => WorkspaceCommand::ClosePane {
+            pane_id: PaneId::from(pane_id),
+        },
         WorkspaceCommandDto::SwapPaneSlots {
             pane_id_a,
             pane_id_b,
         } => WorkspaceCommand::SwapPaneSlots {
-            pane_id_a,
-            pane_id_b,
+            pane_id_a: PaneId::from(pane_id_a),
+            pane_id_b: PaneId::from(pane_id_b),
         },
         WorkspaceCommandDto::ReplacePaneSpec { pane_id, pane_spec } => {
             WorkspaceCommand::ReplacePaneSpec(ReplacePaneSpecCommand {
-                pane_id,
+                pane_id: PaneId::from(pane_id),
                 spec: pane_spec_from_dto(pane_spec),
             })
         }
         WorkspaceCommandDto::RestartPaneRuntime { pane_id } => {
-            WorkspaceCommand::RestartPaneRuntime { pane_id }
+            WorkspaceCommand::RestartPaneRuntime {
+                pane_id: PaneId::from(pane_id),
+            }
         }
     }
 }
@@ -317,7 +328,7 @@ fn theme_mode_from_dto(value: ThemeModeDto) -> ThemeMode {
 fn split_node_to_dto(value: &SplitNode) -> SplitNodeDto {
     match value {
         SplitNode::Pane { pane_id } => SplitNodeDto::Pane {
-            pane_id: pane_id.clone(),
+            pane_id: pane_id.to_string(),
         },
         SplitNode::Split {
             direction,
@@ -359,7 +370,7 @@ fn runtime_status_to_dto(value: RuntimeStatus) -> RuntimeStatusDto {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tabby_runtime::{PaneRuntime, RuntimeKind, RuntimeStatus};
+    use tabby_runtime::{PaneRuntime, RuntimeKind, RuntimeSessionId, RuntimeStatus};
     use tabby_settings::{default_preferences, ProfileCatalog, TerminalProfile, UserPreferences};
     use tabby_workspace::{BrowserPaneSpec, PaneSpec, TerminalPaneSpec};
 
@@ -508,7 +519,7 @@ mod tests {
     fn pane_runtime_to_view_maps_terminal() {
         let runtime = PaneRuntime {
             pane_id: String::from("pane-1"),
-            runtime_session_id: Some(String::from("pty-abc")),
+            runtime_session_id: Some(RuntimeSessionId::from(String::from("pty-abc"))),
             kind: RuntimeKind::Terminal,
             status: RuntimeStatus::Running,
             last_error: None,
@@ -528,7 +539,7 @@ mod tests {
     fn pane_runtime_to_view_maps_browser() {
         let runtime = PaneRuntime {
             pane_id: String::from("pane-2"),
-            runtime_session_id: Some(String::from("browser-xyz")),
+            runtime_session_id: Some(RuntimeSessionId::from(String::from("browser-xyz"))),
             kind: RuntimeKind::Browser,
             status: RuntimeStatus::Running,
             last_error: None,
@@ -654,7 +665,7 @@ mod tests {
 
         match cmd {
             WorkspaceCommand::SplitPane(split) => {
-                assert_eq!(split.pane_id, "pane-1");
+                assert_eq!(split.pane_id.as_ref(), "pane-1");
                 assert!(matches!(split.direction, SplitDirection::Vertical));
                 assert!(matches!(split.spec, PaneSpec::Browser(_)));
             }
@@ -669,7 +680,7 @@ mod tests {
         };
         let cmd = workspace_command_from_dto(dto, LayoutPreset::OneByOne);
         match cmd {
-            WorkspaceCommand::CloseTab(close) => assert_eq!(close.tab_id, "tab-42"),
+            WorkspaceCommand::CloseTab(close) => assert_eq!(close.tab_id.as_ref(), "tab-42"),
             other => panic!("Expected CloseTab, got {other:?}"),
         }
     }
@@ -689,7 +700,7 @@ mod tests {
 
         match cmd {
             WorkspaceCommand::ReplacePaneSpec(replace) => {
-                assert_eq!(replace.pane_id, "pane-5");
+                assert_eq!(replace.pane_id.as_ref(), "pane-5");
                 match replace.spec {
                     PaneSpec::Terminal(t) => {
                         assert_eq!(t.launch_profile_id, "codex");

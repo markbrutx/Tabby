@@ -1,6 +1,10 @@
+pub mod ids;
+
 use std::collections::HashMap;
 
 use thiserror::Error;
+
+pub use ids::RuntimeSessionId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeKind {
@@ -19,7 +23,7 @@ pub enum RuntimeStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaneRuntime {
     pub pane_id: String,
-    pub runtime_session_id: Option<String>,
+    pub runtime_session_id: Option<RuntimeSessionId>,
     pub kind: RuntimeKind,
     pub status: RuntimeStatus,
     pub last_error: Option<String>,
@@ -38,7 +42,11 @@ pub enum RuntimeError {
 }
 
 impl RuntimeRegistry {
-    pub fn register_terminal(&mut self, pane_id: &str, runtime_session_id: String) -> PaneRuntime {
+    pub fn register_terminal(
+        &mut self,
+        pane_id: &str,
+        runtime_session_id: RuntimeSessionId,
+    ) -> PaneRuntime {
         let runtime = PaneRuntime {
             pane_id: String::from(pane_id),
             runtime_session_id: Some(runtime_session_id),
@@ -54,7 +62,7 @@ impl RuntimeRegistry {
     pub fn register_browser(
         &mut self,
         pane_id: &str,
-        runtime_session_id: String,
+        runtime_session_id: RuntimeSessionId,
         initial_url: String,
     ) -> PaneRuntime {
         let runtime = PaneRuntime {
@@ -72,7 +80,7 @@ impl RuntimeRegistry {
     pub fn mark_terminal_exit(
         &mut self,
         pane_id: &str,
-        runtime_session_id: Option<&str>,
+        runtime_session_id: Option<&RuntimeSessionId>,
         failed: bool,
         message: Option<String>,
     ) -> Result<PaneRuntime, RuntimeError> {
@@ -82,7 +90,7 @@ impl RuntimeRegistry {
             .ok_or_else(|| RuntimeError::NotFound(String::from(pane_id)))?;
 
         if let Some(expected) = runtime_session_id {
-            if runtime.runtime_session_id.as_deref() != Some(expected) {
+            if runtime.runtime_session_id.as_ref() != Some(expected) {
                 return Ok(runtime.clone());
             }
         }
@@ -118,7 +126,7 @@ impl RuntimeRegistry {
         self.runtimes.get(pane_id)
     }
 
-    pub fn terminal_session_id(&self, pane_id: &str) -> Option<String> {
+    pub fn terminal_session_id(&self, pane_id: &str) -> Option<RuntimeSessionId> {
         self.runtimes
             .get(pane_id)
             .and_then(|runtime| runtime.runtime_session_id.clone())
@@ -131,15 +139,16 @@ impl RuntimeRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::{RuntimeRegistry, RuntimeStatus};
+    use super::{RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
 
     #[test]
     fn registers_terminal_and_marks_exit() {
         let mut registry = RuntimeRegistry::default();
-        registry.register_terminal("pane-1", String::from("session-1"));
+        let session_id = RuntimeSessionId::from(String::from("session-1"));
+        registry.register_terminal("pane-1", session_id.clone());
 
         let runtime = registry
-            .mark_terminal_exit("pane-1", Some("session-1"), false, None)
+            .mark_terminal_exit("pane-1", Some(&session_id), false, None)
             .expect("runtime should exist");
         assert_eq!(runtime.status, RuntimeStatus::Exited);
     }
@@ -149,7 +158,7 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
         registry.register_browser(
             "pane-1",
-            String::from("browser-1"),
+            RuntimeSessionId::from(String::from("browser-1")),
             String::from("https://example.com"),
         );
 

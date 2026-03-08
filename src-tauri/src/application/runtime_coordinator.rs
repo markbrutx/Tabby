@@ -35,13 +35,13 @@ impl RuntimeCoordinator {
         for event in events {
             match event {
                 WorkspaceDomainEvent::PaneAdded { pane_id, spec } => {
-                    runtime_service.start_runtime(&pane_id, &spec, &preferences)?;
+                    runtime_service.start_runtime(pane_id.as_ref(), &spec, &preferences)?;
                 }
                 WorkspaceDomainEvent::PaneSpecReplaced { pane_id, spec } => {
-                    runtime_service.start_runtime(&pane_id, &spec, &preferences)?;
+                    runtime_service.start_runtime(pane_id.as_ref(), &spec, &preferences)?;
                 }
                 WorkspaceDomainEvent::PaneRemoved { pane_id, .. } => {
-                    runtime_service.stop_runtime(&pane_id);
+                    runtime_service.stop_runtime(pane_id.as_ref());
                 }
                 WorkspaceDomainEvent::ActivePaneChanged { .. }
                 | WorkspaceDomainEvent::ActiveTabChanged { .. } => {
@@ -57,8 +57,8 @@ impl RuntimeCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeStatus};
-    use tabby_workspace::{BrowserPaneSpec, PaneSpec, TerminalPaneSpec};
+    use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
+    use tabby_workspace::{BrowserPaneSpec, PaneId, PaneSpec, TabId, TerminalPaneSpec};
 
     fn terminal_spec(profile_id: &str) -> PaneSpec {
         PaneSpec::Terminal(TerminalPaneSpec {
@@ -72,6 +72,10 @@ mod tests {
         PaneSpec::Browser(BrowserPaneSpec {
             initial_url: String::from(url),
         })
+    }
+
+    fn sid(s: &str) -> RuntimeSessionId {
+        RuntimeSessionId::from(String::from(s))
     }
 
     // --- Event classification tests ---
@@ -88,7 +92,7 @@ mod tests {
     #[test]
     fn pane_added_is_runtime_event() {
         let event = WorkspaceDomainEvent::PaneAdded {
-            pane_id: String::from("pane-1"),
+            pane_id: PaneId::from(String::from("pane-1")),
             spec: terminal_spec("default"),
         };
         assert!(is_runtime_event(&event));
@@ -97,7 +101,7 @@ mod tests {
     #[test]
     fn pane_removed_is_runtime_event() {
         let event = WorkspaceDomainEvent::PaneRemoved {
-            pane_id: String::from("pane-1"),
+            pane_id: PaneId::from(String::from("pane-1")),
             spec: terminal_spec("default"),
         };
         assert!(is_runtime_event(&event));
@@ -106,7 +110,7 @@ mod tests {
     #[test]
     fn pane_spec_replaced_is_runtime_event() {
         let event = WorkspaceDomainEvent::PaneSpecReplaced {
-            pane_id: String::from("pane-1"),
+            pane_id: PaneId::from(String::from("pane-1")),
             spec: browser_spec("https://example.com"),
         };
         assert!(is_runtime_event(&event));
@@ -115,8 +119,8 @@ mod tests {
     #[test]
     fn active_pane_changed_is_not_runtime_event() {
         let event = WorkspaceDomainEvent::ActivePaneChanged {
-            pane_id: String::from("pane-1"),
-            tab_id: String::from("tab-1"),
+            pane_id: PaneId::from(String::from("pane-1")),
+            tab_id: TabId::from(String::from("tab-1")),
         };
         assert!(!is_runtime_event(&event));
     }
@@ -124,7 +128,7 @@ mod tests {
     #[test]
     fn active_tab_changed_is_not_runtime_event() {
         let event = WorkspaceDomainEvent::ActiveTabChanged {
-            tab_id: String::from("tab-1"),
+            tab_id: TabId::from(String::from("tab-1")),
         };
         assert!(!is_runtime_event(&event));
     }
@@ -137,7 +141,10 @@ mod tests {
 
         // Simulate what handle_workspace_events does for PaneAdded(Terminal)
         let pane_id = "pane-1";
-        let runtime = registry.register_terminal(pane_id, String::from("pty-session-1"));
+        let runtime = registry.register_terminal(
+            pane_id,
+            RuntimeSessionId::from(String::from("pty-session-1")),
+        );
 
         assert_eq!(runtime.pane_id, pane_id);
         assert!(matches!(runtime.kind, RuntimeKind::Terminal));
@@ -153,7 +160,7 @@ mod tests {
         let pane_id = "pane-b";
         let runtime = registry.register_browser(
             pane_id,
-            String::from("browser-session-1"),
+            RuntimeSessionId::from(String::from("browser-session-1")),
             String::from("https://example.com"),
         );
 
@@ -171,10 +178,10 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
 
         // Original pane runtime
-        registry.register_terminal("pane-1", String::from("pty-1"));
+        registry.register_terminal("pane-1", sid("pty-1"));
 
         // Split produces PaneAdded for the new pane
-        let runtime = registry.register_terminal("pane-2", String::from("pty-2"));
+        let runtime = registry.register_terminal("pane-2", sid("pty-2"));
 
         assert_eq!(runtime.pane_id, "pane-2");
         assert_eq!(registry.snapshot().len(), 2);
@@ -190,8 +197,8 @@ mod tests {
     fn close_pane_stops_runtime() {
         let mut registry = RuntimeRegistry::default();
 
-        registry.register_terminal("pane-1", String::from("pty-1"));
-        registry.register_terminal("pane-2", String::from("pty-2"));
+        registry.register_terminal("pane-1", sid("pty-1"));
+        registry.register_terminal("pane-2", sid("pty-2"));
         assert_eq!(registry.snapshot().len(), 2);
 
         // PaneRemoved -> stop runtime
@@ -209,7 +216,7 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
 
         // Start with terminal
-        registry.register_terminal("pane-1", String::from("pty-1"));
+        registry.register_terminal("pane-1", sid("pty-1"));
         assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Terminal));
 
         // PaneSpecReplaced: old runtime was already stopped by the caller,
@@ -219,7 +226,7 @@ mod tests {
 
         let runtime = registry.register_browser(
             "pane-1",
-            String::from("browser-session-1"),
+            sid("browser-session-1"),
             String::from("https://example.com"),
         );
 
@@ -235,7 +242,7 @@ mod tests {
         // Start with browser
         registry.register_browser(
             "pane-1",
-            String::from("browser-1"),
+            sid("browser-1"),
             String::from("https://example.com"),
         );
         assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Browser));
@@ -244,7 +251,7 @@ mod tests {
         let removed = registry.remove("pane-1");
         assert!(removed.is_some());
 
-        let runtime = registry.register_terminal("pane-1", String::from("pty-1"));
+        let runtime = registry.register_terminal("pane-1", sid("pty-1"));
 
         assert_eq!(runtime.pane_id, "pane-1");
         assert!(matches!(runtime.kind, RuntimeKind::Terminal));
@@ -254,7 +261,7 @@ mod tests {
     #[test]
     fn focus_events_do_not_affect_registry() {
         let mut registry = RuntimeRegistry::default();
-        registry.register_terminal("pane-1", String::from("pty-1"));
+        registry.register_terminal("pane-1", sid("pty-1"));
 
         let snapshot_before = registry.snapshot().len();
 

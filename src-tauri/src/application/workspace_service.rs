@@ -2,7 +2,8 @@ use std::sync::Mutex;
 
 use tabby_workspace::layout::{LayoutPreset, SplitDirection};
 use tabby_workspace::{
-    PaneSpec, TabLayoutStrategy, WorkspaceDomainEvent, WorkspaceError, WorkspaceSession,
+    PaneId, PaneSpec, TabId, TabLayoutStrategy, WorkspaceDomainEvent, WorkspaceError,
+    WorkspaceSession,
 };
 
 use crate::shell::error::ShellError;
@@ -32,7 +33,7 @@ impl WorkspaceApplicationService {
         Ok(workspace.tab_summaries().is_empty())
     }
 
-    pub fn pane_spec(&self, pane_id: &str) -> Result<Option<PaneSpec>, ShellError> {
+    pub fn pane_spec(&self, pane_id: &PaneId) -> Result<Option<PaneSpec>, ShellError> {
         let workspace = self.lock_workspace()?;
         Ok(workspace.pane_spec(pane_id))
     }
@@ -53,13 +54,13 @@ impl WorkspaceApplicationService {
             .map_err(workspace_error_to_shell)
     }
 
-    pub fn close_tab(&self, tab_id: &str) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
+    pub fn close_tab(&self, tab_id: &TabId) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .close_tab(tab_id)
             .map_err(workspace_error_to_shell)
     }
 
-    pub fn set_active_tab(&self, tab_id: &str) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
+    pub fn set_active_tab(&self, tab_id: &TabId) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .set_active_tab(tab_id)
             .map_err(workspace_error_to_shell)
@@ -67,8 +68,8 @@ impl WorkspaceApplicationService {
 
     pub fn focus_pane(
         &self,
-        tab_id: &str,
-        pane_id: &str,
+        tab_id: &TabId,
+        pane_id: &PaneId,
     ) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .focus_pane(tab_id, pane_id)
@@ -77,7 +78,7 @@ impl WorkspaceApplicationService {
 
     pub fn split_pane(
         &self,
-        pane_id: &str,
+        pane_id: &PaneId,
         direction: SplitDirection,
         spec: PaneSpec,
     ) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
@@ -86,13 +87,17 @@ impl WorkspaceApplicationService {
             .map_err(workspace_error_to_shell)
     }
 
-    pub fn close_pane(&self, pane_id: &str) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
+    pub fn close_pane(&self, pane_id: &PaneId) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
             .close_pane(pane_id)
             .map_err(workspace_error_to_shell)
     }
 
-    pub fn swap_pane_slots(&self, pane_id_a: &str, pane_id_b: &str) -> Result<(), ShellError> {
+    pub fn swap_pane_slots(
+        &self,
+        pane_id_a: &PaneId,
+        pane_id_b: &PaneId,
+    ) -> Result<(), ShellError> {
         self.lock_workspace()?
             .swap_pane_slots(pane_id_a, pane_id_b)
             .map_err(workspace_error_to_shell)
@@ -100,7 +105,7 @@ impl WorkspaceApplicationService {
 
     pub fn replace_pane_spec(
         &self,
-        pane_id: &str,
+        pane_id: &PaneId,
         spec: PaneSpec,
     ) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
         self.lock_workspace()?
@@ -110,7 +115,7 @@ impl WorkspaceApplicationService {
 
     pub fn track_terminal_working_directory(
         &self,
-        pane_id: &str,
+        pane_id: &PaneId,
         working_directory: &str,
     ) -> Result<(), ShellError> {
         self.lock_workspace()?
@@ -214,7 +219,7 @@ mod tests {
     #[test]
     fn close_pane_not_found_returns_error() {
         let service = WorkspaceApplicationService::new();
-        let result = service.close_pane("nonexistent-pane");
+        let result = service.close_pane(&PaneId::from(String::from("nonexistent-pane")));
         assert!(result.is_err(), "should return error for nonexistent pane");
     }
 }
