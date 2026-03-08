@@ -4,6 +4,7 @@ use tauri::{AppHandle, Manager};
 use tracing::warn;
 
 use crate::application::commands::RuntimeCommand;
+use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use tabby_runtime::{PaneRuntime, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
 use tabby_settings::{resolve_terminal_profile, SettingsError, UserPreferences};
 use tabby_workspace::{PaneId, PaneSpec};
@@ -197,6 +198,75 @@ impl RuntimeApplicationService {
         self.runtimes
             .lock()
             .map_err(|_| ShellError::State(String::from("Runtime lock poisoned")))
+    }
+}
+
+impl RuntimeObservationReceiver for RuntimeApplicationService {
+    fn on_terminal_output_received(&self, pane_id: &PaneId, data: &[u8]) {
+        // Terminal output is currently emitted directly by the PTY read thread
+        // via Tauri events. Once infrastructure is wired to this trait (future story),
+        // this method will become the single entry point for terminal output dispatch.
+        tracing::trace!(
+            pane_id = pane_id.as_ref(),
+            bytes = data.len(),
+            "Terminal output observation received"
+        );
+    }
+
+    fn on_terminal_exited(&self, pane_id: &PaneId, exit_code: Option<i32>) {
+        let failed = exit_code.is_some_and(|code| code != 0);
+        let message = exit_code
+            .filter(|code| *code != 0)
+            .map(|code| format!("Process exited with code {code}"));
+
+        let result = self.lock_runtimes().and_then(|mut runtimes| {
+            runtimes
+                .mark_terminal_exit(pane_id.as_ref(), None, failed, message)
+                .map_err(|error| ShellError::NotFound(error.to_string()))
+        });
+
+        match result {
+            Ok(runtime) => self.publisher.emit_runtime_status(&runtime),
+            Err(error) => {
+                warn!(
+                    ?error,
+                    pane_id = pane_id.as_ref(),
+                    "Failed to process terminal exit observation"
+                );
+            }
+        }
+    }
+
+    fn on_browser_location_changed(&self, pane_id: &PaneId, url: &str) {
+        let result = self.lock_runtimes().and_then(|mut runtimes| {
+            runtimes
+                .update_browser_location(pane_id.as_ref(), String::from(url))
+                .map_err(|error| ShellError::NotFound(error.to_string()))
+        });
+
+        match result {
+            Ok(runtime) => self.publisher.emit_runtime_status(&runtime),
+            Err(error) => {
+                warn!(
+                    ?error,
+                    pane_id = pane_id.as_ref(),
+                    "Failed to process browser location observation"
+                );
+            }
+        }
+    }
+
+    fn on_terminal_cwd_changed(&self, pane_id: &PaneId, cwd: &str) {
+        // Log the observation. Full processing (workspace tracking + settings
+        // persistence) requires cross-service access handled by the existing
+        // observe_terminal_cwd method on the shell layer. This trait method
+        // provides the application-owned entry point that infrastructure will
+        // call directly once wired (future story).
+        tracing::debug!(
+            pane_id = pane_id.as_ref(),
+            cwd,
+            "Terminal CWD observation received"
+        );
     }
 }
 

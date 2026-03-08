@@ -2,6 +2,7 @@ mod bootstrap_service;
 pub mod commands;
 mod projection_publisher;
 mod runtime_coordinator;
+pub mod runtime_observation_receiver;
 mod runtime_service;
 mod settings_service;
 mod workspace_service;
