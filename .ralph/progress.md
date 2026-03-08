@@ -3,6 +3,49 @@
 ## Codebase Patterns
 - (add reusable patterns here)
 
+## 2026-03-08 23:51 - US-016: Introduce TerminalProcessPort and BrowserSurfacePort traits
+Thread:
+Run: 20260308-215923-84117 (iteration 17)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-17.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-17.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 98cd756 feat: introduce TerminalProcessPort and BrowserSurfacePort traits (US-016)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (141 app + 10 runtime + 27 settings + 51 workspace = 229 Rust tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (162 frontend tests)
+- Files changed:
+  - src-tauri/src/application/ports.rs (added TerminalProcessPort, BrowserSurfacePort, RuntimeProjectionEmitter traits)
+  - src-tauri/src/shell/pty.rs (impl TerminalProcessPort for PtyManager)
+  - src-tauri/src/infrastructure/tauri_browser_surface_adapter.rs (NEW — TauriBrowserSurfaceAdapter implements BrowserSurfacePort)
+  - src-tauri/src/infrastructure/mod.rs (export TauriBrowserSurfaceAdapter)
+  - src-tauri/src/application/projection_publisher.rs (impl RuntimeProjectionEmitter for ProjectionPublisher)
+  - src-tauri/src/application/runtime_service.rs (refactored to use dyn ports, removed AppHandle dependency, added 8 mock-port tests)
+  - src-tauri/src/shell/mod.rs (inject concrete adapters into RuntimeApplicationService, removed window param from dispatch_runtime_command)
+  - src-tauri/src/commands/shell.rs (removed window param from dispatch_runtime_command handler)
+- What was implemented:
+  - TerminalProcessPort trait with 4 methods: spawn, kill, resize, write_input
+  - BrowserSurfacePort trait with 5 methods: ensure_surface, set_bounds, set_visible, close_surface, navigate
+  - RuntimeProjectionEmitter trait with emit_runtime_status method (enables testing without Tauri AppHandle)
+  - PtyManager implements TerminalProcessPort by delegating to existing methods
+  - TauriBrowserSurfaceAdapter resolves main window from AppHandle and delegates to browser_surface module
+  - ProjectionPublisher implements RuntimeProjectionEmitter
+  - RuntimeApplicationService constructor takes Box<dyn TerminalProcessPort>, Box<dyn BrowserSurfacePort>, Box<dyn RuntimeProjectionEmitter> — no more AppHandle
+  - Removed window parameter from dispatch_runtime_command (browser navigation now goes through BrowserSurfacePort)
+  - 8 new tests with mock ports: start terminal, stop terminal, start browser, stop browser, restart, navigate, write input, resize
+- **Learnings for future iterations:**
+  - get_webview_window returns WebviewWindow but browser_surface expects &Window — use get_window instead
+  - resolve_terminal_profile requires a valid profile ID from built_in_profile_catalog (e.g., "terminal", not "default")
+  - ensure_surface/set_bounds/set_visible are not yet called from RuntimeApplicationService — they're still routed directly via dispatch_browser_surface_command. #[allow(dead_code)] needed on trait
+  - Arc-wrapper pattern (ArcTerminalPort wrapping Arc<MockTerminalProcess>) enables test inspection of mock state after service calls
+  - RuntimeProjectionEmitter was minimally scoped to just emit_runtime_status — workspace and settings projections remain on ProjectionPublisher directly
+---
+
 ## 2026-03-08 23:35 - US-015: Introduce PreferencesRepository port and move Tauri Store to infra adapter
 Thread:
 Run: 20260308-215923-84117 (iteration 16)

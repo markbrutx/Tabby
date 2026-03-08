@@ -8,7 +8,7 @@ use tabby_contracts::{
 use tabby_runtime::PaneRuntime;
 use tabby_settings::{built_in_profile_catalog, UserPreferences};
 
-use crate::application::ports::RuntimeProjectionEmitter;
+use crate::application::ports::ProjectionPublisherPort;
 use crate::mapping::dto_mappers;
 use crate::shell::{
     RUNTIME_STATUS_CHANGED_EVENT, SETTINGS_PROJECTION_UPDATED_EVENT,
@@ -16,16 +16,18 @@ use crate::shell::{
 };
 
 #[derive(Debug)]
-pub struct ProjectionPublisher {
+pub struct TauriProjectionPublisher {
     app: AppHandle,
 }
 
-impl ProjectionPublisher {
+impl TauriProjectionPublisher {
     pub fn new(app: AppHandle) -> Self {
         Self { app }
     }
+}
 
-    pub fn emit_workspace_projection_from_view(&self, workspace: &WorkspaceView) {
+impl ProjectionPublisherPort for TauriProjectionPublisher {
+    fn publish_workspace_projection(&self, workspace: &WorkspaceView) {
         if let Err(error) = self.app.emit(
             WORKSPACE_PROJECTION_UPDATED_EVENT,
             WorkspaceProjectionUpdatedEvent {
@@ -36,7 +38,7 @@ impl ProjectionPublisher {
         }
     }
 
-    pub fn emit_settings_projection(&self, preferences: &UserPreferences) {
+    fn publish_settings_projection(&self, preferences: &UserPreferences) {
         let settings = dto_mappers::settings_view_from_preferences(preferences);
         let profile_catalog =
             dto_mappers::profile_catalog_view_from_catalog(&built_in_profile_catalog());
@@ -51,7 +53,7 @@ impl ProjectionPublisher {
         }
     }
 
-    pub fn emit_runtime_status(&self, runtime: &PaneRuntime) {
+    fn publish_runtime_status(&self, runtime: &PaneRuntime) {
         let view = dto_mappers::pane_runtime_to_view(runtime);
         if let Err(error) = self.app.emit(
             RUNTIME_STATUS_CHANGED_EVENT,
@@ -59,27 +61,5 @@ impl ProjectionPublisher {
         ) {
             warn!(?error, "Failed to emit runtime status update");
         }
-    }
-}
-
-impl RuntimeProjectionEmitter for ProjectionPublisher {
-    fn emit_runtime_status(&self, runtime: &PaneRuntime) {
-        ProjectionPublisher::emit_runtime_status(self, runtime);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::ProjectionPublisher;
-
-    #[test]
-    fn projection_publisher_is_constructible() {
-        // ProjectionPublisher requires a real AppHandle which needs a Tauri runtime.
-        // This test validates the type exists and has the expected public API surface
-        // by asserting it is Send + Sync (required for Tauri managed state).
-        fn assert_send<T: Send>() {}
-        fn assert_sync<T: Sync>() {}
-        assert_send::<ProjectionPublisher>();
-        assert_sync::<ProjectionPublisher>();
     }
 }

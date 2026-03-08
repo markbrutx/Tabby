@@ -3,9 +3,7 @@ use std::sync::Mutex;
 use tracing::warn;
 
 use crate::application::commands::RuntimeCommand;
-use crate::application::ports::{
-    BrowserSurfacePort, RuntimeProjectionEmitter, TerminalProcessPort,
-};
+use crate::application::ports::{BrowserSurfacePort, ProjectionPublisherPort, TerminalProcessPort};
 use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use tabby_runtime::{PaneRuntime, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
 use tabby_settings::{resolve_terminal_profile, SettingsError, UserPreferences};
@@ -18,7 +16,7 @@ pub struct RuntimeApplicationService {
     runtimes: Mutex<RuntimeRegistry>,
     terminal_port: Box<dyn TerminalProcessPort>,
     browser_port: Box<dyn BrowserSurfacePort>,
-    emitter: Box<dyn RuntimeProjectionEmitter>,
+    emitter: Box<dyn ProjectionPublisherPort>,
 }
 
 impl std::fmt::Debug for RuntimeApplicationService {
@@ -35,7 +33,7 @@ impl RuntimeApplicationService {
     pub fn new(
         terminal_port: Box<dyn TerminalProcessPort>,
         browser_port: Box<dyn BrowserSurfacePort>,
-        emitter: Box<dyn RuntimeProjectionEmitter>,
+        emitter: Box<dyn ProjectionPublisherPort>,
     ) -> Self {
         Self {
             runtimes: Mutex::new(RuntimeRegistry::default()),
@@ -75,7 +73,7 @@ impl RuntimeApplicationService {
                 spec.initial_url.clone(),
             ),
         };
-        self.emitter.emit_runtime_status(&runtime);
+        self.emitter.publish_runtime_status(&runtime);
         Ok(())
     }
 
@@ -109,7 +107,7 @@ impl RuntimeApplicationService {
 
         let mut exited = runtime;
         exited.status = RuntimeStatus::Exited;
-        self.emitter.emit_runtime_status(&exited);
+        self.emitter.publish_runtime_status(&exited);
     }
 
     pub fn restart_runtime(
@@ -152,7 +150,7 @@ impl RuntimeApplicationService {
                     .update_browser_location(pane_id.as_ref(), url)
                     .ok();
                 if let Some(runtime) = maybe_runtime {
-                    self.emitter.emit_runtime_status(&runtime);
+                    self.emitter.publish_runtime_status(&runtime);
                 }
             }
             RuntimeCommand::ObserveTerminalCwd { .. }
@@ -179,7 +177,7 @@ impl RuntimeApplicationService {
             .lock_runtimes()?
             .update_terminal_cwd(pane_id.as_ref(), String::from(working_directory))
             .map_err(|error| ShellError::NotFound(error.to_string()))?;
-        self.emitter.emit_runtime_status(&runtime);
+        self.emitter.publish_runtime_status(&runtime);
 
         let mut preferences = settings_service.preferences()?;
         preferences.last_working_directory = Some(String::from(working_directory));
@@ -193,7 +191,7 @@ impl RuntimeApplicationService {
             .update_browser_location(pane_id, String::from(url))
             .ok();
         if let Some(runtime) = maybe_runtime {
-            self.emitter.emit_runtime_status(&runtime);
+            self.emitter.publish_runtime_status(&runtime);
         }
         Ok(())
     }
@@ -234,7 +232,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
         });
 
         match result {
-            Ok(runtime) => self.emitter.emit_runtime_status(&runtime),
+            Ok(runtime) => self.emitter.publish_runtime_status(&runtime),
             Err(error) => {
                 warn!(
                     ?error,
@@ -253,7 +251,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
         });
 
         match result {
-            Ok(runtime) => self.emitter.emit_runtime_status(&runtime),
+            Ok(runtime) => self.emitter.publish_runtime_status(&runtime),
             Err(error) => {
                 warn!(
                     ?error,
@@ -276,7 +274,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
         });
 
         match result {
-            Ok(runtime) => self.emitter.emit_runtime_status(&runtime),
+            Ok(runtime) => self.emitter.publish_runtime_status(&runtime),
             Err(error) => {
                 warn!(
                     ?error,
@@ -541,7 +539,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use crate::application::ports::{
-        BrowserSurfacePort, RuntimeProjectionEmitter, TerminalProcessPort,
+        BrowserSurfacePort, ProjectionPublisherPort, TerminalProcessPort,
     };
     use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
     use crate::shell::error::ShellError;
@@ -656,10 +654,22 @@ mod tests {
     #[derive(Debug, Default)]
     struct MockProjectionEmitter {
         emitted: Mutex<Vec<(String, RuntimeStatus)>>,
+        workspace_calls: Mutex<u32>,
+        settings_calls: Mutex<u32>,
     }
 
-    impl RuntimeProjectionEmitter for MockProjectionEmitter {
-        fn emit_runtime_status(&self, runtime: &tabby_runtime::PaneRuntime) {
+    impl ProjectionPublisherPort for MockProjectionEmitter {
+        fn publish_workspace_projection(&self, _workspace: &tabby_contracts::WorkspaceView) {
+            if let Ok(mut count) = self.workspace_calls.lock() {
+                *count += 1;
+            }
+        }
+        fn publish_settings_projection(&self, _preferences: &UserPreferences) {
+            if let Ok(mut count) = self.settings_calls.lock() {
+                *count += 1;
+            }
+        }
+        fn publish_runtime_status(&self, runtime: &tabby_runtime::PaneRuntime) {
             if let Ok(mut emitted) = self.emitted.lock() {
                 emitted.push((runtime.pane_id.clone(), runtime.status));
             }
@@ -771,9 +781,11 @@ mod tests {
     #[derive(Debug)]
     struct ArcEmitter(Arc<MockProjectionEmitter>);
 
-    impl RuntimeProjectionEmitter for ArcEmitter {
-        fn emit_runtime_status(&self, runtime: &tabby_runtime::PaneRuntime) {
-            self.0.emit_runtime_status(runtime);
+    impl ProjectionPublisherPort for ArcEmitter {
+        fn publish_workspace_projection(&self, _workspace: &tabby_contracts::WorkspaceView) {}
+        fn publish_settings_projection(&self, _preferences: &UserPreferences) {}
+        fn publish_runtime_status(&self, runtime: &tabby_runtime::PaneRuntime) {
+            self.0.publish_runtime_status(runtime);
         }
     }
 
@@ -1026,5 +1038,76 @@ mod tests {
         assert_eq!(resize_calls.len(), 1);
         assert_eq!(resize_calls[0].1, 120);
         assert_eq!(resize_calls[0].2, 40);
+    }
+
+    // -----------------------------------------------------------------------
+    // AC#5: Projection publishing works with mock publisher
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn mock_publisher_receives_all_three_projection_types() {
+        let publisher = MockProjectionEmitter::default();
+
+        // 1. publish_workspace_projection
+        let workspace_view = tabby_contracts::WorkspaceView {
+            tabs: vec![],
+            active_tab_id: String::new(),
+        };
+        publisher.publish_workspace_projection(&workspace_view);
+        assert_eq!(
+            *publisher.workspace_calls.lock().expect("lock"),
+            1,
+            "workspace projection should be published"
+        );
+
+        // 2. publish_settings_projection
+        let prefs = tabby_settings::default_preferences();
+        publisher.publish_settings_projection(&prefs);
+        assert_eq!(
+            *publisher.settings_calls.lock().expect("lock"),
+            1,
+            "settings projection should be published"
+        );
+
+        // 3. publish_runtime_status
+        let runtime = tabby_runtime::PaneRuntime {
+            pane_id: String::from("pane-1"),
+            kind: tabby_runtime::RuntimeKind::Terminal,
+            status: RuntimeStatus::Running,
+            runtime_session_id: Some(RuntimeSessionId::from(String::from("pty-1"))),
+            browser_location: None,
+            last_error: None,
+            terminal_cwd: None,
+        };
+        publisher.publish_runtime_status(&runtime);
+        let emitted = publisher.emitted.lock().expect("lock");
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "pane-1");
+        assert_eq!(emitted[0].1, RuntimeStatus::Running);
+    }
+
+    #[test]
+    fn projection_publisher_port_is_object_safe_behind_box() {
+        // Verify the trait can be used as Box<dyn ProjectionPublisherPort>
+        let publisher: Box<dyn ProjectionPublisherPort> =
+            Box::new(MockProjectionEmitter::default());
+
+        let workspace_view = tabby_contracts::WorkspaceView {
+            tabs: vec![],
+            active_tab_id: String::new(),
+        };
+        publisher.publish_workspace_projection(&workspace_view);
+        publisher.publish_settings_projection(&tabby_settings::default_preferences());
+
+        let runtime = tabby_runtime::PaneRuntime {
+            pane_id: String::from("pane-x"),
+            kind: tabby_runtime::RuntimeKind::Browser,
+            status: RuntimeStatus::Running,
+            runtime_session_id: None,
+            browser_location: Some(String::from("https://example.com")),
+            last_error: None,
+            terminal_cwd: None,
+        };
+        publisher.publish_runtime_status(&runtime);
     }
 }

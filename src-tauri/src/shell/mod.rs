@@ -15,13 +15,16 @@ use tabby_workspace::layout::LayoutPreset;
 use tabby_workspace::WorkspaceDomainEvent;
 
 use crate::application::commands::WorkspaceCommand;
+use crate::application::ports::ProjectionPublisherPort;
 use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use crate::application::{
-    BootstrapService, ProjectionPublisher, RuntimeApplicationService, RuntimeCoordinator,
-    SettingsApplicationService, WorkspaceApplicationService,
+    BootstrapService, RuntimeApplicationService, RuntimeCoordinator, SettingsApplicationService,
+    WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
-use crate::infrastructure::{TauriBrowserSurfaceAdapter, TauriStorePreferencesRepository};
+use crate::infrastructure::{
+    TauriBrowserSurfaceAdapter, TauriProjectionPublisher, TauriStorePreferencesRepository,
+};
 use crate::mapping::dto_mappers;
 use crate::shell::error::ShellError;
 use crate::shell::pty::PtyManager;
@@ -37,7 +40,7 @@ pub struct AppShell {
     settings_service: SettingsApplicationService,
     workspace_service: WorkspaceApplicationService,
     runtime_service: Arc<RuntimeApplicationService>,
-    publisher: ProjectionPublisher,
+    publisher: Box<dyn ProjectionPublisherPort>,
 }
 
 impl AppShell {
@@ -47,7 +50,8 @@ impl AppShell {
 
         let terminal_port = PtyManager::new(app.clone());
         let browser_port = TauriBrowserSurfaceAdapter::new(app.clone());
-        let runtime_publisher = ProjectionPublisher::new(app.clone());
+        let runtime_publisher = TauriProjectionPublisher::new(app.clone());
+        let publisher = TauriProjectionPublisher::new(app);
 
         Ok(Self {
             bootstrap_service: BootstrapService::new(cli_args),
@@ -57,7 +61,7 @@ impl AppShell {
                 Box::new(browser_port),
                 Box::new(runtime_publisher),
             )),
-            publisher: ProjectionPublisher::new(app),
+            publisher: Box::new(publisher),
             settings_service,
         })
     }
@@ -103,7 +107,7 @@ impl AppShell {
         let view = self
             .workspace_service
             .with_session(dto_mappers::workspace_view_from_session)?;
-        self.publisher.emit_workspace_projection_from_view(&view);
+        self.publisher.publish_workspace_projection(&view);
         Ok(view)
     }
 
@@ -116,7 +120,7 @@ impl AppShell {
         })?;
         let preferences = self.settings_service.dispatch_settings_command(command)?;
         let settings = dto_mappers::settings_view_from_preferences(&preferences);
-        self.publisher.emit_settings_projection(&preferences);
+        self.publisher.publish_settings_projection(&preferences);
         Ok(settings)
     }
 

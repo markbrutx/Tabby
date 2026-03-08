@@ -1,5 +1,7 @@
 mod tauri_browser_surface_adapter;
+mod tauri_projection_publisher;
 mod tauri_store_preferences_repository;
 
 pub use tauri_browser_surface_adapter::TauriBrowserSurfaceAdapter;
+pub use tauri_projection_publisher::TauriProjectionPublisher;
 pub use tauri_store_preferences_repository::TauriStorePreferencesRepository;

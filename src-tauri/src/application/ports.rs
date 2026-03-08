@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tabby_contracts::WorkspaceView;
 use tabby_runtime::PaneRuntime;
 use tabby_settings::UserPreferences;
 
@@ -16,6 +17,21 @@ pub trait PreferencesRepository: Send + Sync + std::fmt::Debug {
 
     /// Persist the given preferences.
     fn save(&self, preferences: &UserPreferences) -> Result<(), ShellError>;
+}
+
+/// Port for publishing projections (workspace, settings, runtime status) to the frontend.
+///
+/// Infrastructure adapters implement this trait to decouple application services
+/// from any specific event transport (e.g., Tauri `app.emit`).
+pub trait ProjectionPublisherPort: Send + Sync + std::fmt::Debug {
+    /// Publish a workspace projection update to the frontend.
+    fn publish_workspace_projection(&self, workspace: &WorkspaceView);
+
+    /// Publish a settings projection update to the frontend.
+    fn publish_settings_projection(&self, preferences: &UserPreferences);
+
+    /// Publish a runtime status change for a single pane runtime.
+    fn publish_runtime_status(&self, runtime: &PaneRuntime);
 }
 
 /// Port for managing terminal process (PTY) lifecycle.
@@ -81,13 +97,4 @@ pub trait BrowserSurfacePort: Send + Sync + std::fmt::Debug {
 
     /// Navigate an existing browser surface to a new URL.
     fn navigate(&self, pane_id: &str, url: &str) -> Result<(), ShellError>;
-}
-
-/// Port for emitting runtime status projections to the frontend.
-///
-/// Infrastructure adapters implement this trait to decouple
-/// `RuntimeApplicationService` from any specific event transport.
-pub trait RuntimeProjectionEmitter: Send + Sync + std::fmt::Debug {
-    /// Emit a runtime status change event for a single pane runtime.
-    fn emit_runtime_status(&self, runtime: &PaneRuntime);
 }
