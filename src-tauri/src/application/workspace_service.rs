@@ -270,7 +270,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            WorkspaceDomainEvent::PaneSpecReplaced {
+            WorkspaceDomainEvent::PaneContentChanged {
                 pane_id: pid,
                 old_content,
                 new_content,
@@ -283,7 +283,7 @@ mod tests {
                 // Old content id is never reused
                 assert_ne!(old_content.content_id(), new_content.content_id());
             }
-            other => panic!("expected PaneSpecReplaced, got {other:?}"),
+            other => panic!("expected PaneContentChanged, got {other:?}"),
         }
 
         let updated_spec = service

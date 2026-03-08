@@ -18,11 +18,13 @@ impl RuntimeCoordinator {
     /// Handles a batch of workspace domain events by starting, stopping, or
     /// restarting runtimes as needed.
     ///
-    /// Event mapping:
+    /// Event mapping (runtime-relevant events only):
     /// - `PaneAdded` → start runtime from content definition
     /// - `PaneRemoved` → stop runtime, content already destroyed
-    /// - `PaneSpecReplaced` → stop old runtime, start new runtime from new content
-    /// - `ActivePaneChanged` / `ActiveTabChanged` → no runtime side-effects
+    /// - `PaneContentChanged` → stop old runtime, start new runtime from new content
+    ///
+    /// Structural focus events (`ActivePaneChanged`, `ActiveTabChanged`) are
+    /// skipped — they carry no runtime side-effects.
     pub fn handle_workspace_events(
         events: Vec<WorkspaceDomainEvent>,
         settings_service: &SettingsApplicationService,
@@ -46,7 +48,7 @@ impl RuntimeCoordinator {
                         Arc::clone(&observation_receiver),
                     )?;
                 }
-                WorkspaceDomainEvent::PaneSpecReplaced {
+                WorkspaceDomainEvent::PaneContentChanged {
                     pane_id,
                     new_content,
                     ..
@@ -100,60 +102,57 @@ mod tests {
         RuntimeSessionId::from(String::from(s))
     }
 
-    // --- Event classification tests ---
-
-    fn is_runtime_event(event: &WorkspaceDomainEvent) -> bool {
-        matches!(
-            event,
-            WorkspaceDomainEvent::PaneAdded { .. }
-                | WorkspaceDomainEvent::PaneRemoved { .. }
-                | WorkspaceDomainEvent::PaneSpecReplaced { .. }
-        )
-    }
+    // --- Event classification tests (delegates to WorkspaceDomainEvent::is_runtime_relevant) ---
 
     #[test]
-    fn pane_added_is_runtime_event() {
+    fn pane_added_is_runtime_relevant() {
         let event = WorkspaceDomainEvent::PaneAdded {
             pane_id: PaneId::from(String::from("pane-1")),
             content: terminal_content("default"),
         };
-        assert!(is_runtime_event(&event));
+        assert!(event.is_runtime_relevant());
     }
 
     #[test]
-    fn pane_removed_is_runtime_event() {
+    fn pane_removed_is_runtime_relevant() {
         let event = WorkspaceDomainEvent::PaneRemoved {
             pane_id: PaneId::from(String::from("pane-1")),
             content: terminal_content("default"),
         };
-        assert!(is_runtime_event(&event));
+        assert!(event.is_runtime_relevant());
     }
 
     #[test]
-    fn pane_spec_replaced_is_runtime_event() {
-        let event = WorkspaceDomainEvent::PaneSpecReplaced {
+    fn pane_content_changed_is_runtime_relevant() {
+        let event = WorkspaceDomainEvent::PaneContentChanged {
             pane_id: PaneId::from(String::from("pane-1")),
             old_content: terminal_content("default"),
             new_content: browser_content("https://example.com"),
         };
-        assert!(is_runtime_event(&event));
+        assert!(event.is_runtime_relevant());
     }
 
     #[test]
-    fn active_pane_changed_is_not_runtime_event() {
+    fn active_pane_changed_is_not_runtime_relevant() {
         let event = WorkspaceDomainEvent::ActivePaneChanged {
             pane_id: PaneId::from(String::from("pane-1")),
             tab_id: TabId::from(String::from("tab-1")),
         };
-        assert!(!is_runtime_event(&event));
+        assert!(
+            !event.is_runtime_relevant(),
+            "structural focus event must not trigger RuntimeCoordinator action"
+        );
     }
 
     #[test]
-    fn active_tab_changed_is_not_runtime_event() {
+    fn active_tab_changed_is_not_runtime_relevant() {
         let event = WorkspaceDomainEvent::ActiveTabChanged {
             tab_id: TabId::from(String::from("tab-1")),
         };
-        assert!(!is_runtime_event(&event));
+        assert!(
+            !event.is_runtime_relevant(),
+            "structural focus event must not trigger RuntimeCoordinator action"
+        );
     }
 
     // --- Integration-style tests using RuntimeRegistry directly ---
@@ -242,7 +241,7 @@ mod tests {
         registry.register_terminal("pane-1", sid("pty-1"));
         assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Terminal));
 
-        // PaneSpecReplaced: coordinator stops old runtime then starts new one
+        // PaneContentChanged: coordinator stops old runtime then starts new one
         let removed = registry.remove("pane-1");
         assert!(removed.is_some());
 
@@ -344,18 +343,18 @@ mod tests {
 
     #[test]
     fn pane_spec_replaced_requires_restart_with_new_spec() {
-        // Verifies: PaneSpecReplaced → coordinator stops old + starts new
+        // Verifies: PaneContentChanged → coordinator stops old + starts new
         let mut registry = RuntimeRegistry::default();
         registry.register_terminal("pane-1", sid("pty-1"));
 
         let new_content = browser_content("https://example.com");
-        let event = WorkspaceDomainEvent::PaneSpecReplaced {
+        let event = WorkspaceDomainEvent::PaneContentChanged {
             pane_id: PaneId::from(String::from("pane-1")),
             old_content: terminal_content("default"),
             new_content: new_content.clone(),
         };
 
-        if let WorkspaceDomainEvent::PaneSpecReplaced {
+        if let WorkspaceDomainEvent::PaneContentChanged {
             ref pane_id,
             new_content: ref nc,
             ..
@@ -382,12 +381,12 @@ mod tests {
         assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Browser));
     }
 
-    // --- AC#5: replace_pane_spec → PaneSpecReplaced → stop old + start new ---
+    // --- AC#5: replace_pane_spec → PaneContentChanged → stop old + start new ---
 
     #[test]
     fn replace_pane_spec_event_triggers_coordinator_stop_old_then_start_new() {
         // Simulates the full flow: workspace.replace_pane_spec() emits
-        // PaneSpecReplaced → RuntimeCoordinator handles it by stopping
+        // PaneContentChanged → RuntimeCoordinator handles it by stopping
         // the old runtime and starting the new one. The shell layer does
         // NOT manually call stop_runtime before the workspace mutation.
         let mut registry = RuntimeRegistry::default();
@@ -402,16 +401,16 @@ mod tests {
             Some(old_session.clone()),
         );
 
-        // 2. Workspace emits PaneSpecReplaced (this is what replace_pane_spec returns)
-        let event = WorkspaceDomainEvent::PaneSpecReplaced {
+        // 2. Workspace emits PaneContentChanged (this is what replace_pane_spec returns)
+        let event = WorkspaceDomainEvent::PaneContentChanged {
             pane_id: PaneId::from(String::from("pane-1")),
             old_content: terminal_content("default"),
             new_content: browser_content("https://example.com"),
         };
 
         // 3. Coordinator processes event: stop old → start new
-        //    (mirrors handle_workspace_events logic for PaneSpecReplaced)
-        if let WorkspaceDomainEvent::PaneSpecReplaced {
+        //    (mirrors handle_workspace_events logic for PaneContentChanged)
+        if let WorkspaceDomainEvent::PaneContentChanged {
             ref pane_id,
             new_content: ref nc,
             ..
@@ -445,7 +444,7 @@ mod tests {
                         Some("https://example.com"),
                     );
                 }
-                _ => panic!("expected browser spec in PaneSpecReplaced"),
+                _ => panic!("expected browser spec in PaneContentChanged"),
             }
         }
 
@@ -534,14 +533,14 @@ mod tests {
         );
 
         // === Phase 4: Replace spec → old stopped + new started ===
-        // WorkspaceService.replace_pane_spec() emits PaneSpecReplaced.
-        // RuntimeCoordinator handles PaneSpecReplaced → stop old + start new.
-        let replace_event = WorkspaceDomainEvent::PaneSpecReplaced {
+        // WorkspaceService.replace_pane_spec() emits PaneContentChanged.
+        // RuntimeCoordinator handles PaneContentChanged → stop old + start new.
+        let replace_event = WorkspaceDomainEvent::PaneContentChanged {
             pane_id: PaneId::from(String::from("pane-1")),
             old_content: terminal_content("default"),
             new_content: browser_content("https://example.com"),
         };
-        if let WorkspaceDomainEvent::PaneSpecReplaced {
+        if let WorkspaceDomainEvent::PaneContentChanged {
             ref pane_id,
             new_content: ref nc,
             ..

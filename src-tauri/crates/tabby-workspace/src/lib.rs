@@ -74,6 +74,7 @@ pub enum TabLayoutStrategy {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceDomainEvent {
+    // -- Structural events: affect workspace layout (tabs, panes, focus) --
     PaneAdded {
         pane_id: PaneId,
         content: PaneContentDefinition,
@@ -82,11 +83,6 @@ pub enum WorkspaceDomainEvent {
         pane_id: PaneId,
         content: PaneContentDefinition,
     },
-    PaneSpecReplaced {
-        pane_id: PaneId,
-        old_content: PaneContentDefinition,
-        new_content: PaneContentDefinition,
-    },
     ActivePaneChanged {
         pane_id: PaneId,
         tab_id: TabId,
@@ -94,6 +90,24 @@ pub enum WorkspaceDomainEvent {
     ActiveTabChanged {
         tab_id: TabId,
     },
+
+    // -- Content events: mutate what runs inside a pane --
+    PaneContentChanged {
+        pane_id: PaneId,
+        old_content: PaneContentDefinition,
+        new_content: PaneContentDefinition,
+    },
+}
+
+impl WorkspaceDomainEvent {
+    /// Returns `true` when this event requires a runtime lifecycle action
+    /// (start, stop, or restart). Structural focus events do not.
+    pub fn is_runtime_relevant(&self) -> bool {
+        matches!(
+            self,
+            Self::PaneAdded { .. } | Self::PaneRemoved { .. } | Self::PaneContentChanged { .. }
+        )
+    }
 }
 
 #[derive(Debug, Error)]
@@ -460,7 +474,7 @@ impl WorkspaceSession {
 
         self.validate()?;
 
-        Ok(vec![WorkspaceDomainEvent::PaneSpecReplaced {
+        Ok(vec![WorkspaceDomainEvent::PaneContentChanged {
             pane_id: pane_id.clone(),
             old_content,
             new_content,
@@ -773,7 +787,7 @@ mod tests {
     }
 
     #[test]
-    fn replace_pane_spec_emits_pane_spec_replaced() {
+    fn replace_pane_spec_emits_pane_content_changed() {
         let mut workspace = WorkspaceSession::default();
         workspace
             .open_tab(
@@ -790,7 +804,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            WorkspaceDomainEvent::PaneSpecReplaced {
+            WorkspaceDomainEvent::PaneContentChanged {
                 pane_id: pid,
                 old_content,
                 new_content,
@@ -807,7 +821,7 @@ mod tests {
                 // Old content id is never reused
                 assert_ne!(old_content.content_id(), new_content.content_id());
             }
-            other => panic!("expected PaneSpecReplaced, got {other:?}"),
+            other => panic!("expected PaneContentChanged, got {other:?}"),
         }
     }
 
@@ -921,6 +935,60 @@ mod tests {
         assert!(!format!("{event:?}").is_empty());
         assert!(!format!("{event2:?}").is_empty());
         assert!(!format!("{event3:?}").is_empty());
+    }
+
+    // --- US-013: Event classification tests ---
+
+    #[test]
+    fn structural_events_are_runtime_relevant_when_they_add_or_remove() {
+        let content_id = super::create_content_id();
+        let added = WorkspaceDomainEvent::PaneAdded {
+            pane_id: PaneId::from(String::from("p1")),
+            content: PaneContentDefinition::terminal(content_id, "default", "/tmp", None),
+        };
+        assert!(added.is_runtime_relevant());
+
+        let content_id2 = super::create_content_id();
+        let removed = WorkspaceDomainEvent::PaneRemoved {
+            pane_id: PaneId::from(String::from("p1")),
+            content: PaneContentDefinition::terminal(content_id2, "default", "/tmp", None),
+        };
+        assert!(removed.is_runtime_relevant());
+    }
+
+    #[test]
+    fn content_event_is_runtime_relevant() {
+        let old_id = super::create_content_id();
+        let new_id = super::create_content_id();
+        let event = WorkspaceDomainEvent::PaneContentChanged {
+            pane_id: PaneId::from(String::from("p1")),
+            old_content: PaneContentDefinition::terminal(old_id, "default", "/tmp", None),
+            new_content: PaneContentDefinition::browser(
+                new_id,
+                super::BrowserUrl::new("https://example.com"),
+            ),
+        };
+        assert!(event.is_runtime_relevant());
+    }
+
+    #[test]
+    fn focus_events_are_not_runtime_relevant() {
+        let active_pane = WorkspaceDomainEvent::ActivePaneChanged {
+            pane_id: PaneId::from(String::from("p1")),
+            tab_id: TabId::from(String::from("t1")),
+        };
+        assert!(
+            !active_pane.is_runtime_relevant(),
+            "ActivePaneChanged is structural-only and must not trigger runtime actions"
+        );
+
+        let active_tab = WorkspaceDomainEvent::ActiveTabChanged {
+            tab_id: TabId::from(String::from("t1")),
+        };
+        assert!(
+            !active_tab.is_runtime_relevant(),
+            "ActiveTabChanged is structural-only and must not trigger runtime actions"
+        );
     }
 
     /// Negative case: domain functions no longer accept raw String for tab/pane ids.

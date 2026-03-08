@@ -161,7 +161,7 @@ mod tests {
                     let spec = spec_from_content(&content);
                     service.start_runtime(pane_id.as_ref(), &spec);
                 }
-                WorkspaceDomainEvent::PaneSpecReplaced {
+                WorkspaceDomainEvent::PaneContentChanged {
                     pane_id,
                     new_content,
                     ..
