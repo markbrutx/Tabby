@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { GripVertical, RotateCw, X } from "lucide-react";
-import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain";
+import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain/models";
 import { normalizeUrl } from "@/features/browser/hooks/useBrowserWebview";
 
 interface BrowserToolbarProps {

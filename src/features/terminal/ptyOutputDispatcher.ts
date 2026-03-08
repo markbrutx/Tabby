@@ -1,5 +1,5 @@
 import type { RuntimeClient, UnlistenFn } from "@/app-shell/clients";
-import type { TerminalOutputEvent } from "@/features/workspace/domain";
+import type { TerminalOutputEvent } from "@/contracts/tauri-bindings";
 
 type OutputHandler = (chunk: string) => void;
 

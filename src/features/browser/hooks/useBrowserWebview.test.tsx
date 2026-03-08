@@ -2,7 +2,7 @@ import { act, render } from "@testing-library/react";
 import { useEffect, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeClient } from "@/app-shell/clients";
-import type { BrowserSurfaceCommandDto } from "@/features/workspace/domain";
+import type { BrowserSurfaceCommandDto } from "@/contracts/tauri-bindings";
 import { normalizeUrl, useBrowserWebview } from "./useBrowserWebview";
 import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import { createRuntimeStore } from "@/features/runtime/application/store";

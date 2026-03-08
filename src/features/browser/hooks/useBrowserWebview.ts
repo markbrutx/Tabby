@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRuntimeStore } from "@/contexts/stores";
-import { DEFAULT_BROWSER_URL, type BrowserBounds } from "@/features/workspace/domain";
+import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain/models";
+import type { BrowserBounds } from "@/features/runtime/domain/models";
 import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import { isTauriRuntime } from "@/lib/runtime";
 

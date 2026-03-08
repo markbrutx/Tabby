@@ -7,12 +7,12 @@ import type {
   RuntimeCommandDto,
   SettingsCommandDto,
   SettingsProjectionUpdatedEvent,
+  SettingsView as WorkspaceSettings,
   TerminalOutputEvent,
-  WorkspaceSettings,
   WorkspaceBootstrapView,
   WorkspaceCommandDto,
   WorkspaceView,
-} from "@/features/workspace/domain";
+} from "@/contracts/tauri-bindings";
 
 export type UnlistenFn = () => void;
 

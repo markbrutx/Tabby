@@ -18,3 +18,14 @@ export interface RuntimeReadModel {
   readonly lastError: string | null;
   readonly browserLocation: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Browser surface geometry
+// ---------------------------------------------------------------------------
+
+export interface BrowserBounds {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}

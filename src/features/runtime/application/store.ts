@@ -2,8 +2,8 @@ import { create } from "zustand";
 import type {
   BrowserLocationObservedEvent,
   PaneRuntimeView,
-} from "@/features/workspace/domain";
-import type { BrowserBounds } from "@/features/workspace/domain";
+} from "@/contracts/tauri-bindings";
+import type { BrowserBounds } from "@/features/runtime/domain/models";
 import type { RuntimeClient, UnlistenFn } from "@/app-shell/clients";
 import {
   initDispatcher,

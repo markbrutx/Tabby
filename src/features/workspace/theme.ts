@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ITheme } from "xterm";
-import type { ThemeMode } from "@/features/workspace/domain";
+import type { ThemeMode } from "@/features/settings/domain/models";
 
 export type ResolvedTheme = Exclude<ThemeMode, "system">;
 

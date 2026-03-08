@@ -6,7 +6,7 @@ import {
   teardownDispatcher,
 } from "./ptyOutputDispatcher";
 import type { RuntimeClient, UnlistenFn } from "@/app-shell/clients";
-import type { TerminalOutputEvent } from "@/features/workspace/domain";
+import type { TerminalOutputEvent } from "@/contracts/tauri-bindings";
 
 let captured: ((event: TerminalOutputEvent) => void) | null = null;
 

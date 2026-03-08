@@ -97,9 +97,9 @@ describe("SplitPopup", () => {
 
     expect(onConfirm).toHaveBeenCalledWith({
       kind: "terminal",
-      launch_profile_id: "custom",
-      working_directory: "/tmp",
-      command_override: "npm run dev",
+      launchProfileId: "custom",
+      workingDirectory: "/tmp",
+      commandOverride: "npm run dev",
     });
   });
 });

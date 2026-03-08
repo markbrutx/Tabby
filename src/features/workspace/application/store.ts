@@ -11,10 +11,11 @@ import {
   CUSTOM_PROFILE_ID,
 } from "@/features/workspace/domain/models";
 import type {
+  PaneSpec,
   SplitDirection,
   WorkspaceReadModel,
 } from "@/features/workspace/domain/models";
-import { mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
+import { mapPaneSpecToDto, mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
 import type { WorkspaceClient } from "@/app-shell/clients";
 import type { SettingsReadModel } from "@/features/settings/domain/models";
 import type { SetupWizardConfig, WizardTab } from "@/features/workspace/store/types";
@@ -32,12 +33,12 @@ export interface WorkspaceStore {
   closeTab: (tabId: string) => Promise<void>;
   setActiveTab: (tabId: string) => Promise<void>;
   focusPane: (tabId: string, paneId: string) => Promise<void>;
-  replacePaneSpec: (paneId: string, paneSpec: PaneSpecDto) => Promise<void>;
+  replacePaneSpec: (paneId: string, paneSpec: PaneSpec) => Promise<void>;
   restartPaneRuntime: (paneId: string) => Promise<void>;
   splitPane: (
     paneId: string,
     direction: SplitDirection,
-    paneSpec: PaneSpecDto,
+    paneSpec: PaneSpec,
   ) => Promise<void>;
   closePane: (paneId: string) => Promise<void>;
   swapPanes: (paneIdA: string, paneIdB: string) => Promise<void>;
@@ -230,7 +231,7 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
         deps.workspaceClient.dispatch({
           kind: "replacePaneSpec",
           pane_id: paneId,
-          pane_spec: paneSpec,
+          pane_spec: mapPaneSpecToDto(paneSpec),
         } satisfies WorkspaceCommandDto),
       );
     },
@@ -254,7 +255,7 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
           kind: "splitPane",
           pane_id: paneId,
           direction,
-          pane_spec: paneSpec,
+          pane_spec: mapPaneSpecToDto(paneSpec),
         } satisfies WorkspaceCommandDto),
       );
     },

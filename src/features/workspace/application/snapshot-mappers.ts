@@ -37,6 +37,22 @@ export function mapPaneSpecFromDto(dto: PaneSpecDto): PaneSpec {
   };
 }
 
+export function mapPaneSpecToDto(spec: PaneSpec): PaneSpecDto {
+  if (spec.kind === "browser") {
+    return {
+      kind: "browser",
+      initial_url: spec.initialUrl,
+    };
+  }
+
+  return {
+    kind: "terminal",
+    launch_profile_id: spec.launchProfileId,
+    working_directory: spec.workingDirectory,
+    command_override: spec.commandOverride,
+  };
+}
+
 export function mapSplitNodeFromDto(dto: SplitNodeDto): SplitNode {
   if (dto.type === "pane") {
     return { type: "pane", paneId: dto.paneId };

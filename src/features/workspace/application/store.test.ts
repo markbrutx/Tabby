@@ -258,9 +258,9 @@ describe("createWorkspaceStore", () => {
     await store.getState().initialize();
     const paneSpec = {
       kind: "terminal" as const,
-      launch_profile_id: "default",
-      working_directory: "/home",
-      command_override: null,
+      launchProfileId: "default",
+      workingDirectory: "/home",
+      commandOverride: null,
     };
     await store.getState().splitPane("p1", "horizontal", paneSpec);
 
@@ -268,7 +268,12 @@ describe("createWorkspaceStore", () => {
       kind: "splitPane",
       pane_id: "p1",
       direction: "horizontal",
-      pane_spec: paneSpec,
+      pane_spec: {
+        kind: "terminal",
+        launch_profile_id: "default",
+        working_directory: "/home",
+        command_override: null,
+      },
     });
     expect(store.getState().workspace?.tabs[0].panes).toHaveLength(2);
   });

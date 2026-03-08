@@ -7,12 +7,12 @@ import {
 import { RefreshCw } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui/Button";
-import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain";
+import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain/models";
 import type {
   PaneSnapshotModel,
   TabSnapshotModel,
 } from "@/features/workspace/model/workspaceSnapshot";
-import type { SplitNode } from "@/features/workspace/domain";
+import type { SplitNode } from "@/features/workspace/domain/models";
 import type { ResolvedTheme } from "@/features/workspace/theme";
 import { BrowserPane, type BrowserPaneHandle } from "@/features/browser/components/BrowserPane";
 import { BrowserToolbar } from "@/features/browser/components/BrowserToolbar";

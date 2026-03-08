@@ -1,4 +1,4 @@
-import type { SplitNode } from "@/features/workspace/domain";
+import type { SplitNode } from "@/features/workspace/domain/models";
 
 function leaf(id: string): SplitNode {
   return { type: "pane", paneId: id };

@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import type { PaneSpecDto } from "@/contracts/tauri-bindings";
 import { CUSTOM_PROFILE_ID, type PaneSpec, type SplitDirection } from "@/features/workspace/domain/models";
 import type { ProfileReadModel } from "@/features/settings/domain/models";
 import { pickDirectory } from "@/lib/pickDirectory";
@@ -12,7 +11,7 @@ interface SplitPopupProps {
   direction: SplitDirection;
   profiles: readonly ProfileReadModel[];
   defaultSpec: PaneSpec;
-  onConfirm: (paneSpec: PaneSpecDto) => void;
+  onConfirm: (paneSpec: PaneSpec) => void;
   onCancel: () => void;
 }
 
@@ -57,12 +56,12 @@ export function SplitPopup({
 
         onConfirm(
           nextMode === "browser"
-            ? { kind: "browser", initial_url: nextUrl.trim() || "https://google.com" }
+            ? { kind: "browser", initialUrl: nextUrl.trim() || "https://google.com" }
             : {
                 kind: "terminal",
-                launch_profile_id: nextProfileId,
-                working_directory: nextCwd,
-                command_override:
+                launchProfileId: nextProfileId,
+                workingDirectory: nextCwd,
+                commandOverride:
                   nextProfileId === CUSTOM_PROFILE_ID ? nextCommand.trim() || null : null,
               },
         );
@@ -87,12 +86,12 @@ export function SplitPopup({
 
     onConfirm(
       mode === "browser"
-        ? { kind: "browser", initial_url: url.trim() || "https://google.com" }
+        ? { kind: "browser", initialUrl: url.trim() || "https://google.com" }
         : {
             kind: "terminal",
-            launch_profile_id: profileId,
-            working_directory: cwd,
-            command_override: profileId === CUSTOM_PROFILE_ID ? customCommand.trim() || null : null,
+            launchProfileId: profileId,
+            workingDirectory: cwd,
+            commandOverride: profileId === CUSTOM_PROFILE_ID ? customCommand.trim() || null : null,
           },
     );
   }

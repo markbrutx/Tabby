@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SplitNode } from "@/features/workspace/domain";
+import type { SplitNode } from "@/features/workspace/domain/models";
 import {
   collectPaneIds,
   treeFromCount,
