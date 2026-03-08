@@ -60,7 +60,11 @@ const mockBridge = {
 } satisfies RuntimeClient;
 
 // Create a real store backed by the mock client and wire it into the module mock
-const mockStore = createRuntimeStore(mockBridge);
+const mockStore = createRuntimeStore({
+  runtimeClient: mockBridge,
+  initTerminalDispatcher: vi.fn().mockResolvedValue(undefined),
+  teardownTerminalDispatcher: vi.fn(),
+});
 
 vi.mock("@/contexts/stores", () => ({
   useRuntimeStore: (selector: (state: unknown) => unknown) => mockStore(selector),

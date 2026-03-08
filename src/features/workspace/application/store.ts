@@ -100,7 +100,7 @@ function toPaneSpec(group: SetupWizardConfig["groups"][number]): PaneSpecDto[] {
 
 export interface WorkspaceStoreDeps {
   workspaceClient: WorkspaceClient;
-  onOnboardingComplete: () => void;
+  onWizardComplete: () => void;
 }
 
 export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
@@ -157,7 +157,7 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
             pane_specs: config.groups.flatMap(toPaneSpec),
           } satisfies WorkspaceCommandDto),
         () => {
-          deps.onOnboardingComplete();
+          deps.onWizardComplete();
           return {};
         },
       );

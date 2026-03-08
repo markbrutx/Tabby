@@ -78,7 +78,7 @@ function makeMockDeps(
 ): WorkspaceStoreDeps {
   return {
     workspaceClient: makeMockWorkspaceClient(clientOverrides),
-    onOnboardingComplete: vi.fn(),
+    onWizardComplete: vi.fn(),
     ...depsOverrides,
   };
 }
@@ -329,12 +329,12 @@ describe("createWorkspaceStore", () => {
     expect(store.getState().wizardTab).not.toBeNull();
   });
 
-  it("createTabFromWizard dispatches openTab and calls onOnboardingComplete", async () => {
+  it("createTabFromWizard dispatches openTab and calls onWizardComplete", async () => {
     const tabView = makeWorkspaceView();
-    const onOnboardingComplete = vi.fn();
+    const onWizardComplete = vi.fn();
     const deps = makeMockDeps(
       { dispatch: vi.fn().mockResolvedValue(tabView) },
-      { onOnboardingComplete },
+      { onWizardComplete },
     );
     const store = createWorkspaceStore(deps);
 
@@ -356,7 +356,7 @@ describe("createWorkspaceStore", () => {
         auto_layout: true,
       }),
     );
-    expect(onOnboardingComplete).toHaveBeenCalledOnce();
+    expect(onWizardComplete).toHaveBeenCalledOnce();
   });
 
   it("dispatches closePane command through injected client", async () => {
@@ -389,6 +389,21 @@ describe("createWorkspaceStore", () => {
       kind: "swapPaneSlots",
       pane_id_a: "p1",
       pane_id_b: "p2",
+    });
+  });
+
+  describe("isolation", () => {
+    it("can be instantiated and tested with no cross-feature dependencies", async () => {
+      const deps = makeMockDeps();
+      const store = createWorkspaceStore(deps);
+
+      expect(store.getState().workspace).toBeNull();
+      expect(store.getState().isHydrating).toBe(true);
+
+      await store.getState().loadBootstrap(makeBootstrapPayload());
+
+      expect(store.getState().workspace).not.toBeNull();
+      expect(store.getState().isHydrating).toBe(false);
     });
   });
 });

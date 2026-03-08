@@ -1,5 +1,39 @@
 # Progress Log
 
+## 2026-03-09 00:33 - US-023: Move onboarding cross-context updates to app-level coordinator
+Thread:
+Run: 20260308-215923-84117 (iteration 24)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-24.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-24.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 85490dd feat: move onboarding cross-context updates to AppBootstrapCoordinator (US-023)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (181 tests, 18 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (237 tests)
+- Files changed:
+  - src/app-shell/AppBootstrapCoordinator.ts (added completeOnboarding, markOnboardingComplete interface)
+  - src/app-shell/AppBootstrapCoordinator.test.ts (added 3 onboarding tests)
+  - src/features/settings/application/store.ts (added markOnboardingComplete method)
+  - src/features/workspace/application/store.ts (replaced getSettingsStore with onOnboardingComplete callback)
+  - src/features/workspace/application/store.test.ts (updated for callback API)
+  - src/contexts/stores.ts (wired coordinator.completeOnboarding as callback)
+- What was implemented:
+  - Added completeOnboarding() to AppBootstrapCoordinator that checks hasCompletedOnboarding flag and delegates to settings store
+  - Added markOnboardingComplete() to settings store, keeping the update logic within its own bounded context
+  - Replaced getSettingsStore cross-store dependency in workspace store with a simple onOnboardingComplete callback
+  - Wired the coordinator's completeOnboarding as the callback via closure in stores.ts
+  - Workspace store no longer has any knowledge of or dependency on settings store
+- **Learnings for future iterations:**
+  - When typing coordinator interfaces that bridge stores, avoid generic Record<string, unknown> — it breaks assignability with readonly domain models. Use dedicated methods (markOnboardingComplete) instead of forwarding updateSettings with a loose type.
+  - Callback injection (onOnboardingComplete: () => void) is simpler than store accessor injection (getSettingsStore) for single-purpose cross-context coordination.
+---
+
 ## 2026-03-09 00:30 - US-022: Extract bootstrap orchestration from workspace store to AppBootstrapCoordinator
 Thread:
 Run: 20260308-215923-84117 (iteration 23)

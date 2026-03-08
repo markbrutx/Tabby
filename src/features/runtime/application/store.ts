@@ -5,10 +5,6 @@ import type {
 } from "@/contracts/tauri-bindings";
 import type { BrowserBounds, RuntimeReadModel } from "@/features/runtime/domain/models";
 import type { RuntimeClient, UnlistenFn } from "@/app-shell/clients";
-import {
-  initDispatcher,
-  teardownDispatcher,
-} from "@/features/terminal/ptyOutputDispatcher";
 import { mapRuntimeFromDto } from "@/features/runtime/application/snapshot-mappers";
 
 export interface RuntimeState {
@@ -37,7 +33,14 @@ function toRuntimeMap(dtos: PaneRuntimeView[]): Record<string, RuntimeReadModel>
   return Object.fromEntries(dtos.map((dto) => [dto.paneId, mapRuntimeFromDto(dto)]));
 }
 
-export function createRuntimeStore(runtimeClient: RuntimeClient) {
+export interface RuntimeStoreDeps {
+  runtimeClient: RuntimeClient;
+  initTerminalDispatcher: (client: RuntimeClient) => Promise<void>;
+  teardownTerminalDispatcher: () => void;
+}
+
+export function createRuntimeStore(deps: RuntimeStoreDeps) {
+  const { runtimeClient } = deps;
   let runtimeListenersReady: Promise<void> | null = null;
 
   return create<RuntimeState>((set, get) => ({
@@ -116,11 +119,11 @@ export function createRuntimeStore(runtimeClient: RuntimeClient) {
     },
 
     async initTerminalOutputDispatcher() {
-      await initDispatcher(runtimeClient);
+      await deps.initTerminalDispatcher(runtimeClient);
     },
 
     teardownTerminalOutputDispatcher() {
-      teardownDispatcher();
+      deps.teardownTerminalDispatcher();
     },
 
     // Browser actions

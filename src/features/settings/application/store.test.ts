@@ -143,4 +143,18 @@ describe("createSettingsStore", () => {
       "reset failed",
     );
   });
+
+  describe("isolation", () => {
+    it("can be instantiated and tested with no cross-feature dependencies", () => {
+      const client = makeMockSettingsClient();
+      const store = createSettingsStore(client);
+
+      expect(store.getState().settings).toBeNull();
+      expect(store.getState().profiles).toEqual([]);
+
+      store.getState().loadBootstrap(makeSettingsView(), []);
+
+      expect(store.getState().settings).not.toBeNull();
+    });
+  });
 });

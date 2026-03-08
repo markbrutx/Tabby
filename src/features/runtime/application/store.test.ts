@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PaneRuntimeView } from "@/contracts/tauri-bindings";
 import type { RuntimeClient } from "@/app-shell/clients";
 import { createRuntimeStore } from "./store";
+import type { RuntimeStoreDeps } from "./store";
 
 function makeMockRuntimeClient(): RuntimeClient {
   return {
@@ -10,6 +11,14 @@ function makeMockRuntimeClient(): RuntimeClient {
     listenStatusChanged: vi.fn().mockResolvedValue(() => {}),
     listenTerminalOutput: vi.fn().mockResolvedValue(() => {}),
     listenBrowserLocationObserved: vi.fn().mockResolvedValue(() => {}),
+  };
+}
+
+function makeMockDeps(clientOverrides?: Partial<RuntimeClient>): RuntimeStoreDeps {
+  return {
+    runtimeClient: { ...makeMockRuntimeClient(), ...clientOverrides },
+    initTerminalDispatcher: vi.fn().mockResolvedValue(undefined),
+    teardownTerminalDispatcher: vi.fn(),
   };
 }
 
@@ -29,8 +38,8 @@ function makeRuntimeDto(overrides?: Partial<PaneRuntimeView>): PaneRuntimeView {
 describe("createRuntimeStore", () => {
   describe("loadBootstrap", () => {
     it("maps PaneRuntimeView DTOs to RuntimeReadModel before storing", () => {
-      const client = makeMockRuntimeClient();
-      const store = createRuntimeStore(client);
+      const deps = makeMockDeps();
+      const store = createRuntimeStore(deps);
 
       const dtos: PaneRuntimeView[] = [
         makeRuntimeDto({ paneId: "p1", kind: "terminal", status: "running" }),
@@ -72,8 +81,8 @@ describe("createRuntimeStore", () => {
     });
 
     it("stores an empty map when given an empty array", () => {
-      const client = makeMockRuntimeClient();
-      const store = createRuntimeStore(client);
+      const deps = makeMockDeps();
+      const store = createRuntimeStore(deps);
 
       store.getState().loadBootstrap([]);
 
@@ -81,8 +90,8 @@ describe("createRuntimeStore", () => {
     });
 
     it("stored models are frozen snapshots independent of the input DTO", () => {
-      const client = makeMockRuntimeClient();
-      const store = createRuntimeStore(client);
+      const deps = makeMockDeps();
+      const store = createRuntimeStore(deps);
       const dto = makeRuntimeDto();
 
       store.getState().loadBootstrap([dto]);
@@ -96,14 +105,15 @@ describe("createRuntimeStore", () => {
 
   describe("runtime status listener", () => {
     it("maps incoming PaneRuntimeView DTO through mapper before updating store", () => {
-      const client = makeMockRuntimeClient();
       let statusHandler: ((runtime: PaneRuntimeView) => void) | null = null;
-      client.listenStatusChanged = vi.fn((handler) => {
-        statusHandler = handler;
-        return Promise.resolve(() => {});
+      const deps = makeMockDeps({
+        listenStatusChanged: vi.fn((handler) => {
+          statusHandler = handler;
+          return Promise.resolve(() => {});
+        }),
       });
 
-      const store = createRuntimeStore(client);
+      const store = createRuntimeStore(deps);
       store.getState().loadBootstrap([
         makeRuntimeDto({ paneId: "p1", status: "starting" }),
       ]);
@@ -118,6 +128,41 @@ describe("createRuntimeStore", () => {
       const runtime = store.getState().runtimes["p1"];
       expect(runtime.status).toBe("running");
       expect(runtime).not.toBe(updatedDto);
+    });
+  });
+
+  describe("terminal dispatcher delegation", () => {
+    it("delegates initTerminalOutputDispatcher to injected initTerminalDispatcher", async () => {
+      const initTerminalDispatcher = vi.fn().mockResolvedValue(undefined);
+      const deps = makeMockDeps();
+      deps.initTerminalDispatcher = initTerminalDispatcher;
+      const store = createRuntimeStore(deps);
+
+      await store.getState().initTerminalOutputDispatcher();
+
+      expect(initTerminalDispatcher).toHaveBeenCalledWith(deps.runtimeClient);
+    });
+
+    it("delegates teardownTerminalOutputDispatcher to injected teardownTerminalDispatcher", () => {
+      const teardownTerminalDispatcher = vi.fn();
+      const deps = makeMockDeps();
+      deps.teardownTerminalDispatcher = teardownTerminalDispatcher;
+      const store = createRuntimeStore(deps);
+
+      store.getState().teardownTerminalOutputDispatcher();
+
+      expect(teardownTerminalDispatcher).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("isolation", () => {
+    it("can be instantiated and tested with no cross-feature dependencies", () => {
+      const deps = makeMockDeps();
+      const store = createRuntimeStore(deps);
+
+      expect(store.getState().runtimes).toEqual({});
+      store.getState().loadBootstrap([makeRuntimeDto()]);
+      expect(Object.keys(store.getState().runtimes)).toHaveLength(1);
     });
   });
 });
