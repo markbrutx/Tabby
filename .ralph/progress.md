@@ -692,3 +692,32 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - The persistence module lives in the domain crate (tabby-settings), not the mapping layer — this is correct per DDD: persistence format is a domain concern
   - serde/serde_json added to tabby-settings crate — these are the first serde deps in a domain crate, justified since persistence serialization is intrinsic to domain model lifecycle
 ---
+
+## [2026-03-09 00:05] - US-019: Create RuntimeReadModel and RuntimeSnapshotMapper on frontend
+Thread:
+Run: 20260308-215923-84117 (iteration 20)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-20.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-20.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 5f2231d feat: add RuntimeSnapshotMapper with tests for DTO-to-domain mapping (US-019)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (170 tests, 16 test files)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (237 tests: 141 app + 10 runtime + 35 settings + 51 workspace)
+- Files changed:
+  - src/features/runtime/application/snapshot-mappers.ts (new — mapRuntimeFromDto function)
+  - src/features/runtime/application/snapshot-mappers.test.ts (new — 8 tests)
+- What was implemented:
+  - RuntimeReadModel already existed in src/features/runtime/domain/models.ts (created in US-012) with camelCase fields: paneId, runtimeSessionId, kind, status, lastError, browserLocation, terminalCwd
+  - Created mapRuntimeFromDto in snapshot-mappers.ts converting PaneRuntimeView DTO → RuntimeReadModel
+  - 8 tests: full field mapping, browser runtime with location, null lastError, non-null lastError with failed status, null runtimeSessionId, missing browserLocation for terminal, camelCase-only keys, immutability (no DTO mutation)
+  - Runtime store not changed — mapper exists but is not wired (deferred to next story)
+- **Learnings for future iterations:**
+  - PaneRuntimeView already uses camelCase from specta/tauri-specta, so the mapping is field-to-field — but the anti-corruption layer is still valuable to decouple domain models from generated contract types
+  - Followed the exact same pattern as settings/snapshot-mappers.ts and workspace/snapshot-mappers.ts
+---
