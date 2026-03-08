@@ -119,7 +119,7 @@ describe("mapSplitNodeFromDto", () => {
 });
 
 describe("mapPaneFromDto", () => {
-  it("maps PaneView to PaneReadModel with converted spec", () => {
+  it("maps PaneView to PaneReadModel with converted terminal spec", () => {
     const dto: PaneView = {
       paneId: "p1",
       title: "Terminal",
@@ -140,6 +140,44 @@ describe("mapPaneFromDto", () => {
       expect(result.spec.launchProfileId).toBe("zsh");
       expect(result.spec.workingDirectory).toBe("/tmp");
     }
+  });
+
+  it("maps PaneView with browser spec to PaneReadModel", () => {
+    const dto: PaneView = {
+      paneId: "p2",
+      title: "Browser",
+      spec: {
+        kind: "browser",
+        initial_url: "https://docs.rs",
+      },
+    };
+
+    const result = mapPaneFromDto(dto);
+
+    expect(result.paneId).toBe("p2");
+    expect(result.title).toBe("Browser");
+    expect(result.spec.kind).toBe("browser");
+    if (result.spec.kind === "browser") {
+      expect(result.spec.initialUrl).toBe("https://docs.rs");
+    }
+  });
+
+  it("does not mutate the original PaneView DTO", () => {
+    const dto: PaneView = {
+      paneId: "p1",
+      title: "Terminal",
+      spec: {
+        kind: "terminal",
+        launch_profile_id: "default",
+        working_directory: "~",
+        command_override: "npm start",
+      },
+    };
+
+    const original = JSON.stringify(dto);
+    mapPaneFromDto(dto);
+
+    expect(JSON.stringify(dto)).toBe(original);
   });
 });
 
@@ -171,6 +209,65 @@ describe("mapTabFromDto", () => {
     expect(result.activePaneId).toBe("p1");
     expect(result.panes).toHaveLength(1);
     expect(result.panes[0].spec.kind).toBe("terminal");
+  });
+
+  it("maps TabView with multiple panes including mixed specs", () => {
+    const dto: TabView = {
+      tabId: "t2",
+      title: "Mixed Tab",
+      layout: {
+        type: "split",
+        direction: "horizontal",
+        ratio: 0.5,
+        first: { type: "pane", paneId: "p1" },
+        second: { type: "pane", paneId: "p2" },
+      },
+      panes: [
+        {
+          paneId: "p1",
+          title: "Terminal",
+          spec: {
+            kind: "terminal",
+            launch_profile_id: "zsh",
+            working_directory: "/home",
+            command_override: null,
+          },
+        },
+        {
+          paneId: "p2",
+          title: "Browser",
+          spec: {
+            kind: "browser",
+            initial_url: "https://localhost:3000",
+          },
+        },
+      ],
+      activePaneId: "p2",
+    };
+
+    const result = mapTabFromDto(dto);
+
+    expect(result.panes).toHaveLength(2);
+    expect(result.panes[0].spec.kind).toBe("terminal");
+    expect(result.panes[1].spec.kind).toBe("browser");
+    expect(result.activePaneId).toBe("p2");
+    expect(result.layout.type).toBe("split");
+  });
+
+  it("maps TabView with empty panes array", () => {
+    const dto: TabView = {
+      tabId: "t3",
+      title: "Empty Tab",
+      layout: { type: "pane", paneId: "" },
+      panes: [],
+      activePaneId: "",
+    };
+
+    const result = mapTabFromDto(dto);
+
+    expect(result.tabId).toBe("t3");
+    expect(result.panes).toHaveLength(0);
+    expect(result.activePaneId).toBe("");
   });
 });
 

@@ -103,4 +103,44 @@ describe("createSettingsStore", () => {
       "network timeout",
     );
   });
+
+  it("maps multiple profiles from bootstrap data", () => {
+    const client = makeMockSettingsClient();
+    const store = createSettingsStore(client);
+
+    const profiles = [
+      { id: "zsh", label: "Zsh", description: "Z shell", startupCommandTemplate: null },
+      { id: "bash", label: "Bash", description: "Bash shell", startupCommandTemplate: "/bin/bash" },
+      { id: "claude", label: "Claude", description: "AI agent", startupCommandTemplate: "claude --project ." },
+    ];
+
+    store.getState().loadBootstrap(makeSettingsView(), profiles);
+
+    expect(store.getState().profiles).toHaveLength(3);
+    expect(store.getState().profiles[0].id).toBe("zsh");
+    expect(store.getState().profiles[1].startupCommandTemplate).toBe("/bin/bash");
+    expect(store.getState().profiles[2].label).toBe("Claude");
+  });
+
+  it("registers event listener on bootstrap via initializeListeners", () => {
+    const client = makeMockSettingsClient();
+    const store = createSettingsStore(client);
+
+    store.getState().loadBootstrap(makeSettingsView(), []);
+
+    expect(client.listenProjectionUpdated).toHaveBeenCalledOnce();
+  });
+
+  it("throws on reset failure with descriptive message", async () => {
+    const client = makeMockSettingsClient({
+      dispatch: vi.fn().mockRejectedValue(new Error("reset failed")),
+    });
+    const store = createSettingsStore(client);
+
+    store.getState().loadBootstrap(makeSettingsView(), []);
+
+    await expect(store.getState().resetSettings()).rejects.toThrow(
+      "reset failed",
+    );
+  });
 });

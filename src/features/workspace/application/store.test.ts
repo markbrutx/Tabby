@@ -193,4 +193,223 @@ describe("createWorkspaceStore", () => {
     expect(store.getState().wizardTab).not.toBeNull();
     expect(store.getState().wizardTab?.title).toBe("Workspace 1");
   });
+
+  it("dispatches setActiveTab command and updates workspace state", async () => {
+    const updatedView = makeWorkspaceView({ activeTabId: "t2" });
+    const deps = makeMockDeps({
+      dispatch: vi.fn().mockResolvedValue(updatedView),
+    });
+    const store = createWorkspaceStore(deps);
+
+    await store.getState().initialize();
+    await store.getState().setActiveTab("t2");
+
+    expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
+      kind: "setActiveTab",
+      tab_id: "t2",
+    });
+    expect(store.getState().workspace?.activeTabId).toBe("t2");
+  });
+
+  it("dispatches splitPane command with direction and pane spec", async () => {
+    const splitView = makeWorkspaceView({
+      tabs: [
+        {
+          tabId: "t1",
+          title: "Tab 1",
+          layout: {
+            type: "split",
+            direction: "horizontal",
+            ratio: 0.5,
+            first: { type: "pane", paneId: "p1" },
+            second: { type: "pane", paneId: "p2" },
+          },
+          panes: [
+            {
+              paneId: "p1",
+              title: "Terminal",
+              spec: {
+                kind: "terminal",
+                launch_profile_id: "default",
+                working_directory: "/home",
+                command_override: null,
+              },
+            },
+            {
+              paneId: "p2",
+              title: "Terminal 2",
+              spec: {
+                kind: "terminal",
+                launch_profile_id: "default",
+                working_directory: "/home",
+                command_override: null,
+              },
+            },
+          ],
+          activePaneId: "p1",
+        },
+      ],
+    });
+    const deps = makeMockDeps({
+      dispatch: vi.fn().mockResolvedValue(splitView),
+    });
+    const store = createWorkspaceStore(deps);
+
+    await store.getState().initialize();
+    const paneSpec = {
+      kind: "terminal" as const,
+      launch_profile_id: "default",
+      working_directory: "/home",
+      command_override: null,
+    };
+    await store.getState().splitPane("p1", "horizontal", paneSpec);
+
+    expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
+      kind: "splitPane",
+      pane_id: "p1",
+      direction: "horizontal",
+      pane_spec: paneSpec,
+    });
+    expect(store.getState().workspace?.tabs[0].panes).toHaveLength(2);
+  });
+
+  it("transitions isWorking state during mutations", async () => {
+    let resolveDispatch: (value: WorkspaceView) => void;
+    const dispatchPromise = new Promise<WorkspaceView>((resolve) => {
+      resolveDispatch = resolve;
+    });
+    const deps = makeMockDeps({
+      dispatch: vi.fn().mockReturnValue(dispatchPromise),
+    });
+    const store = createWorkspaceStore(deps);
+
+    await store.getState().initialize();
+
+    expect(store.getState().isWorking).toBe(false);
+
+    const closePromise = store.getState().closeTab("t1");
+
+    expect(store.getState().isWorking).toBe(true);
+
+    resolveDispatch!(makeWorkspaceView({ tabs: [] }));
+    await closePromise;
+
+    expect(store.getState().isWorking).toBe(false);
+  });
+
+  it("openSetupWizard creates a wizard tab", async () => {
+    const deps = makeMockDeps();
+    const store = createWorkspaceStore(deps);
+
+    await store.getState().initialize();
+
+    expect(store.getState().wizardTab).toBeNull();
+
+    store.getState().openSetupWizard();
+
+    expect(store.getState().wizardTab).not.toBeNull();
+    expect(store.getState().wizardTab?.title).toBe("Workspace 2");
+  });
+
+  it("closeSetupWizard clears wizard when tabs exist", async () => {
+    const deps = makeMockDeps();
+    const store = createWorkspaceStore(deps);
+
+    await store.getState().initialize();
+
+    store.getState().openSetupWizard();
+    expect(store.getState().wizardTab).not.toBeNull();
+
+    store.getState().closeSetupWizard();
+    expect(store.getState().wizardTab).toBeNull();
+  });
+
+  it("closeSetupWizard keeps wizard when no tabs exist", async () => {
+    const emptyView = makeWorkspaceView({ tabs: [], activeTabId: "" });
+    const deps = makeMockDeps({
+      bootstrap: vi.fn().mockResolvedValue({
+        workspace: emptyView,
+        settings: {
+          defaultLayout: "1x1",
+          defaultTerminalProfileId: "terminal",
+          defaultWorkingDirectory: "~",
+          defaultCustomCommand: "",
+          fontSize: 14,
+          theme: "midnight",
+          launchFullscreen: false,
+          hasCompletedOnboarding: false,
+          lastWorkingDirectory: null,
+        },
+        profileCatalog: { terminalProfiles: [] },
+        runtimeProjections: [],
+      }),
+    });
+    const store = createWorkspaceStore(deps);
+
+    await store.getState().initialize();
+    expect(store.getState().wizardTab).not.toBeNull();
+
+    store.getState().closeSetupWizard();
+    expect(store.getState().wizardTab).not.toBeNull();
+  });
+
+  it("createTabFromWizard dispatches openTab and marks onboarding complete", async () => {
+    const tabView = makeWorkspaceView();
+    const deps = makeMockDeps({
+      dispatch: vi.fn().mockResolvedValue(tabView),
+    });
+    const store = createWorkspaceStore(deps);
+
+    await store.getState().initialize();
+    await store.getState().createTabFromWizard({
+      groups: [
+        {
+          mode: "terminal",
+          profileId: "terminal",
+          workingDirectory: "~",
+          count: 1,
+        },
+      ],
+    });
+
+    expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "openTab",
+        auto_layout: true,
+      }),
+    );
+  });
+
+  it("dispatches closePane command through injected client", async () => {
+    const updatedView = makeWorkspaceView();
+    const deps = makeMockDeps({
+      dispatch: vi.fn().mockResolvedValue(updatedView),
+    });
+    const store = createWorkspaceStore(deps);
+
+    await store.getState().initialize();
+    await store.getState().closePane("p1");
+
+    expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
+      kind: "closePane",
+      pane_id: "p1",
+    });
+  });
+
+  it("dispatches swapPanes command through injected client", async () => {
+    const updatedView = makeWorkspaceView();
+    const deps = makeMockDeps({
+      dispatch: vi.fn().mockResolvedValue(updatedView),
+    });
+    const store = createWorkspaceStore(deps);
+
+    await store.getState().initialize();
+    await store.getState().swapPanes("p1", "p2");
+
+    expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
+      kind: "swapPaneSlots",
+      pane_id_a: "p1",
+      pane_id_b: "p2",
+    });
+  });
 });
