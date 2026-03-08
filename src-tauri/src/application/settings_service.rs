@@ -4,11 +4,13 @@ use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 use tracing::warn;
 
-use tabby_contracts::{SettingsCommandDto, SettingsView};
+use tabby_contracts::SettingsView;
 use tabby_settings::{
     default_preferences, normalize_preferences, validate_preferences, SettingsError,
     UserPreferences,
 };
+
+use crate::application::commands::SettingsCommand;
 
 use crate::shell::error::ShellError;
 use crate::shell::mapping::{preferences_from_settings_view, settings_view_from_preferences};
@@ -51,15 +53,15 @@ impl SettingsApplicationService {
 
     pub fn dispatch_settings_command(
         &self,
-        command: SettingsCommandDto,
+        command: SettingsCommand,
     ) -> Result<(UserPreferences, SettingsView), ShellError> {
         let next_preferences = match command {
-            SettingsCommandDto::Update { settings } => {
-                let next = normalize_preferences(preferences_from_settings_view(&settings));
+            SettingsCommand::Update(update) => {
+                let next = normalize_preferences(update.preferences);
                 validate_preferences(&next).map_err(settings_error_to_shell)?;
                 next
             }
-            SettingsCommandDto::Reset => default_preferences(),
+            SettingsCommand::Reset => default_preferences(),
         };
 
         self.persist_preferences(&next_preferences)?;

@@ -1,4 +1,5 @@
 mod bootstrap_service;
+pub mod commands;
 mod projection_publisher;
 mod runtime_service;
 mod settings_service;

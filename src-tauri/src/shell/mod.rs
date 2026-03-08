@@ -6,20 +6,23 @@ pub(crate) mod pty;
 use tauri::AppHandle;
 
 use tabby_contracts::{
-    LayoutPresetDto, RuntimeCommandDto, SettingsCommandDto, SettingsView, WorkspaceBootstrapView,
+    RuntimeCommandDto, SettingsCommandDto, SettingsView, WorkspaceBootstrapView,
     WorkspaceCommandDto, WorkspaceView,
 };
 use tabby_settings::default_preferences;
 use tabby_workspace::layout::LayoutPreset;
 use tabby_workspace::WorkspaceEvent;
 
+use crate::application::commands::WorkspaceCommand;
 use crate::application::{
     BootstrapService, ProjectionPublisher, RuntimeApplicationService, SettingsApplicationService,
     WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
 use crate::shell::error::ShellError;
-use crate::shell::mapping::{layout_preset_from_dto, pane_spec_from_dto, split_direction_from_dto};
+use crate::shell::mapping::{
+    runtime_command_from_dto, settings_command_from_dto, workspace_command_from_dto,
+};
 
 pub const WORKSPACE_PROJECTION_UPDATED_EVENT: &str = "workspace_projection_updated";
 pub const SETTINGS_PROJECTION_UPDATED_EVENT: &str = "settings_projection_updated";
@@ -67,81 +70,80 @@ impl AppShell {
 
     pub fn dispatch_workspace_command(
         &self,
-        command: WorkspaceCommandDto,
+        dto: WorkspaceCommandDto,
     ) -> Result<WorkspaceView, ShellError> {
+        let default_layout = self.resolve_default_layout();
+        let command = workspace_command_from_dto(dto, default_layout);
+        self.execute_workspace_command(command)?;
+
+        let view = self.workspace_service.workspace_view()?;
+        self.emit_workspace_projection(&view);
+        Ok(view)
+    }
+
+    pub fn dispatch_settings_command(
+        &self,
+        dto: SettingsCommandDto,
+    ) -> Result<SettingsView, ShellError> {
+        let command = settings_command_from_dto(dto);
+        let (_preferences, settings) = self.settings_service.dispatch_settings_command(command)?;
+        self.emit_settings_projection(&settings);
+        Ok(settings)
+    }
+
+    pub fn dispatch_runtime_command(
+        &self,
+        window: &tauri::Window,
+        dto: RuntimeCommandDto,
+    ) -> Result<(), ShellError> {
+        let command = runtime_command_from_dto(dto);
+        self.runtime_service
+            .dispatch_runtime_command(window, command)
+    }
+
+    fn execute_workspace_command(&self, command: WorkspaceCommand) -> Result<(), ShellError> {
         match command {
-            WorkspaceCommandDto::OpenTab {
-                layout,
-                auto_layout,
-                pane_specs,
-            } => {
-                let layout = layout.unwrap_or_else(|| {
-                    let preferences = self
-                        .settings_service
-                        .preferences()
-                        .unwrap_or_else(|_| default_preferences());
-                    match LayoutPreset::parse(&preferences.default_layout)
-                        .unwrap_or(LayoutPreset::OneByOne)
-                    {
-                        LayoutPreset::OneByOne => LayoutPresetDto::OneByOne,
-                        LayoutPreset::OneByTwo => LayoutPresetDto::OneByTwo,
-                        LayoutPreset::TwoByTwo => LayoutPresetDto::TwoByTwo,
-                        LayoutPreset::TwoByThree => LayoutPresetDto::TwoByThree,
-                        LayoutPreset::ThreeByThree => LayoutPresetDto::ThreeByThree,
-                    }
-                });
-                let specs = pane_specs
-                    .into_iter()
-                    .map(pane_spec_from_dto)
-                    .collect::<Vec<_>>();
-                let events = self.workspace_service.open_tab(
-                    layout_preset_from_dto(layout),
-                    auto_layout,
-                    specs,
-                )?;
+            WorkspaceCommand::OpenTab(cmd) => {
+                let events =
+                    self.workspace_service
+                        .open_tab(cmd.layout, cmd.auto_layout, cmd.pane_specs)?;
                 self.apply_workspace_events(events)?;
             }
-            WorkspaceCommandDto::CloseTab { tab_id } => {
-                let events = self.workspace_service.close_tab(&tab_id)?;
+            WorkspaceCommand::CloseTab(cmd) => {
+                let events = self.workspace_service.close_tab(&cmd.tab_id)?;
                 self.apply_workspace_events(events)?;
             }
-            WorkspaceCommandDto::SetActiveTab { tab_id } => {
+            WorkspaceCommand::SetActiveTab { tab_id } => {
                 self.workspace_service.set_active_tab(&tab_id)?;
             }
-            WorkspaceCommandDto::FocusPane { tab_id, pane_id } => {
+            WorkspaceCommand::FocusPane { tab_id, pane_id } => {
                 self.workspace_service.focus_pane(&tab_id, &pane_id)?;
             }
-            WorkspaceCommandDto::SplitPane {
-                pane_id,
-                direction,
-                pane_spec,
-            } => {
-                let events = self.workspace_service.split_pane(
-                    &pane_id,
-                    split_direction_from_dto(direction),
-                    pane_spec_from_dto(pane_spec),
-                )?;
+            WorkspaceCommand::SplitPane(cmd) => {
+                let events =
+                    self.workspace_service
+                        .split_pane(&cmd.pane_id, cmd.direction, cmd.spec)?;
                 self.apply_workspace_events(events)?;
             }
-            WorkspaceCommandDto::ClosePane { pane_id } => {
+            WorkspaceCommand::ClosePane { pane_id } => {
                 let events = self.workspace_service.close_pane(&pane_id)?;
                 self.apply_workspace_events(events)?;
             }
-            WorkspaceCommandDto::SwapPaneSlots {
+            WorkspaceCommand::SwapPaneSlots {
                 pane_id_a,
                 pane_id_b,
             } => {
                 self.workspace_service
                     .swap_pane_slots(&pane_id_a, &pane_id_b)?;
             }
-            WorkspaceCommandDto::ReplacePaneSpec { pane_id, pane_spec } => {
-                self.runtime_service.stop_runtime(&pane_id);
+            WorkspaceCommand::ReplacePaneSpec(cmd) => {
+                self.runtime_service.stop_runtime(&cmd.pane_id);
                 let events = self
                     .workspace_service
-                    .replace_pane_spec(&pane_id, pane_spec_from_dto(pane_spec))?;
+                    .replace_pane_spec(&cmd.pane_id, cmd.spec)?;
                 self.apply_workspace_events(events)?;
             }
-            WorkspaceCommandDto::RestartPaneRuntime { pane_id } => {
+            WorkspaceCommand::RestartPaneRuntime { pane_id } => {
                 let spec = self
                     .workspace_service
                     .pane_spec(&pane_id)?
@@ -150,7 +152,7 @@ impl AppShell {
                 self.runtime_service
                     .restart_runtime(&pane_id, &spec, &preferences)?;
             }
-            WorkspaceCommandDto::TrackTerminalWorkingDirectory {
+            WorkspaceCommand::TrackTerminalWorkingDirectory {
                 pane_id,
                 working_directory,
             } => {
@@ -161,28 +163,15 @@ impl AppShell {
                 self.settings_service.persist_preferences(&preferences)?;
             }
         }
-
-        let view = self.workspace_service.workspace_view()?;
-        self.emit_workspace_projection(&view);
-        Ok(view)
+        Ok(())
     }
 
-    pub fn dispatch_settings_command(
-        &self,
-        command: SettingsCommandDto,
-    ) -> Result<SettingsView, ShellError> {
-        let (_preferences, settings) = self.settings_service.dispatch_settings_command(command)?;
-        self.emit_settings_projection(&settings);
-        Ok(settings)
-    }
-
-    pub fn dispatch_runtime_command(
-        &self,
-        window: &tauri::Window,
-        command: RuntimeCommandDto,
-    ) -> Result<(), ShellError> {
-        self.runtime_service
-            .dispatch_runtime_command(window, command)
+    fn resolve_default_layout(&self) -> LayoutPreset {
+        let preferences = self
+            .settings_service
+            .preferences()
+            .unwrap_or_else(|_| default_preferences());
+        LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne)
     }
 
     fn apply_workspace_events(&self, events: Vec<WorkspaceEvent>) -> Result<(), ShellError> {

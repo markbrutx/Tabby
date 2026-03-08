@@ -1,12 +1,17 @@
 use tabby_contracts::{
     LayoutPresetDto, PaneRuntimeView, PaneSpecDto, PaneView, ProfileCatalogView, ProfileView,
-    RuntimeKindDto, RuntimeStatusDto, SettingsView, SplitDirectionDto, SplitNodeDto, TabView,
-    ThemeModeDto, WorkspaceView,
+    RuntimeCommandDto, RuntimeKindDto, RuntimeStatusDto, SettingsCommandDto, SettingsView,
+    SplitDirectionDto, SplitNodeDto, TabView, ThemeModeDto, WorkspaceCommandDto, WorkspaceView,
 };
 use tabby_runtime::{PaneRuntime, RuntimeKind, RuntimeStatus};
 use tabby_settings::{ProfileCatalog, ThemeMode, UserPreferences};
 use tabby_workspace::layout::{LayoutPreset, SplitDirection, SplitNode};
 use tabby_workspace::{PaneSpec, WorkspaceSession};
+
+use crate::application::commands::{
+    CloseTabCommand, OpenTabCommand, ReplacePaneSpecCommand, RuntimeCommand, SettingsCommand,
+    SplitPaneCommand, UpdateSettingsCommand, WorkspaceCommand,
+};
 
 pub fn settings_view_from_preferences(preferences: &UserPreferences) -> SettingsView {
     SettingsView {
@@ -191,5 +196,98 @@ fn split_node_to_dto(value: &SplitNode) -> SplitNodeDto {
             first: Box::new(split_node_to_dto(first)),
             second: Box::new(split_node_to_dto(second)),
         },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DTO → internal command mappers
+// ---------------------------------------------------------------------------
+
+pub fn workspace_command_from_dto(
+    dto: WorkspaceCommandDto,
+    default_layout: LayoutPreset,
+) -> WorkspaceCommand {
+    match dto {
+        WorkspaceCommandDto::OpenTab {
+            layout,
+            auto_layout,
+            pane_specs,
+        } => {
+            let layout = layout.map(layout_preset_from_dto).unwrap_or(default_layout);
+            WorkspaceCommand::OpenTab(OpenTabCommand {
+                layout,
+                auto_layout,
+                pane_specs: pane_specs.into_iter().map(pane_spec_from_dto).collect(),
+            })
+        }
+        WorkspaceCommandDto::CloseTab { tab_id } => {
+            WorkspaceCommand::CloseTab(CloseTabCommand { tab_id })
+        }
+        WorkspaceCommandDto::SetActiveTab { tab_id } => WorkspaceCommand::SetActiveTab { tab_id },
+        WorkspaceCommandDto::FocusPane { tab_id, pane_id } => {
+            WorkspaceCommand::FocusPane { tab_id, pane_id }
+        }
+        WorkspaceCommandDto::SplitPane {
+            pane_id,
+            direction,
+            pane_spec,
+        } => WorkspaceCommand::SplitPane(SplitPaneCommand {
+            pane_id,
+            direction: split_direction_from_dto(direction),
+            spec: pane_spec_from_dto(pane_spec),
+        }),
+        WorkspaceCommandDto::ClosePane { pane_id } => WorkspaceCommand::ClosePane { pane_id },
+        WorkspaceCommandDto::SwapPaneSlots {
+            pane_id_a,
+            pane_id_b,
+        } => WorkspaceCommand::SwapPaneSlots {
+            pane_id_a,
+            pane_id_b,
+        },
+        WorkspaceCommandDto::ReplacePaneSpec { pane_id, pane_spec } => {
+            WorkspaceCommand::ReplacePaneSpec(ReplacePaneSpecCommand {
+                pane_id,
+                spec: pane_spec_from_dto(pane_spec),
+            })
+        }
+        WorkspaceCommandDto::RestartPaneRuntime { pane_id } => {
+            WorkspaceCommand::RestartPaneRuntime { pane_id }
+        }
+        WorkspaceCommandDto::TrackTerminalWorkingDirectory {
+            pane_id,
+            working_directory,
+        } => WorkspaceCommand::TrackTerminalWorkingDirectory {
+            pane_id,
+            working_directory,
+        },
+    }
+}
+
+pub fn settings_command_from_dto(dto: SettingsCommandDto) -> SettingsCommand {
+    match dto {
+        SettingsCommandDto::Update { settings } => SettingsCommand::Update(UpdateSettingsCommand {
+            preferences: preferences_from_settings_view(&settings),
+        }),
+        SettingsCommandDto::Reset => SettingsCommand::Reset,
+    }
+}
+
+pub fn runtime_command_from_dto(dto: RuntimeCommandDto) -> RuntimeCommand {
+    match dto {
+        RuntimeCommandDto::WriteTerminalInput { pane_id, input } => {
+            RuntimeCommand::WriteTerminalInput { pane_id, input }
+        }
+        RuntimeCommandDto::ResizeTerminal {
+            pane_id,
+            cols,
+            rows,
+        } => RuntimeCommand::ResizeTerminal {
+            pane_id,
+            cols,
+            rows,
+        },
+        RuntimeCommandDto::NavigateBrowser { pane_id, url } => {
+            RuntimeCommand::NavigateBrowser { pane_id, url }
+        }
     }
 }

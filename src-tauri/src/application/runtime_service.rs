@@ -3,7 +3,9 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 use tracing::warn;
 
-use tabby_contracts::{PaneRuntimeView, RuntimeCommandDto};
+use tabby_contracts::PaneRuntimeView;
+
+use crate::application::commands::RuntimeCommand;
 use tabby_runtime::{RuntimeRegistry, RuntimeStatus};
 use tabby_settings::{resolve_terminal_profile, SettingsError, UserPreferences};
 use tabby_workspace::PaneSpec;
@@ -122,17 +124,17 @@ impl RuntimeApplicationService {
     pub fn dispatch_runtime_command(
         &self,
         window: &tauri::Window,
-        command: RuntimeCommandDto,
+        command: RuntimeCommand,
     ) -> Result<(), ShellError> {
         match command {
-            RuntimeCommandDto::WriteTerminalInput { pane_id, input } => {
+            RuntimeCommand::WriteTerminalInput { pane_id, input } => {
                 let runtime_session_id = self
                     .lock_runtimes()?
                     .terminal_session_id(&pane_id)
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
                 self.pty_manager.write(&runtime_session_id, &input)?;
             }
-            RuntimeCommandDto::ResizeTerminal {
+            RuntimeCommand::ResizeTerminal {
                 pane_id,
                 cols,
                 rows,
@@ -143,7 +145,7 @@ impl RuntimeApplicationService {
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
                 self.pty_manager.resize(&runtime_session_id, cols, rows)?;
             }
-            RuntimeCommandDto::NavigateBrowser { pane_id, url } => {
+            RuntimeCommand::NavigateBrowser { pane_id, url } => {
                 browser_surface::navigate_browser(window, &pane_id, &url)?;
                 let maybe_runtime = self
                     .lock_runtimes()?
