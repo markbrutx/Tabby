@@ -1,36 +1,30 @@
 pub(crate) mod browser_surface;
 pub mod error;
 pub(crate) mod mapping;
-mod pty;
+pub(crate) mod pty;
 
-use std::sync::Mutex;
-
-use tauri::{AppHandle, Manager};
-use tracing::warn;
+use tauri::AppHandle;
 
 use tabby_contracts::{
     LayoutPresetDto, RuntimeCommandDto, SettingsCommandDto, SettingsView, WorkspaceBootstrapView,
     WorkspaceCommandDto, WorkspaceView,
 };
-use tabby_runtime::{RuntimeRegistry, RuntimeStatus};
 use tabby_settings::{
     built_in_profile_catalog, default_preferences, resolve_default_working_directory,
-    resolve_terminal_profile, SettingsError,
 };
 use tabby_workspace::layout::LayoutPreset;
 use tabby_workspace::{PaneSpec, WorkspaceEvent};
 
 use crate::application::{
-    ProjectionPublisher, SettingsApplicationService, WorkspaceApplicationService,
+    ProjectionPublisher, RuntimeApplicationService, SettingsApplicationService,
+    WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
-use crate::shell::browser_surface::navigate_browser;
 use crate::shell::error::ShellError;
 use crate::shell::mapping::{
-    layout_preset_from_dto, pane_runtime_to_view, pane_spec_from_dto,
-    profile_catalog_view_from_catalog, split_direction_from_dto,
+    layout_preset_from_dto, pane_spec_from_dto, profile_catalog_view_from_catalog,
+    split_direction_from_dto,
 };
-use crate::shell::pty::PtyManager;
 
 pub const WORKSPACE_PROJECTION_UPDATED_EVENT: &str = "workspace_projection_updated";
 pub const SETTINGS_PROJECTION_UPDATED_EVENT: &str = "settings_projection_updated";
@@ -40,13 +34,11 @@ pub const BROWSER_LOCATION_OBSERVED_EVENT: &str = "browser_location_observed";
 
 #[derive(Debug)]
 pub struct AppShell {
-    app: AppHandle,
     settings_service: SettingsApplicationService,
     workspace_service: WorkspaceApplicationService,
-    runtimes: Mutex<RuntimeRegistry>,
-    pty_manager: PtyManager,
+    runtime_service: RuntimeApplicationService,
     publisher: ProjectionPublisher,
-    launch_overrides: Mutex<Option<CliArgs>>,
+    launch_overrides: std::sync::Mutex<Option<CliArgs>>,
 }
 
 impl AppShell {
@@ -54,12 +46,10 @@ impl AppShell {
         let settings_service = SettingsApplicationService::new(app.clone())?;
         Ok(Self {
             workspace_service: WorkspaceApplicationService::new(),
-            runtimes: Mutex::new(RuntimeRegistry::default()),
-            pty_manager: PtyManager::new(app.clone()),
-            publisher: ProjectionPublisher::new(app.clone()),
-            launch_overrides: Mutex::new(Some(cli_args)),
+            runtime_service: RuntimeApplicationService::new(app.clone()),
+            publisher: ProjectionPublisher::new(app),
+            launch_overrides: std::sync::Mutex::new(Some(cli_args)),
             settings_service,
-            app,
         })
     }
 
@@ -86,14 +76,7 @@ impl AppShell {
             workspace: self.workspace_service.workspace_view()?,
             settings: self.settings_service.settings_view()?,
             profile_catalog: profile_catalog_view_from_catalog(&built_in_profile_catalog()),
-            runtime_projections: self
-                .runtimes
-                .lock()
-                .map_err(|_| ShellError::State(String::from("Runtime lock poisoned")))?
-                .snapshot()
-                .iter()
-                .map(pane_runtime_to_view)
-                .collect(),
+            runtime_projections: self.runtime_service.snapshot()?,
         })
     }
 
@@ -199,7 +182,7 @@ impl AppShell {
                     .swap_pane_slots(&pane_id_a, &pane_id_b)?;
             }
             WorkspaceCommandDto::ReplacePaneSpec { pane_id, pane_spec } => {
-                self.stop_runtime_for_pane(&pane_id);
+                self.runtime_service.stop_runtime(&pane_id);
                 let events = self
                     .workspace_service
                     .replace_pane_spec(&pane_id, pane_spec_from_dto(pane_spec))?;
@@ -210,8 +193,9 @@ impl AppShell {
                     .workspace_service
                     .pane_spec(&pane_id)?
                     .ok_or_else(|| ShellError::NotFound(format!("pane {pane_id}")))?;
-                self.stop_runtime_for_pane(&pane_id);
-                self.start_runtime_for_pane(&pane_id, &spec)?;
+                let preferences = self.settings_service.preferences()?;
+                self.runtime_service
+                    .restart_runtime(&pane_id, &spec, &preferences)?;
             }
             WorkspaceCommandDto::TrackTerminalWorkingDirectory {
                 pane_id,
@@ -244,44 +228,8 @@ impl AppShell {
         window: &tauri::Window,
         command: RuntimeCommandDto,
     ) -> Result<(), ShellError> {
-        match command {
-            RuntimeCommandDto::WriteTerminalInput { pane_id, input } => {
-                let runtime_session_id = self
-                    .runtimes
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Runtime lock poisoned")))?
-                    .terminal_session_id(&pane_id)
-                    .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
-                self.pty_manager.write(&runtime_session_id, &input)?;
-            }
-            RuntimeCommandDto::ResizeTerminal {
-                pane_id,
-                cols,
-                rows,
-            } => {
-                let runtime_session_id = self
-                    .runtimes
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Runtime lock poisoned")))?
-                    .terminal_session_id(&pane_id)
-                    .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
-                self.pty_manager.resize(&runtime_session_id, cols, rows)?;
-            }
-            RuntimeCommandDto::NavigateBrowser { pane_id, url } => {
-                navigate_browser(window, &pane_id, &url)?;
-                let maybe_runtime = self
-                    .runtimes
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Runtime lock poisoned")))?
-                    .update_browser_location(&pane_id, url)
-                    .ok();
-                if let Some(runtime) = maybe_runtime {
-                    self.emit_runtime_status(&pane_runtime_to_view(&runtime));
-                }
-            }
-        }
-
-        Ok(())
+        self.runtime_service
+            .dispatch_runtime_command(window, command)
     }
 
     fn open_default_tab(&self) -> Result<(), ShellError> {
@@ -301,98 +249,20 @@ impl AppShell {
     }
 
     fn apply_workspace_events(&self, events: Vec<WorkspaceEvent>) -> Result<(), ShellError> {
+        let preferences = self.settings_service.preferences()?;
         for event in events {
             match event {
                 WorkspaceEvent::PaneAdded { pane_id, spec }
                 | WorkspaceEvent::PaneSpecReplaced { pane_id, spec } => {
-                    self.start_runtime_for_pane(&pane_id, &spec)?;
+                    self.runtime_service
+                        .start_runtime(&pane_id, &spec, &preferences)?;
                 }
                 WorkspaceEvent::PaneRemoved { pane_id, .. } => {
-                    self.stop_runtime_for_pane(&pane_id);
+                    self.runtime_service.stop_runtime(&pane_id);
                 }
             }
         }
         Ok(())
-    }
-
-    fn start_runtime_for_pane(&self, pane_id: &str, spec: &PaneSpec) -> Result<(), ShellError> {
-        let preferences = self.settings_service.preferences()?;
-        let runtime_view = match spec {
-            PaneSpec::Terminal(spec) => {
-                let resolved = resolve_terminal_profile(
-                    &spec.launch_profile_id,
-                    spec.command_override.clone(),
-                    &preferences.default_custom_command,
-                )
-                .map_err(settings_error_to_shell)?;
-                let runtime_session_id = self.pty_manager.spawn(
-                    pane_id,
-                    &spec.working_directory,
-                    resolved.command.as_deref(),
-                )?;
-                let runtime = self
-                    .runtimes
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Runtime lock poisoned")))?
-                    .register_terminal(pane_id, runtime_session_id);
-                pane_runtime_to_view(&runtime)
-            }
-            PaneSpec::Browser(spec) => {
-                let runtime = self
-                    .runtimes
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Runtime lock poisoned")))?
-                    .register_browser(
-                        pane_id,
-                        format!("browser-{}", uuid::Uuid::new_v4()),
-                        spec.initial_url.clone(),
-                    );
-                pane_runtime_to_view(&runtime)
-            }
-        };
-        self.emit_runtime_status(&runtime_view);
-        Ok(())
-    }
-
-    fn stop_runtime_for_pane(&self, pane_id: &str) {
-        let runtime = match self
-            .runtimes
-            .lock()
-            .map_err(|_| ShellError::State(String::from("Runtime lock poisoned")))
-        {
-            Ok(mut runtimes) => runtimes.remove(pane_id),
-            Err(error) => {
-                warn!(?error, "Failed to lock runtime registry during stop");
-                None
-            }
-        };
-
-        if let Some(runtime) = runtime {
-            if let Some(runtime_session_id) = runtime.runtime_session_id.clone() {
-                match runtime.kind {
-                    tabby_runtime::RuntimeKind::Terminal => {
-                        if let Err(error) = self.pty_manager.kill(&runtime_session_id) {
-                            warn!(?error, pane_id, "Failed to kill terminal runtime");
-                        }
-                    }
-                    tabby_runtime::RuntimeKind::Browser => {
-                        if let Some(window) = self.app.get_webview_window("main") {
-                            if let Some(webview) =
-                                window.get_webview(&browser_surface::webview_label(pane_id))
-                            {
-                                if let Err(error) = webview.close() {
-                                    warn!(?error, pane_id, "Failed to close browser surface");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            let mut exited = runtime;
-            exited.status = RuntimeStatus::Exited;
-            self.emit_runtime_status(&pane_runtime_to_view(&exited));
-        }
     }
 
     fn emit_workspace_projection(&self, workspace: &WorkspaceView) {
@@ -401,15 +271,5 @@ impl AppShell {
 
     fn emit_settings_projection(&self, settings: &SettingsView) {
         self.publisher.emit_settings_projection(settings);
-    }
-
-    fn emit_runtime_status(&self, runtime: &tabby_contracts::PaneRuntimeView) {
-        self.publisher.emit_runtime_status(runtime);
-    }
-}
-
-fn settings_error_to_shell(error: SettingsError) -> ShellError {
-    match error {
-        SettingsError::Validation(message) => ShellError::Validation(message),
     }
 }
