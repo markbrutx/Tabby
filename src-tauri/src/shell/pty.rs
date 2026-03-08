@@ -10,6 +10,7 @@ use tracing::warn;
 use tabby_contracts::TerminalOutputEvent;
 use tabby_workspace::PaneId;
 
+use crate::application::ports::TerminalProcessPort;
 use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use crate::shell::error::ShellError;
 use crate::shell::TERMINAL_OUTPUT_RECEIVED_EVENT;
@@ -183,6 +184,36 @@ impl PtyManager {
         self.sessions
             .lock()
             .map_err(|_| ShellError::State(String::from("PTY sessions lock poisoned")))
+    }
+}
+
+impl TerminalProcessPort for PtyManager {
+    fn spawn(
+        &self,
+        pane_id: &str,
+        working_directory: &str,
+        startup_command: Option<&str>,
+        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
+    ) -> Result<String, ShellError> {
+        PtyManager::spawn(
+            self,
+            pane_id,
+            working_directory,
+            startup_command,
+            observation_receiver,
+        )
+    }
+
+    fn kill(&self, runtime_session_id: &str) -> Result<(), ShellError> {
+        PtyManager::kill(self, runtime_session_id)
+    }
+
+    fn resize(&self, runtime_session_id: &str, cols: u16, rows: u16) -> Result<(), ShellError> {
+        PtyManager::resize(self, runtime_session_id, cols, rows)
+    }
+
+    fn write_input(&self, runtime_session_id: &str, data: &str) -> Result<(), ShellError> {
+        PtyManager::write(self, runtime_session_id, data)
     }
 }
 

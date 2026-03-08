@@ -21,9 +21,10 @@ use crate::application::{
     SettingsApplicationService, WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
-use crate::infrastructure::TauriStorePreferencesRepository;
+use crate::infrastructure::{TauriBrowserSurfaceAdapter, TauriStorePreferencesRepository};
 use crate::mapping::dto_mappers;
 use crate::shell::error::ShellError;
+use crate::shell::pty::PtyManager;
 
 pub const WORKSPACE_PROJECTION_UPDATED_EVENT: &str = "workspace_projection_updated";
 pub const SETTINGS_PROJECTION_UPDATED_EVENT: &str = "settings_projection_updated";
@@ -43,10 +44,19 @@ impl AppShell {
     pub fn new(app: AppHandle, cli_args: CliArgs) -> Result<Self, ShellError> {
         let preferences_repository = TauriStorePreferencesRepository::new(app.clone());
         let settings_service = SettingsApplicationService::new(Box::new(preferences_repository))?;
+
+        let terminal_port = PtyManager::new(app.clone());
+        let browser_port = TauriBrowserSurfaceAdapter::new(app.clone());
+        let runtime_publisher = ProjectionPublisher::new(app.clone());
+
         Ok(Self {
             bootstrap_service: BootstrapService::new(cli_args),
             workspace_service: WorkspaceApplicationService::new(),
-            runtime_service: Arc::new(RuntimeApplicationService::new(app.clone())),
+            runtime_service: Arc::new(RuntimeApplicationService::new(
+                Box::new(terminal_port),
+                Box::new(browser_port),
+                Box::new(runtime_publisher),
+            )),
             publisher: ProjectionPublisher::new(app),
             settings_service,
         })
@@ -110,11 +120,7 @@ impl AppShell {
         Ok(settings)
     }
 
-    pub fn dispatch_runtime_command(
-        &self,
-        window: &tauri::Window,
-        dto: RuntimeCommandDto,
-    ) -> Result<(), ShellError> {
+    pub fn dispatch_runtime_command(&self, dto: RuntimeCommandDto) -> Result<(), ShellError> {
         use crate::application::commands::RuntimeCommand;
 
         let command = dto_mappers::runtime_command_from_dto(dto);
@@ -134,8 +140,7 @@ impl AppShell {
                     .observe_browser_location(pane_id.as_ref(), &url)?;
             }
             other => {
-                self.runtime_service
-                    .dispatch_runtime_command(window, other)?;
+                self.runtime_service.dispatch_runtime_command(other)?;
             }
         }
         Ok(())

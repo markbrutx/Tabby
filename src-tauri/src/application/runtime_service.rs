@@ -1,34 +1,47 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
-use tauri::{AppHandle, Manager};
 use tracing::warn;
 
 use crate::application::commands::RuntimeCommand;
+use crate::application::ports::{
+    BrowserSurfacePort, RuntimeProjectionEmitter, TerminalProcessPort,
+};
 use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use tabby_runtime::{PaneRuntime, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
 use tabby_settings::{resolve_terminal_profile, SettingsError, UserPreferences};
 use tabby_workspace::{PaneId, PaneSpec};
 
-use crate::application::{ProjectionPublisher, SettingsApplicationService};
-use crate::shell::browser_surface;
+use crate::application::SettingsApplicationService;
 use crate::shell::error::ShellError;
-use crate::shell::pty::PtyManager;
 
-#[derive(Debug)]
 pub struct RuntimeApplicationService {
-    app: AppHandle,
     runtimes: Mutex<RuntimeRegistry>,
-    pty_manager: PtyManager,
-    publisher: ProjectionPublisher,
+    terminal_port: Box<dyn TerminalProcessPort>,
+    browser_port: Box<dyn BrowserSurfacePort>,
+    emitter: Box<dyn RuntimeProjectionEmitter>,
+}
+
+impl std::fmt::Debug for RuntimeApplicationService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeApplicationService")
+            .field("terminal_port", &self.terminal_port)
+            .field("browser_port", &self.browser_port)
+            .field("emitter", &self.emitter)
+            .finish_non_exhaustive()
+    }
 }
 
 impl RuntimeApplicationService {
-    pub fn new(app: AppHandle) -> Self {
+    pub fn new(
+        terminal_port: Box<dyn TerminalProcessPort>,
+        browser_port: Box<dyn BrowserSurfacePort>,
+        emitter: Box<dyn RuntimeProjectionEmitter>,
+    ) -> Self {
         Self {
             runtimes: Mutex::new(RuntimeRegistry::default()),
-            pty_manager: PtyManager::new(app.clone()),
-            publisher: ProjectionPublisher::new(app.clone()),
-            app,
+            terminal_port,
+            browser_port,
+            emitter,
         }
     }
 
@@ -37,7 +50,7 @@ impl RuntimeApplicationService {
         pane_id: &str,
         spec: &PaneSpec,
         preferences: &UserPreferences,
-        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
+        observation_receiver: std::sync::Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<(), ShellError> {
         let runtime = match spec {
             PaneSpec::Terminal(spec) => {
@@ -47,7 +60,7 @@ impl RuntimeApplicationService {
                     &preferences.default_custom_command,
                 )
                 .map_err(settings_error_to_shell)?;
-                let pty_session_id = self.pty_manager.spawn(
+                let pty_session_id = self.terminal_port.spawn(
                     pane_id,
                     &spec.working_directory,
                     resolved.command.as_deref(),
@@ -62,7 +75,7 @@ impl RuntimeApplicationService {
                 spec.initial_url.clone(),
             ),
         };
-        self.publisher.emit_runtime_status(&runtime);
+        self.emitter.emit_runtime_status(&runtime);
         Ok(())
     }
 
@@ -82,19 +95,13 @@ impl RuntimeApplicationService {
         if let Some(runtime_session_id) = &runtime.runtime_session_id {
             match runtime.kind {
                 tabby_runtime::RuntimeKind::Terminal => {
-                    if let Err(error) = self.pty_manager.kill(runtime_session_id.as_ref()) {
+                    if let Err(error) = self.terminal_port.kill(runtime_session_id.as_ref()) {
                         warn!(?error, pane_id, "Failed to kill terminal runtime");
                     }
                 }
                 tabby_runtime::RuntimeKind::Browser => {
-                    if let Some(window) = self.app.get_webview_window("main") {
-                        if let Some(webview) =
-                            window.get_webview(&browser_surface::webview_label(pane_id))
-                        {
-                            if let Err(error) = webview.close() {
-                                warn!(?error, pane_id, "Failed to close browser surface");
-                            }
-                        }
+                    if let Err(error) = self.browser_port.close_surface(pane_id) {
+                        warn!(?error, pane_id, "Failed to close browser surface");
                     }
                 }
             }
@@ -102,7 +109,7 @@ impl RuntimeApplicationService {
 
         let mut exited = runtime;
         exited.status = RuntimeStatus::Exited;
-        self.publisher.emit_runtime_status(&exited);
+        self.emitter.emit_runtime_status(&exited);
     }
 
     pub fn restart_runtime(
@@ -110,25 +117,21 @@ impl RuntimeApplicationService {
         pane_id: &str,
         spec: &PaneSpec,
         preferences: &UserPreferences,
-        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
+        observation_receiver: std::sync::Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<(), ShellError> {
         self.stop_runtime(pane_id);
         self.start_runtime(pane_id, spec, preferences, observation_receiver)
     }
 
-    pub fn dispatch_runtime_command(
-        &self,
-        window: &tauri::Window,
-        command: RuntimeCommand,
-    ) -> Result<(), ShellError> {
+    pub fn dispatch_runtime_command(&self, command: RuntimeCommand) -> Result<(), ShellError> {
         match command {
             RuntimeCommand::WriteTerminalInput { pane_id, input } => {
                 let runtime_session_id = self
                     .lock_runtimes()?
                     .terminal_session_id(pane_id.as_ref())
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
-                self.pty_manager
-                    .write(runtime_session_id.as_ref(), &input)?;
+                self.terminal_port
+                    .write_input(runtime_session_id.as_ref(), &input)?;
             }
             RuntimeCommand::ResizeTerminal {
                 pane_id,
@@ -139,17 +142,17 @@ impl RuntimeApplicationService {
                     .lock_runtimes()?
                     .terminal_session_id(pane_id.as_ref())
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
-                self.pty_manager
+                self.terminal_port
                     .resize(runtime_session_id.as_ref(), cols, rows)?;
             }
             RuntimeCommand::NavigateBrowser { pane_id, url } => {
-                browser_surface::navigate_browser(window, pane_id.as_ref(), &url)?;
+                self.browser_port.navigate(pane_id.as_ref(), &url)?;
                 let maybe_runtime = self
                     .lock_runtimes()?
                     .update_browser_location(pane_id.as_ref(), url)
                     .ok();
                 if let Some(runtime) = maybe_runtime {
-                    self.publisher.emit_runtime_status(&runtime);
+                    self.emitter.emit_runtime_status(&runtime);
                 }
             }
             RuntimeCommand::ObserveTerminalCwd { .. }
@@ -176,7 +179,7 @@ impl RuntimeApplicationService {
             .lock_runtimes()?
             .update_terminal_cwd(pane_id.as_ref(), String::from(working_directory))
             .map_err(|error| ShellError::NotFound(error.to_string()))?;
-        self.publisher.emit_runtime_status(&runtime);
+        self.emitter.emit_runtime_status(&runtime);
 
         let mut preferences = settings_service.preferences()?;
         preferences.last_working_directory = Some(String::from(working_directory));
@@ -190,7 +193,7 @@ impl RuntimeApplicationService {
             .update_browser_location(pane_id, String::from(url))
             .ok();
         if let Some(runtime) = maybe_runtime {
-            self.publisher.emit_runtime_status(&runtime);
+            self.emitter.emit_runtime_status(&runtime);
         }
         Ok(())
     }
@@ -231,7 +234,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
         });
 
         match result {
-            Ok(runtime) => self.publisher.emit_runtime_status(&runtime),
+            Ok(runtime) => self.emitter.emit_runtime_status(&runtime),
             Err(error) => {
                 warn!(
                     ?error,
@@ -250,7 +253,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
         });
 
         match result {
-            Ok(runtime) => self.publisher.emit_runtime_status(&runtime),
+            Ok(runtime) => self.emitter.emit_runtime_status(&runtime),
             Err(error) => {
                 warn!(
                     ?error,
@@ -273,7 +276,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
         });
 
         match result {
-            Ok(runtime) => self.publisher.emit_runtime_status(&runtime),
+            Ok(runtime) => self.emitter.emit_runtime_status(&runtime),
             Err(error) => {
                 warn!(
                     ?error,
@@ -529,5 +532,499 @@ mod tests {
 
         // 5. Workspace session should have no track_terminal_working_directory method
         // (compile-time guarantee — if this test compiles, the method is removed)
+    }
+
+    // -----------------------------------------------------------------------
+    // Mock ports for testing RuntimeApplicationService with abstractions
+    // -----------------------------------------------------------------------
+
+    use std::sync::{Arc, Mutex};
+
+    use crate::application::ports::{
+        BrowserSurfacePort, RuntimeProjectionEmitter, TerminalProcessPort,
+    };
+    use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
+    use crate::shell::error::ShellError;
+    use tabby_workspace::PaneId;
+
+    #[derive(Debug, Default)]
+    struct MockTerminalProcess {
+        spawn_calls: Mutex<Vec<(String, String)>>,
+        kill_calls: Mutex<Vec<String>>,
+        resize_calls: Mutex<Vec<(String, u16, u16)>>,
+        write_calls: Mutex<Vec<(String, String)>>,
+        next_session_counter: Mutex<u32>,
+    }
+
+    impl TerminalProcessPort for MockTerminalProcess {
+        fn spawn(
+            &self,
+            pane_id: &str,
+            working_directory: &str,
+            _startup_command: Option<&str>,
+            _observation_receiver: Arc<dyn RuntimeObservationReceiver>,
+        ) -> Result<String, ShellError> {
+            let mut counter = self
+                .next_session_counter
+                .lock()
+                .map_err(|_| ShellError::State(String::from("lock")))?;
+            *counter += 1;
+            let session_id = format!("mock-pty-{counter}");
+            self.spawn_calls
+                .lock()
+                .map_err(|_| ShellError::State(String::from("lock")))?
+                .push((String::from(pane_id), String::from(working_directory)));
+            Ok(session_id)
+        }
+
+        fn kill(&self, runtime_session_id: &str) -> Result<(), ShellError> {
+            self.kill_calls
+                .lock()
+                .map_err(|_| ShellError::State(String::from("lock")))?
+                .push(String::from(runtime_session_id));
+            Ok(())
+        }
+
+        fn resize(&self, runtime_session_id: &str, cols: u16, rows: u16) -> Result<(), ShellError> {
+            self.resize_calls
+                .lock()
+                .map_err(|_| ShellError::State(String::from("lock")))?
+                .push((String::from(runtime_session_id), cols, rows));
+            Ok(())
+        }
+
+        fn write_input(&self, runtime_session_id: &str, data: &str) -> Result<(), ShellError> {
+            self.write_calls
+                .lock()
+                .map_err(|_| ShellError::State(String::from("lock")))?
+                .push((String::from(runtime_session_id), String::from(data)));
+            Ok(())
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct MockBrowserSurface {
+        close_calls: Mutex<Vec<String>>,
+        navigate_calls: Mutex<Vec<(String, String)>>,
+    }
+
+    impl BrowserSurfacePort for MockBrowserSurface {
+        fn ensure_surface(
+            &self,
+            _pane_id: &str,
+            _url: &str,
+            _x: f64,
+            _y: f64,
+            _width: f64,
+            _height: f64,
+        ) -> Result<(), ShellError> {
+            Ok(())
+        }
+
+        fn set_bounds(
+            &self,
+            _pane_id: &str,
+            _x: f64,
+            _y: f64,
+            _width: f64,
+            _height: f64,
+        ) -> Result<(), ShellError> {
+            Ok(())
+        }
+
+        fn set_visible(&self, _pane_id: &str, _visible: bool) -> Result<(), ShellError> {
+            Ok(())
+        }
+
+        fn close_surface(&self, pane_id: &str) -> Result<(), ShellError> {
+            self.close_calls
+                .lock()
+                .map_err(|_| ShellError::State(String::from("lock")))?
+                .push(String::from(pane_id));
+            Ok(())
+        }
+
+        fn navigate(&self, pane_id: &str, url: &str) -> Result<(), ShellError> {
+            self.navigate_calls
+                .lock()
+                .map_err(|_| ShellError::State(String::from("lock")))?
+                .push((String::from(pane_id), String::from(url)));
+            Ok(())
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct MockProjectionEmitter {
+        emitted: Mutex<Vec<(String, RuntimeStatus)>>,
+    }
+
+    impl RuntimeProjectionEmitter for MockProjectionEmitter {
+        fn emit_runtime_status(&self, runtime: &tabby_runtime::PaneRuntime) {
+            if let Ok(mut emitted) = self.emitted.lock() {
+                emitted.push((runtime.pane_id.clone(), runtime.status));
+            }
+        }
+    }
+
+    use super::RuntimeApplicationService;
+    use tabby_settings::UserPreferences;
+    use tabby_workspace::{BrowserPaneSpec, PaneSpec, TerminalPaneSpec};
+
+    fn default_preferences() -> UserPreferences {
+        tabby_settings::default_preferences()
+    }
+
+    struct MockObservationReceiver;
+
+    impl RuntimeObservationReceiver for MockObservationReceiver {
+        fn on_terminal_output_received(&self, _pane_id: &PaneId, _data: &[u8]) {}
+        fn on_terminal_exited(&self, _pane_id: &PaneId, _exit_code: Option<i32>) {}
+        fn on_browser_location_changed(&self, _pane_id: &PaneId, _url: &str) {}
+        fn on_terminal_cwd_changed(&self, _pane_id: &PaneId, _cwd: &str) {}
+    }
+
+    fn mock_receiver() -> Arc<dyn RuntimeObservationReceiver> {
+        Arc::new(MockObservationReceiver)
+    }
+
+    fn build_service() -> (
+        RuntimeApplicationService,
+        Arc<MockTerminalProcess>,
+        Arc<MockBrowserSurface>,
+        Arc<MockProjectionEmitter>,
+    ) {
+        let terminal = Arc::new(MockTerminalProcess::default());
+        let browser = Arc::new(MockBrowserSurface::default());
+        let emitter = Arc::new(MockProjectionEmitter::default());
+
+        // Use Arc-based sharing so tests can inspect mocks after service calls.
+        // The service takes Box<dyn Trait>, so we clone the Arc into the box.
+        let service = RuntimeApplicationService::new(
+            Box::new(ArcTerminalPort(Arc::clone(&terminal))),
+            Box::new(ArcBrowserPort(Arc::clone(&browser))),
+            Box::new(ArcEmitter(Arc::clone(&emitter))),
+        );
+
+        (service, terminal, browser, emitter)
+    }
+
+    // Thin wrappers to pass Arc<Mock> as Box<dyn Trait>
+
+    #[derive(Debug)]
+    struct ArcTerminalPort(Arc<MockTerminalProcess>);
+
+    impl TerminalProcessPort for ArcTerminalPort {
+        fn spawn(
+            &self,
+            pane_id: &str,
+            working_directory: &str,
+            startup_command: Option<&str>,
+            observation_receiver: Arc<dyn RuntimeObservationReceiver>,
+        ) -> Result<String, ShellError> {
+            self.0.spawn(
+                pane_id,
+                working_directory,
+                startup_command,
+                observation_receiver,
+            )
+        }
+        fn kill(&self, id: &str) -> Result<(), ShellError> {
+            self.0.kill(id)
+        }
+        fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), ShellError> {
+            self.0.resize(id, cols, rows)
+        }
+        fn write_input(&self, id: &str, data: &str) -> Result<(), ShellError> {
+            self.0.write_input(id, data)
+        }
+    }
+
+    #[derive(Debug)]
+    struct ArcBrowserPort(Arc<MockBrowserSurface>);
+
+    impl BrowserSurfacePort for ArcBrowserPort {
+        fn ensure_surface(
+            &self,
+            p: &str,
+            u: &str,
+            x: f64,
+            y: f64,
+            w: f64,
+            h: f64,
+        ) -> Result<(), ShellError> {
+            self.0.ensure_surface(p, u, x, y, w, h)
+        }
+        fn set_bounds(&self, p: &str, x: f64, y: f64, w: f64, h: f64) -> Result<(), ShellError> {
+            self.0.set_bounds(p, x, y, w, h)
+        }
+        fn set_visible(&self, p: &str, v: bool) -> Result<(), ShellError> {
+            self.0.set_visible(p, v)
+        }
+        fn close_surface(&self, p: &str) -> Result<(), ShellError> {
+            self.0.close_surface(p)
+        }
+        fn navigate(&self, p: &str, u: &str) -> Result<(), ShellError> {
+            self.0.navigate(p, u)
+        }
+    }
+
+    #[derive(Debug)]
+    struct ArcEmitter(Arc<MockProjectionEmitter>);
+
+    impl RuntimeProjectionEmitter for ArcEmitter {
+        fn emit_runtime_status(&self, runtime: &tabby_runtime::PaneRuntime) {
+            self.0.emit_runtime_status(runtime);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // AC: RuntimeApplicationService start/stop works with mock ports
+    // -----------------------------------------------------------------------
+
+    fn terminal_spec_for_test(cwd: &str) -> PaneSpec {
+        PaneSpec::Terminal(TerminalPaneSpec {
+            launch_profile_id: String::from(tabby_settings::TERMINAL_PROFILE_ID),
+            working_directory: String::from(cwd),
+            command_override: None,
+        })
+    }
+
+    #[test]
+    fn start_terminal_runtime_calls_terminal_port_spawn() {
+        let (service, terminal, _browser, emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = terminal_spec_for_test("/tmp");
+
+        service
+            .start_runtime("pane-1", &spec, &prefs, mock_receiver())
+            .expect("start should succeed");
+
+        // Terminal port spawn was called
+        let spawn_calls = terminal.spawn_calls.lock().expect("lock");
+        assert_eq!(spawn_calls.len(), 1);
+        assert_eq!(spawn_calls[0].0, "pane-1");
+        assert_eq!(spawn_calls[0].1, "/tmp");
+
+        // Runtime registered in registry
+        let snapshot = service.snapshot().expect("snapshot");
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].pane_id, "pane-1");
+        assert!(matches!(snapshot[0].kind, RuntimeKind::Terminal));
+        assert!(matches!(snapshot[0].status, RuntimeStatus::Running));
+
+        // Projection emitted
+        let emitted = emitter.emitted.lock().expect("lock");
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "pane-1");
+        assert_eq!(emitted[0].1, RuntimeStatus::Running);
+    }
+
+    #[test]
+    fn stop_terminal_runtime_calls_terminal_port_kill() {
+        let (service, terminal, _browser, emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = terminal_spec_for_test("/tmp");
+
+        service
+            .start_runtime("pane-1", &spec, &prefs, mock_receiver())
+            .expect("start");
+
+        // Get the session ID that was assigned
+        let snapshot = service.snapshot().expect("snapshot");
+        let session_id = snapshot[0]
+            .runtime_session_id
+            .as_ref()
+            .expect("should have session id")
+            .clone();
+
+        service.stop_runtime("pane-1");
+
+        // Terminal port kill was called with the correct session ID
+        let kill_calls = terminal.kill_calls.lock().expect("lock");
+        assert_eq!(kill_calls.len(), 1);
+        assert_eq!(kill_calls[0], session_id.as_ref());
+
+        // Registry is empty
+        let snapshot = service.snapshot().expect("snapshot");
+        assert!(snapshot.is_empty(), "registry should be empty after stop");
+
+        // Exited projection emitted
+        let emitted = emitter.emitted.lock().expect("lock");
+        let exited = emitted
+            .iter()
+            .filter(|(id, status)| id == "pane-1" && *status == RuntimeStatus::Exited)
+            .count();
+        assert_eq!(exited, 1, "Exited projection should be emitted");
+    }
+
+    #[test]
+    fn start_browser_runtime_does_not_call_terminal_port() {
+        let (service, terminal, _browser, emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = PaneSpec::Browser(BrowserPaneSpec {
+            initial_url: String::from("https://example.com"),
+        });
+
+        service
+            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .expect("start");
+
+        // Terminal port was NOT called
+        let spawn_calls = terminal.spawn_calls.lock().expect("lock");
+        assert!(
+            spawn_calls.is_empty(),
+            "terminal port should not be called for browser runtime"
+        );
+
+        // Browser runtime registered
+        let snapshot = service.snapshot().expect("snapshot");
+        assert_eq!(snapshot.len(), 1);
+        assert!(matches!(snapshot[0].kind, RuntimeKind::Browser));
+
+        // Projection emitted
+        let emitted = emitter.emitted.lock().expect("lock");
+        assert_eq!(emitted.len(), 1);
+    }
+
+    #[test]
+    fn stop_browser_runtime_calls_browser_port_close() {
+        let (service, _terminal, browser, _emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = PaneSpec::Browser(BrowserPaneSpec {
+            initial_url: String::from("https://example.com"),
+        });
+
+        service
+            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .expect("start");
+
+        service.stop_runtime("pane-b");
+
+        // Browser port close was called
+        let close_calls = browser.close_calls.lock().expect("lock");
+        assert_eq!(close_calls.len(), 1);
+        assert_eq!(close_calls[0], "pane-b");
+    }
+
+    #[test]
+    fn restart_runtime_stops_then_starts_via_ports() {
+        let (service, terminal, _browser, emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = terminal_spec_for_test("/projects");
+
+        service
+            .start_runtime("pane-1", &spec, &prefs, mock_receiver())
+            .expect("start");
+
+        service
+            .restart_runtime("pane-1", &spec, &prefs, mock_receiver())
+            .expect("restart");
+
+        // Terminal port: 2 spawns, 1 kill
+        let spawn_calls = terminal.spawn_calls.lock().expect("lock");
+        assert_eq!(spawn_calls.len(), 2, "spawn should be called twice");
+        let kill_calls = terminal.kill_calls.lock().expect("lock");
+        assert_eq!(kill_calls.len(), 1, "kill should be called once");
+
+        // Registry has exactly one runtime, Running
+        let snapshot = service.snapshot().expect("snapshot");
+        assert_eq!(snapshot.len(), 1);
+        assert!(matches!(snapshot[0].status, RuntimeStatus::Running));
+
+        // Projections: Running, Exited, Running
+        let emitted = emitter.emitted.lock().expect("lock");
+        let statuses: Vec<_> = emitted
+            .iter()
+            .filter(|(id, _)| id == "pane-1")
+            .map(|(_, s)| *s)
+            .collect();
+        assert_eq!(
+            statuses,
+            vec![
+                RuntimeStatus::Running,
+                RuntimeStatus::Exited,
+                RuntimeStatus::Running,
+            ]
+        );
+    }
+
+    #[test]
+    fn dispatch_navigate_browser_calls_browser_port() {
+        use crate::application::commands::RuntimeCommand;
+
+        let (service, _terminal, browser, _emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = PaneSpec::Browser(BrowserPaneSpec {
+            initial_url: String::from("https://example.com"),
+        });
+
+        service
+            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .expect("start");
+
+        service
+            .dispatch_runtime_command(RuntimeCommand::NavigateBrowser {
+                pane_id: PaneId::from(String::from("pane-b")),
+                url: String::from("https://docs.rs"),
+            })
+            .expect("navigate");
+
+        let nav_calls = browser.navigate_calls.lock().expect("lock");
+        assert_eq!(nav_calls.len(), 1);
+        assert_eq!(nav_calls[0].0, "pane-b");
+        assert_eq!(nav_calls[0].1, "https://docs.rs");
+    }
+
+    #[test]
+    fn dispatch_write_terminal_calls_terminal_port() {
+        use crate::application::commands::RuntimeCommand;
+
+        let (service, terminal, _browser, _emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = terminal_spec_for_test("/tmp");
+
+        service
+            .start_runtime("pane-t", &spec, &prefs, mock_receiver())
+            .expect("start");
+
+        let snapshot = service.snapshot().expect("snapshot");
+        let _session_id = snapshot[0].runtime_session_id.as_ref().expect("session id");
+
+        service
+            .dispatch_runtime_command(RuntimeCommand::WriteTerminalInput {
+                pane_id: PaneId::from(String::from("pane-t")),
+                input: String::from("ls\n"),
+            })
+            .expect("write");
+
+        let write_calls = terminal.write_calls.lock().expect("lock");
+        assert_eq!(write_calls.len(), 1);
+        assert_eq!(write_calls[0].1, "ls\n");
+    }
+
+    #[test]
+    fn dispatch_resize_terminal_calls_terminal_port() {
+        use crate::application::commands::RuntimeCommand;
+
+        let (service, terminal, _browser, _emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = terminal_spec_for_test("/tmp");
+
+        service
+            .start_runtime("pane-t", &spec, &prefs, mock_receiver())
+            .expect("start");
+
+        service
+            .dispatch_runtime_command(RuntimeCommand::ResizeTerminal {
+                pane_id: PaneId::from(String::from("pane-t")),
+                cols: 120,
+                rows: 40,
+            })
+            .expect("resize");
+
+        let resize_calls = terminal.resize_calls.lock().expect("lock");
+        assert_eq!(resize_calls.len(), 1);
+        assert_eq!(resize_calls[0].1, 120);
+        assert_eq!(resize_calls[0].2, 40);
     }
 }

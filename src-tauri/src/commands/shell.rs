@@ -40,11 +40,10 @@ pub fn dispatch_settings_command(
 #[tauri::command]
 #[specta::specta]
 pub fn dispatch_runtime_command(
-    window: tauri::Window,
     state: State<'_, Arc<AppShell>>,
     command: RuntimeCommandDto,
 ) -> Result<(), ShellError> {
-    state.dispatch_runtime_command(&window, command)
+    state.dispatch_runtime_command(command)
 }
 
 #[tauri::command]

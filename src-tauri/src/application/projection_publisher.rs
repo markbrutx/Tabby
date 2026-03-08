@@ -8,6 +8,7 @@ use tabby_contracts::{
 use tabby_runtime::PaneRuntime;
 use tabby_settings::{built_in_profile_catalog, UserPreferences};
 
+use crate::application::ports::RuntimeProjectionEmitter;
 use crate::mapping::dto_mappers;
 use crate::shell::{
     RUNTIME_STATUS_CHANGED_EVENT, SETTINGS_PROJECTION_UPDATED_EVENT,
@@ -58,6 +59,12 @@ impl ProjectionPublisher {
         ) {
             warn!(?error, "Failed to emit runtime status update");
         }
+    }
+}
+
+impl RuntimeProjectionEmitter for ProjectionPublisher {
+    fn emit_runtime_status(&self, runtime: &PaneRuntime) {
+        ProjectionPublisher::emit_runtime_status(self, runtime);
     }
 }
 
