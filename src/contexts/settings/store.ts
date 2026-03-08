@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { asErrorMessage, shellClients } from "@/app-shell/clients";
+import { asErrorMessage } from "@/app-shell/clients";
 import type { SettingsCommandDto, SettingsView } from "@/contracts/tauri-bindings";
 import type {
   ProfileReadModel,
@@ -9,8 +9,9 @@ import {
   mapProfileFromDto,
   mapSettingsFromDto,
 } from "@/features/settings/application/snapshot-mappers";
+import type { SettingsClient } from "@/app-shell/clients";
 
-interface SettingsState {
+export interface SettingsState {
   settings: SettingsReadModel | null;
   profiles: ProfileReadModel[];
   loadBootstrap: (settings: SettingsView, profiles: readonly { id: string; label: string; description: string; startupCommandTemplate: string | null }[]) => void;
@@ -33,58 +34,60 @@ function toSettingsView(model: SettingsReadModel): SettingsView {
   };
 }
 
-let settingsListenersReady: Promise<void> | null = null;
+export function createSettingsStore(settingsClient: SettingsClient) {
+  let settingsListenersReady: Promise<void> | null = null;
 
-export const useSettingsStore = create<SettingsState>((set, get) => ({
-  settings: null,
-  profiles: [],
+  return create<SettingsState>((set, get) => ({
+    settings: null,
+    profiles: [],
 
-  loadBootstrap(settings, profiles) {
-    set({
-      settings: mapSettingsFromDto(settings),
-      profiles: profiles.map(mapProfileFromDto),
-    });
-    void get().initializeListeners();
-  },
+    loadBootstrap(settings, profiles) {
+      set({
+        settings: mapSettingsFromDto(settings),
+        profiles: profiles.map(mapProfileFromDto),
+      });
+      void get().initializeListeners();
+    },
 
-  async initializeListeners() {
-    if (settingsListenersReady) {
+    async initializeListeners() {
+      if (settingsListenersReady) {
+        await settingsListenersReady;
+        return;
+      }
+
+      settingsListenersReady = settingsClient
+        .listenProjectionUpdated((payload) => {
+          set({
+            settings: mapSettingsFromDto(payload.settings),
+            profiles: payload.profileCatalog.terminalProfiles.map(mapProfileFromDto),
+          });
+        })
+        .then(() => undefined);
+
       await settingsListenersReady;
-      return;
-    }
+    },
 
-    settingsListenersReady = shellClients.settings
-      .listenProjectionUpdated((payload) => {
-        set({
-          settings: mapSettingsFromDto(payload.settings),
-          profiles: payload.profileCatalog.terminalProfiles.map(mapProfileFromDto),
-        });
-      })
-      .then(() => undefined);
+    async updateSettings(settings) {
+      try {
+        const nextDto = await settingsClient.dispatch({
+          kind: "update",
+          settings: toSettingsView(settings),
+        } satisfies SettingsCommandDto);
+        set({ settings: mapSettingsFromDto(nextDto) });
+      } catch (error) {
+        throw new Error(asErrorMessage(error));
+      }
+    },
 
-    await settingsListenersReady;
-  },
-
-  async updateSettings(settings) {
-    try {
-      const nextDto = await shellClients.settings.dispatch({
-        kind: "update",
-        settings: toSettingsView(settings),
-      } satisfies SettingsCommandDto);
-      set({ settings: mapSettingsFromDto(nextDto) });
-    } catch (error) {
-      throw new Error(asErrorMessage(error));
-    }
-  },
-
-  async resetSettings() {
-    try {
-      const nextDto = await shellClients.settings.dispatch({
-        kind: "reset",
-      } satisfies SettingsCommandDto);
-      set({ settings: mapSettingsFromDto(nextDto) });
-    } catch (error) {
-      throw new Error(asErrorMessage(error));
-    }
-  },
-}));
+    async resetSettings() {
+      try {
+        const nextDto = await settingsClient.dispatch({
+          kind: "reset",
+        } satisfies SettingsCommandDto);
+        set({ settings: mapSettingsFromDto(nextDto) });
+      } catch (error) {
+        throw new Error(asErrorMessage(error));
+      }
+    },
+  }));
+}

@@ -1,7 +1,9 @@
 import { create } from "zustand";
-import { asErrorMessage, shellClients } from "@/app-shell/clients";
+import { asErrorMessage } from "@/app-shell/clients";
 import type {
+  PaneRuntimeView,
   PaneSpecDto,
+  SettingsView,
   WorkspaceCommandDto,
   WorkspaceView,
 } from "@/contracts/tauri-bindings";
@@ -13,11 +15,11 @@ import type {
   WorkspaceReadModel,
 } from "@/features/workspace/domain/models";
 import { mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
-import { useRuntimeStore } from "@/contexts/runtime/store";
-import { useSettingsStore } from "@/contexts/settings/store";
+import type { WorkspaceClient } from "@/app-shell/clients";
+import type { SettingsReadModel } from "@/features/settings/domain/models";
 import type { SetupWizardConfig, WizardTab } from "@/features/workspace/store/types";
 
-interface WorkspaceStore {
+export interface WorkspaceStore {
   workspace: WorkspaceReadModel | null;
   error: string | null;
   isHydrating: boolean;
@@ -47,8 +49,6 @@ type SetFn = (
     | Partial<WorkspaceStore>
     | ((state: WorkspaceStore) => Partial<WorkspaceStore>),
 ) => void;
-
-let workspaceListenersReady: Promise<void> | null = null;
 
 function makeWizardTab(workspace?: WorkspaceReadModel | null): WizardTab {
   const nextIndex = (workspace?.tabs.length ?? 0) + 1;
@@ -97,8 +97,26 @@ function toPaneSpec(group: SetupWizardConfig["groups"][number]): PaneSpecDto[] {
   );
 }
 
-function createWorkspaceStoreState() {
-  return (set: SetFn, get: () => WorkspaceStore): WorkspaceStore => ({
+export interface WorkspaceStoreDeps {
+  workspaceClient: WorkspaceClient;
+  getSettingsStore: () => {
+    getState: () => {
+      settings: SettingsReadModel | null;
+      loadBootstrap: (settings: SettingsView, profiles: readonly { id: string; label: string; description: string; startupCommandTemplate: string | null }[]) => void;
+      updateSettings: (settings: SettingsReadModel) => Promise<void>;
+    };
+  };
+  getRuntimeStore: () => {
+    getState: () => {
+      loadBootstrap: (runtimes: PaneRuntimeView[]) => void;
+    };
+  };
+}
+
+export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
+  let workspaceListenersReady: Promise<void> | null = null;
+
+  return create<WorkspaceStore>((set, get) => ({
     workspace: null,
     error: null,
     isHydrating: true,
@@ -109,15 +127,15 @@ function createWorkspaceStoreState() {
       set({ isHydrating: true, error: null });
 
       try {
-        const payload = await shellClients.workspace.bootstrap();
-        useSettingsStore.getState().loadBootstrap(
+        const payload = await deps.workspaceClient.bootstrap();
+        deps.getSettingsStore().getState().loadBootstrap(
           payload.settings,
           payload.profileCatalog.terminalProfiles,
         );
-        useRuntimeStore.getState().loadBootstrap(payload.runtimeProjections);
+        deps.getRuntimeStore().getState().loadBootstrap(payload.runtimeProjections);
 
         if (!workspaceListenersReady) {
-          workspaceListenersReady = shellClients.workspace
+          workspaceListenersReady = deps.workspaceClient
             .listenProjectionUpdated((dto) => {
               const workspace = mapWorkspaceFromDto(dto);
               set({
@@ -150,18 +168,17 @@ function createWorkspaceStoreState() {
       await runWorkspaceMutation(
         set,
         () =>
-          shellClients.workspace.dispatch({
+          deps.workspaceClient.dispatch({
             kind: "openTab",
             layout: null,
             auto_layout: true,
             pane_specs: config.groups.flatMap(toPaneSpec),
           } satisfies WorkspaceCommandDto),
         () => {
-          const settings = useSettingsStore.getState().settings;
+          const settingsState = deps.getSettingsStore().getState();
+          const settings = settingsState.settings;
           if (settings && !settings.hasCompletedOnboarding) {
-            void useSettingsStore
-              .getState()
-              .updateSettings({ ...settings, hasCompletedOnboarding: true });
+            void settingsState.updateSettings({ ...settings, hasCompletedOnboarding: true });
           }
           return {};
         },
@@ -182,7 +199,7 @@ function createWorkspaceStoreState() {
 
     async closeTab(tabId) {
       await runWorkspaceMutation(set, () =>
-        shellClients.workspace.dispatch({
+        deps.workspaceClient.dispatch({
           kind: "closeTab",
           tab_id: tabId,
         } satisfies WorkspaceCommandDto),
@@ -191,7 +208,7 @@ function createWorkspaceStoreState() {
 
     async setActiveTab(tabId) {
       await runWorkspaceMutation(set, () =>
-        shellClients.workspace.dispatch({
+        deps.workspaceClient.dispatch({
           kind: "setActiveTab",
           tab_id: tabId,
         } satisfies WorkspaceCommandDto),
@@ -200,7 +217,7 @@ function createWorkspaceStoreState() {
 
     async focusPane(tabId, paneId) {
       await runWorkspaceMutation(set, () =>
-        shellClients.workspace.dispatch({
+        deps.workspaceClient.dispatch({
           kind: "focusPane",
           tab_id: tabId,
           pane_id: paneId,
@@ -210,7 +227,7 @@ function createWorkspaceStoreState() {
 
     async replacePaneSpec(paneId, paneSpec) {
       await runWorkspaceMutation(set, () =>
-        shellClients.workspace.dispatch({
+        deps.workspaceClient.dispatch({
           kind: "replacePaneSpec",
           pane_id: paneId,
           pane_spec: paneSpec,
@@ -221,7 +238,7 @@ function createWorkspaceStoreState() {
     async restartPaneRuntime(paneId) {
       set({ isWorking: true });
       try {
-        await shellClients.workspace.dispatch({
+        await deps.workspaceClient.dispatch({
           kind: "restartPaneRuntime",
           pane_id: paneId,
         } satisfies WorkspaceCommandDto);
@@ -233,7 +250,7 @@ function createWorkspaceStoreState() {
 
     async splitPane(paneId, direction, paneSpec) {
       await runWorkspaceMutation(set, () =>
-        shellClients.workspace.dispatch({
+        deps.workspaceClient.dispatch({
           kind: "splitPane",
           pane_id: paneId,
           direction,
@@ -244,7 +261,7 @@ function createWorkspaceStoreState() {
 
     async closePane(paneId) {
       await runWorkspaceMutation(set, () =>
-        shellClients.workspace.dispatch({
+        deps.workspaceClient.dispatch({
           kind: "closePane",
           pane_id: paneId,
         } satisfies WorkspaceCommandDto),
@@ -253,7 +270,7 @@ function createWorkspaceStoreState() {
 
     async swapPanes(paneIdA, paneIdB) {
       await runWorkspaceMutation(set, () =>
-        shellClients.workspace.dispatch({
+        deps.workspaceClient.dispatch({
           kind: "swapPaneSlots",
           pane_id_a: paneIdA,
           pane_id_b: paneIdB,
@@ -264,7 +281,5 @@ function createWorkspaceStoreState() {
     clearError() {
       set({ error: null });
     },
-  });
+  }));
 }
-
-export const useWorkspaceStore = create<WorkspaceStore>(createWorkspaceStoreState());

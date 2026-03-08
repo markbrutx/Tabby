@@ -11,9 +11,7 @@ import { WorkspaceSetupWizard } from "@/features/workspace/components/WorkspaceS
 import { useConfirmAction } from "@/features/workspace/hooks/useConfirmAction";
 import { useTauriMenuEvents } from "@/features/workspace/hooks/useTauriMenuEvents";
 import { selectActivePane, selectActiveTab } from "@/features/workspace/selectors";
-import { useWorkspaceStore } from "@/contexts/workspace/store";
-import { useSettingsStore } from "@/contexts/settings/store";
-import { useRuntimeStore } from "@/contexts/runtime/store";
+import { useWorkspaceStore, useSettingsStore, useRuntimeStore } from "@/contexts/stores";
 import type { SetupWizardConfig } from "@/features/workspace/store/types";
 import { applyResolvedTheme, useResolvedTheme } from "@/features/workspace/theme";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
