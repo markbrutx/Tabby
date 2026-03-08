@@ -464,3 +464,37 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - Frontend uses runtime data as primary source, workspace spec as fallback (before first OSC 7 observation)
   - This separation aligns with DDD: workspace owns structure, runtime owns observed state
 ---
+
+## [2026-03-08 23:25] - US-013: Separate structural domain events from content and runtime events
+Thread: 
+Run: 20260308-215923-84117 (iteration 14)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-14.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-14.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 4779342 feat: separate structural domain events from content events (US-013)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (162 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (212 tests across 5 crates)
+- Files changed:
+  - src-tauri/crates/tabby-workspace/src/lib.rs
+  - src-tauri/src/application/runtime_coordinator.rs
+  - src-tauri/src/application/runtime_lifecycle_tests.rs
+  - src-tauri/src/application/workspace_service.rs
+- What was implemented:
+  - Renamed PaneSpecReplaced → PaneContentChanged to reflect content mutation semantics
+  - Categorized WorkspaceDomainEvent variants into structural (PaneAdded, PaneRemoved, ActivePaneChanged, ActiveTabChanged) and content (PaneContentChanged) groups with doc comments
+  - Added `is_runtime_relevant()` method on WorkspaceDomainEvent to formalize which events trigger RuntimeCoordinator actions
+  - Updated RuntimeCoordinator to use PaneContentChanged and reference is_runtime_relevant in classification tests
+  - Added 3 domain-level classification tests (structural_events_are_runtime_relevant_when_they_add_or_remove, content_event_is_runtime_relevant, focus_events_are_not_runtime_relevant)
+  - Updated coordinator tests to use is_runtime_relevant() instead of local helper function
+- **Learnings for future iterations:**
+  - Event rename was purely Rust-side; no frontend references to PaneSpecReplaced existed
+  - The is_runtime_relevant() method centralizes classification logic that was previously duplicated in test helpers
+  - replace_all Edit flag is effective for bulk renames across a single file
+---
