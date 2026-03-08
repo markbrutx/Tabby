@@ -265,3 +265,42 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - RestartPaneRuntime is the one workspace command that bypasses the coordinator — it goes directly to RuntimeApplicationService.restart_runtime() since there's no workspace domain event for restart (the pane spec doesn't change)
   - All runtime infrastructure (PtyManager, browser_surface) is exclusively accessed through RuntimeApplicationService
 ---
+
+## 2026-03-08 22:40 - US-008: Add regression tests for runtime lifecycle flows
+Thread:
+Run: 20260308-215923-84117 (iteration 9)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-9.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-9.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 706d89c test: add regression tests for runtime lifecycle flows (US-008)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (162 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (190 Rust tests: 129 app + 8 runtime + 27 settings + 26 workspace)
+- Files changed:
+  - src-tauri/src/application/runtime_lifecycle_tests.rs (new — 18 regression tests)
+  - src-tauri/src/application/mod.rs (registered test module)
+- What was implemented:
+  - Created dedicated regression test module with 18 tests covering all 7 acceptance criteria:
+    - AC#1: Natural terminal exit (exit code 0, non-zero, unknown) → registry updated → projection emitted (3 tests)
+    - AC#2: Explicit stop_runtime for terminal, browser, and nonexistent pane (3 tests)
+    - AC#3: replace_pane_spec terminal→browser via workspace events + coordinator pattern (1 test)
+    - AC#4: replace_pane_spec browser→terminal via workspace events + coordinator pattern (1 test)
+    - AC#5: restart_runtime stop+start with same spec, both terminal and browser (2 tests)
+    - AC#6: close_tab with multiple panes, mixed types, and cross-tab isolation (3 tests)
+    - AC#7: Tab switch, focus_pane, and rapid tab switching do NOT affect runtimes (3 tests)
+    - End-to-end: Full lifecycle open→split→replace→restart→close + natural exit after tab switch (2 tests)
+  - TestRuntimeService simulates RuntimeApplicationService without Tauri: backed by real RuntimeRegistry, records projection emissions, implements RuntimeObservationReceiver
+  - apply_events helper mirrors RuntimeCoordinator.handle_workspace_events logic
+  - Tests use real WorkspaceSession for event generation (close_tab, replace_pane_spec, set_active_tab, etc.)
+- **Learnings for future iterations:**
+  - The TestRuntimeService pattern (registry + projection recording + observation receiver) is reusable for any future runtime lifecycle tests
+  - Using real WorkspaceSession to generate events ensures tests stay in sync with domain model changes
+  - 18 new tests added (129→147 app tests, 190 total Rust), zero test failures
+  - All tests are pure unit/integration — no Tauri AppHandle needed
+---
