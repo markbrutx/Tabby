@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans:
+    "IBM Plex Sans", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-mono:
+    "IBM Plex Mono", "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+}
+
+:root {
+  --color-border: rgba(252, 232, 217, 0.08);
+  --color-border-strong: rgba(252, 232, 217, 0.16);
+  --color-text: #f8ece2;
+  --color-text-soft: #dcc7ba;
+  --color-text-muted: #b79684;
+  --color-accent: #f2a084;
+  --color-accent-strong: #e97d61;
+  --color-accent-soft: rgba(233, 125, 97, 0.18);
+  --color-danger: #d56a67;
+  --color-danger-strong: #bf5656;
+  --color-danger-soft: rgba(213, 106, 103, 0.14);
+  --color-warning: #d6a06f;
+  --color-surface-overlay: rgba(255, 240, 232, 0.05);
+  --color-surface-hover: rgba(255, 240, 232, 0.1);
+  --color-scrollbar: rgba(255, 240, 232, 0.18);
+  --color-bg: #120b08;
+  --color-surface: #1b120d;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+:root[data-theme="dawn"] {
+  --color-border: rgba(182, 145, 123, 0.24);
+  --color-border-strong: rgba(176, 133, 108, 0.36);
+  --color-text: #5f463b;
+  --color-text-soft: #82665a;
+  --color-text-muted: #aa8571;
+  --color-accent: #ee8f72;
+  --color-accent-strong: #db735b;
+  --color-accent-soft: rgba(219, 115, 91, 0.16);
+  --color-danger: #cf6d63;
+  --color-danger-strong: #b75a56;
+  --color-danger-soft: rgba(207, 109, 99, 0.12);
+  --color-warning: #c38b59;
+  --color-surface-overlay: rgba(255, 255, 255, 0.56);
+  --color-surface-hover: rgba(255, 255, 255, 0.82);
+  --color-scrollbar: rgba(120, 84, 64, 0.26);
+  --color-bg: #ead4c3;
+  --color-surface: #f6e8dc;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100vh;
+}
+
+body {
+  min-width: 1200px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: var(--color-scrollbar);
+}
+
+@layer utilities {
+  .resize-handle {
+    position: relative;
+    background: transparent;
+    transition: background-color 120ms ease;
+  }
+
+  .resize-handle[data-resize-handle-active] {
+    background: var(--color-accent-soft);
+  }
+}
+
+@media (max-width: 1200px) {
+  body {
+    min-width: 100%;
+  }
+}
