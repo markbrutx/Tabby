@@ -190,7 +190,6 @@ impl AppShell {
                     .swap_pane_slots(&pane_id_a, &pane_id_b)?;
             }
             WorkspaceCommand::ReplacePaneSpec(cmd) => {
-                self.runtime_service.stop_runtime(cmd.pane_id.as_ref());
                 let events = self
                     .workspace_service
                     .replace_pane_spec(&cmd.pane_id, cmd.spec)?;

@@ -47,6 +47,7 @@ impl RuntimeCoordinator {
                     )?;
                 }
                 WorkspaceDomainEvent::PaneSpecReplaced { pane_id, spec } => {
+                    runtime_service.stop_runtime(pane_id.as_ref());
                     runtime_service.start_runtime(
                         pane_id.as_ref(),
                         &spec,
@@ -233,8 +234,7 @@ mod tests {
         registry.register_terminal("pane-1", sid("pty-1"));
         assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Terminal));
 
-        // PaneSpecReplaced: old runtime was already stopped by the caller,
-        // coordinator starts new runtime
+        // PaneSpecReplaced: coordinator stops old runtime then starts new one
         let removed = registry.remove("pane-1");
         assert!(removed.is_some());
 
@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn pane_spec_replaced_requires_restart_with_new_spec() {
-        // Verifies: PaneSpecReplaced → start_runtime(new spec)
+        // Verifies: PaneSpecReplaced → coordinator stops old + starts new
         let mut registry = RuntimeRegistry::default();
         registry.register_terminal("pane-1", sid("pty-1"));
 
@@ -349,7 +349,7 @@ mod tests {
             ref spec,
         } = event
         {
-            // Old runtime removed by caller before coordinator sees PaneSpecReplaced
+            // Coordinator stops old runtime before starting new one
             registry.remove(pane_id.as_ref());
             // Coordinator starts new runtime with new spec
             match spec {
@@ -367,6 +367,90 @@ mod tests {
 
         assert_eq!(registry.snapshot().len(), 1);
         assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Browser));
+    }
+
+    // --- AC#5: replace_pane_spec → PaneSpecReplaced → stop old + start new ---
+
+    #[test]
+    fn replace_pane_spec_event_triggers_coordinator_stop_old_then_start_new() {
+        // Simulates the full flow: workspace.replace_pane_spec() emits
+        // PaneSpecReplaced → RuntimeCoordinator handles it by stopping
+        // the old runtime and starting the new one. The shell layer does
+        // NOT manually call stop_runtime before the workspace mutation.
+        let mut registry = RuntimeRegistry::default();
+
+        // 1. Initial state: terminal runtime registered for pane-1
+        let old_session = sid("pty-old");
+        registry.register_terminal("pane-1", old_session.clone());
+        assert_eq!(registry.snapshot().len(), 1);
+        assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Terminal));
+        assert_eq!(
+            registry.terminal_session_id("pane-1"),
+            Some(old_session.clone()),
+        );
+
+        // 2. Workspace emits PaneSpecReplaced (this is what replace_pane_spec returns)
+        let event = WorkspaceDomainEvent::PaneSpecReplaced {
+            pane_id: PaneId::from(String::from("pane-1")),
+            spec: browser_spec("https://example.com"),
+        };
+
+        // 3. Coordinator processes event: stop old → start new
+        //    (mirrors handle_workspace_events logic for PaneSpecReplaced)
+        if let WorkspaceDomainEvent::PaneSpecReplaced {
+            ref pane_id,
+            ref spec,
+        } = event
+        {
+            // a) Stop old runtime — same as runtime_service.stop_runtime()
+            let removed = registry.remove(pane_id.as_ref());
+            assert!(
+                removed.is_some(),
+                "old runtime must be stopped by coordinator"
+            );
+            let removed = removed.expect("already asserted");
+            assert!(
+                matches!(removed.kind, RuntimeKind::Terminal),
+                "removed runtime should be the old terminal"
+            );
+
+            // b) Start new runtime with the replaced spec
+            match spec {
+                tabby_workspace::PaneSpec::Browser(browser) => {
+                    let new_runtime = registry.register_browser(
+                        pane_id.as_ref(),
+                        sid("browser-new"),
+                        browser.initial_url.clone(),
+                    );
+                    assert!(matches!(new_runtime.kind, RuntimeKind::Browser));
+                    assert!(matches!(new_runtime.status, RuntimeStatus::Running));
+                    assert_eq!(
+                        new_runtime.browser_location.as_deref(),
+                        Some("https://example.com"),
+                    );
+                }
+                _ => panic!("expected browser spec in PaneSpecReplaced"),
+            }
+        }
+
+        // 4. Final state: exactly one runtime, browser kind, for pane-1
+        assert_eq!(
+            registry.snapshot().len(),
+            1,
+            "should have exactly one runtime after replace"
+        );
+        let final_runtime = &registry.snapshot()[0];
+        assert_eq!(final_runtime.pane_id, "pane-1");
+        assert!(matches!(final_runtime.kind, RuntimeKind::Browser));
+        assert!(matches!(final_runtime.status, RuntimeStatus::Running));
+
+        // 5. Old terminal runtime is replaced — pane-1 is now a browser
+        let current = registry.get("pane-1");
+        assert!(current.is_some(), "pane-1 should still have a runtime");
+        assert!(
+            matches!(current.expect("asserted").kind, RuntimeKind::Browser),
+            "pane-1 should now be a browser, not the old terminal"
+        );
     }
 
     // --- Failure path tests ---
