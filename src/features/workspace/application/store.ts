@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { asErrorMessage } from "@/app-shell/clients";
 import type {
-  PaneRuntimeView,
   PaneSpecDto,
   SettingsView,
   WorkspaceCommandDto,
@@ -109,7 +108,7 @@ export interface WorkspaceStoreDeps {
   };
   getRuntimeStore: () => {
     getState: () => {
-      loadBootstrap: (runtimes: PaneRuntimeView[]) => void;
+      loadBootstrap: (...args: any[]) => void;
     };
   };
 }

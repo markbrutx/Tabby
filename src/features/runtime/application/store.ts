@@ -3,15 +3,16 @@ import type {
   BrowserLocationObservedEvent,
   PaneRuntimeView,
 } from "@/contracts/tauri-bindings";
-import type { BrowserBounds } from "@/features/runtime/domain/models";
+import type { BrowserBounds, RuntimeReadModel } from "@/features/runtime/domain/models";
 import type { RuntimeClient, UnlistenFn } from "@/app-shell/clients";
 import {
   initDispatcher,
   teardownDispatcher,
 } from "@/features/terminal/ptyOutputDispatcher";
+import { mapRuntimeFromDto } from "@/features/runtime/application/snapshot-mappers";
 
 export interface RuntimeState {
-  runtimes: Record<string, PaneRuntimeView>;
+  runtimes: Record<string, RuntimeReadModel>;
   initializeListeners: () => Promise<void>;
   loadBootstrap: (runtimes: PaneRuntimeView[]) => void;
 
@@ -32,8 +33,8 @@ export interface RuntimeState {
   ) => Promise<UnlistenFn>;
 }
 
-function toRuntimeMap(runtimes: PaneRuntimeView[]): Record<string, PaneRuntimeView> {
-  return Object.fromEntries(runtimes.map((runtime) => [runtime.paneId, runtime]));
+function toRuntimeMap(dtos: PaneRuntimeView[]): Record<string, RuntimeReadModel> {
+  return Object.fromEntries(dtos.map((dto) => [dto.paneId, mapRuntimeFromDto(dto)]));
 }
 
 export function createRuntimeStore(runtimeClient: RuntimeClient) {
@@ -49,7 +50,8 @@ export function createRuntimeStore(runtimeClient: RuntimeClient) {
       }
 
       runtimeListenersReady = Promise.all([
-        runtimeClient.listenStatusChanged((runtime) => {
+        runtimeClient.listenStatusChanged((dto) => {
+          const runtime = mapRuntimeFromDto(dto);
           set((state) => ({
             runtimes: {
               ...state.runtimes,

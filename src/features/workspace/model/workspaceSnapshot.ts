@@ -1,4 +1,3 @@
-import type { PaneRuntimeView } from "@/contracts/tauri-bindings";
 import {
   BROWSER_PROFILE_ID,
   DEFAULT_BROWSER_URL,
@@ -7,7 +6,7 @@ import {
   type WorkspaceReadModel,
 } from "@/features/workspace/domain/models";
 import type { ProfileReadModel } from "@/features/settings/domain/models";
-import type { RuntimeStatus } from "@/features/runtime/domain/models";
+import type { RuntimeReadModel, RuntimeStatus } from "@/features/runtime/domain/models";
 
 export interface PaneSnapshotModel {
   id: string;
@@ -21,7 +20,7 @@ export interface PaneSnapshotModel {
   paneKind: "terminal" | "browser";
   url: string | null;
   spec: PaneSpec;
-  runtime: PaneRuntimeView | null;
+  runtime: RuntimeReadModel | null;
 }
 
 export interface TabSnapshotModel {
@@ -47,7 +46,7 @@ function defaultStartupCommand(profileId: string, profiles: readonly ProfileRead
 
 export function buildWorkspaceSnapshotModel(
   workspace: WorkspaceReadModel | null,
-  runtimes: Record<string, PaneRuntimeView>,
+  runtimes: Record<string, RuntimeReadModel>,
   profiles: readonly ProfileReadModel[],
 ): WorkspaceSnapshotModel | null {
   if (!workspace) {
