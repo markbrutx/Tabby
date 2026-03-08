@@ -232,3 +232,36 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - RuntimeRegistry.terminal_session_id() does not filter by RuntimeKind — it returns any session ID for the pane, so checking kind requires registry.get() instead
   - The coordinator pattern cleanly separates "what happened" (workspace events) from "what to do about it" (runtime lifecycle)
 ---
+
+## 2026-03-08 22:35 - US-007: Route all replace/restart/stop flows through runtime lifecycle use case
+Thread:
+Run: 20260308-215923-84117 (iteration 8)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-8.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-8.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 6fe528b feat: route all replace/restart/stop flows through runtime lifecycle use case (US-007)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (162 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (172 Rust tests: 111 app + 8 runtime + 27 settings + 26 workspace)
+- Files changed:
+  - src-tauri/src/application/runtime_coordinator.rs (added full_lifecycle_split_close_replace integration test)
+- What was implemented:
+  - Verified all 6 acceptance criteria are met — most were already satisfied by US-005 and US-006:
+    - AC#1: replace_pane_spec in AppShell delegates to workspace_service + apply_workspace_events (no manual stop_runtime)
+    - AC#2: restart_pane_runtime calls RuntimeApplicationService.restart_runtime() directly
+    - AC#3: close_pane and close_tab emit PaneRemoved events handled by RuntimeCoordinator.stop_runtime()
+    - AC#4: No direct PtyManager or browser_surface calls in workspace orchestration (shell/mod.rs, workspace_service, bootstrap_service all clean)
+    - AC#5: Added full_lifecycle_split_close_replace integration test covering: split→runtime started, close→runtime stopped, replace→old stopped + new started
+    - AC#6: All quality gates pass
+- **Learnings for future iterations:**
+  - US-007 was primarily a verification/consolidation story — the architecture was already correct from US-005 and US-006
+  - The coordinator pattern fully decouples workspace mutations from runtime lifecycle: workspace emits events, coordinator translates to runtime operations
+  - RestartPaneRuntime is the one workspace command that bypasses the coordinator — it goes directly to RuntimeApplicationService.restart_runtime() since there's no workspace domain event for restart (the pane spec doesn't change)
+  - All runtime infrastructure (PtyManager, browser_surface) is exclusively accessed through RuntimeApplicationService
+---
