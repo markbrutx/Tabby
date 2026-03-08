@@ -421,3 +421,46 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - Frontend didn't need changes because the workspace projection (WorkspaceView) is independent of domain events — events are internal Rust-side
   - close_tab's PaneRemoved now uses filter_map — silently skips panes with missing content instead of using a fallback empty spec
 ---
+
+## 2026-03-08 23:18 - US-012: Remove runtime-observed cwd mutation from workspace domain
+Thread:
+Run: 20260308-215923-84117 (iteration 13)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-13.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-13.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 94b59ab feat: remove runtime-observed cwd mutation from workspace domain (US-012)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (162 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (129 app + 10 runtime + 27 settings + 43 workspace = 209 Rust tests)
+- Files changed:
+  - src-tauri/crates/tabby-runtime/src/lib.rs (added terminal_cwd field to PaneRuntime, update_terminal_cwd method, 2 new tests)
+  - src-tauri/crates/tabby-workspace/src/lib.rs (removed track_terminal_working_directory method and test)
+  - src-tauri/crates/tabby-contracts/src/lib.rs (added terminal_cwd to PaneRuntimeView)
+  - src-tauri/src/application/workspace_service.rs (removed track_terminal_working_directory wrapper and test)
+  - src-tauri/src/application/runtime_service.rs (observe_terminal_cwd now updates runtime registry instead of workspace, removed workspace_service param, updated on_terminal_cwd_changed trait impl, added boundary test)
+  - src-tauri/src/shell/mod.rs (ObserveTerminalCwd no longer emits workspace projection)
+  - src-tauri/src/mapping/dto_mappers.rs (map terminal_cwd in pane_runtime_to_view, updated test PaneRuntime constructions)
+  - src/contracts/tauri-bindings.ts (added terminalCwd to PaneRuntimeView)
+  - src/features/runtime/domain/models.ts (added terminalCwd to RuntimeReadModel)
+  - src/features/workspace/model/workspaceSnapshot.ts (cwd from runtime?.terminalCwd ?? pane.spec.workingDirectory)
+  - src/features/browser/hooks/useBrowserWebview.test.tsx (added terminalCwd to test runtime)
+- What was implemented:
+  - Removed WorkspaceSession.track_terminal_working_directory() — workspace spec retains only the initial launch directory
+  - RuntimeRegistry now owns observed cwd via terminal_cwd: Option<String> on PaneRuntime
+  - RuntimeApplicationService.observe_terminal_cwd() updates runtime registry and emits runtime status, no longer touches workspace
+  - Shell dispatch for ObserveTerminalCwd no longer emits workspace projection — runtime status event suffices
+  - on_terminal_cwd_changed trait impl now updates registry directly (matching on_browser_location_changed pattern)
+  - Frontend snapshot builder reads cwd from runtime?.terminalCwd with fallback to pane.spec.workingDirectory
+  - Added boundary test: cwd_observation_updates_runtime_registry_not_workspace — verifies workspace domain is never mutated
+- **Learnings for future iterations:**
+  - The workspace spec's working_directory now represents the *launch* directory only (immutable after creation)
+  - The runtime's terminal_cwd represents the *observed* directory (mutable via OSC 7)
+  - Frontend uses runtime data as primary source, workspace spec as fallback (before first OSC 7 observation)
+  - This separation aligns with DDD: workspace owns structure, runtime owns observed state
+---
