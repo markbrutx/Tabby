@@ -3,6 +3,41 @@
 ## Codebase Patterns
 - (add reusable patterns here)
 
+## 2026-03-09 00:12 - US-020: Remove PaneRuntimeView from runtime store and workspace composed snapshot
+Thread:
+Run: 20260308-215923-84117 (iteration 21)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-21.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-21.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: bd652a6 feat: remove PaneRuntimeView DTO from runtime store and workspace snapshot (US-020)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (174 frontend tests, including 4 new runtime store tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (237 Rust tests)
+- Files changed:
+  - src/features/runtime/application/store.ts (state type changed to RuntimeReadModel, loadBootstrap and listener map DTOs through mapRuntimeFromDto)
+  - src/features/runtime/application/store.test.ts (NEW — 4 tests: loadBootstrap maps DTOs, empty array, frozen snapshots, listener maps DTOs)
+  - src/features/workspace/model/workspaceSnapshot.ts (PaneSnapshotModel.runtime changed from PaneRuntimeView to RuntimeReadModel, removed DTO import)
+  - src/features/workspace/application/store.ts (removed PaneRuntimeView import, loosened getRuntimeStore dep type)
+- What was implemented:
+  - RuntimeState.runtimes changed from Record<string, PaneRuntimeView> to Record<string, RuntimeReadModel>
+  - loadBootstrap() maps PaneRuntimeView[] through mapRuntimeFromDto (via toRuntimeMap helper) before storing
+  - Runtime status listener maps incoming PaneRuntimeView DTO through mapRuntimeFromDto before updating store
+  - PaneSnapshotModel.runtime type changed from PaneRuntimeView | null to RuntimeReadModel | null
+  - buildWorkspaceSnapshotModel runtimes parameter changed to Record<string, RuntimeReadModel>
+  - PaneRuntimeView imports removed from workspace snapshot model and workspace store
+  - PaneRuntimeView now only imported in: transport clients (shared.ts), mappers (snapshot-mappers.ts), runtime store (mapping boundary), and test files
+- **Learnings for future iterations:**
+  - PaneRuntimeView and RuntimeReadModel have identical field names (both camelCase), so the mapper is structurally a copy — but it's critical for type boundary enforcement
+  - Function parameter contravariance in TypeScript makes typing dependency injection interfaces tricky — using `(...args: any[]) => void` for pass-through bootstrap deps avoids the issue
+  - Browser webview test data was already compatible with RuntimeReadModel shape, no test data changes needed
+---
+
 ## 2026-03-08 23:57 - US-017: Introduce ProjectionPublisherPort and move Tauri emitter to infra
 Thread:
 Run: 20260308-215923-84117 (iteration 18)
