@@ -69,7 +69,7 @@ export function createMockTransport(): WorkspaceTransport {
   return {
     ...createMockWorkspaceTransport(state),
     ...createMockTerminalTransport(terminalState),
-    ...createMockBrowserTransport(),
+    ...createMockBrowserTransport(state),
     ...createMockSettingsTransport(settingsState),
   };
 }

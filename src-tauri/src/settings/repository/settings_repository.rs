@@ -1,7 +1,8 @@
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
-use crate::settings::domain::app_settings::{default_settings, AppSettings};
+use crate::settings::domain::app_settings::{default_settings, normalize_settings, AppSettings};
+use crate::settings::domain::profiles::{is_known_profile_id, CUSTOM_PROFILE_ID};
 use crate::shared::error::TabbyError;
 
 const STORE_PATH: &str = "tabby-settings.json";
@@ -24,8 +25,15 @@ impl SettingsManager {
             .map_err(|error| TabbyError::Store(error.to_string()))?;
 
         if let Some(value) = store.get(SETTINGS_KEY) {
-            return serde_json::from_value::<AppSettings>(value)
-                .map_err(|error| TabbyError::Serialization(error.to_string()));
+            let settings = serde_json::from_value::<AppSettings>(value.clone())
+                .map_err(|error| TabbyError::Serialization(error.to_string()))?;
+            let normalized = normalize_settings(settings);
+            let current = serde_json::from_value::<AppSettings>(value)
+                .map_err(|error| TabbyError::Serialization(error.to_string()))?;
+            if normalized != current {
+                let _ = self.write_settings(&normalized)?;
+            }
+            return Ok(normalized);
         }
 
         let settings = self.default_settings();
@@ -36,8 +44,9 @@ impl SettingsManager {
     }
 
     pub fn update_settings(&self, settings: AppSettings) -> Result<AppSettings, TabbyError> {
-        self.validate_settings(&settings)?;
-        self.write_settings(&settings)
+        let normalized = normalize_settings(settings);
+        self.validate_settings(&normalized)?;
+        self.write_settings(&normalized)
     }
 
     pub fn reset_settings(&self) -> Result<AppSettings, TabbyError> {
@@ -75,7 +84,20 @@ impl SettingsManager {
             )));
         }
 
-        if settings.default_profile_id == "custom"
+        if settings.default_profile_id.trim().is_empty() {
+            return Err(TabbyError::Validation(String::from(
+                "Default profile must not be empty",
+            )));
+        }
+
+        if !is_known_profile_id(&settings.default_profile_id) {
+            return Err(TabbyError::Validation(format!(
+                "Unknown default profile: {}",
+                settings.default_profile_id
+            )));
+        }
+
+        if settings.default_profile_id == CUSTOM_PROFILE_ID
             && settings.default_custom_command.trim().is_empty()
         {
             return Err(TabbyError::Validation(String::from(

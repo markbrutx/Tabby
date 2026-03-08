@@ -14,7 +14,7 @@ use std::sync::Arc;
 use specta_typescript::Typescript;
 use tauri::{Emitter, Manager};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
-use tracing::error;
+use tracing::{error, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::application::coordinator::Coordinator;
@@ -23,7 +23,7 @@ use crate::shared::events::{
     BrowserUrlChangedEvent, PaneLifecycleEvent, PtyOutputEvent, WorkspaceChangedEvent,
 };
 use crate::terminal::service::pty_service::PtyManager;
-use crate::workspace::commands::workspace_commands::LaunchOverrides;
+use crate::workspace::commands::workspace_commands::{apply_cli_launch_request, LaunchOverrides};
 use crate::workspace::domain::layout::SplitNode;
 use crate::workspace::domain::pane::PaneKind;
 use crate::workspace::service::tab_service::TabManager;
@@ -69,6 +69,17 @@ fn specta_builder() -> SpectaBuilder<tauri::Wry> {
         .typ::<BrowserUrlChangedEvent>()
 }
 
+fn focus_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if let Err(error) = window.show() {
+            warn!(?error, "Failed to show main window");
+        }
+        if let Err(error) = window.set_focus() {
+            warn!(?error, "Failed to focus main window");
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(cli_args: CliArgs) {
     init_tracing();
@@ -83,6 +94,20 @@ pub fn run(cli_args: CliArgs) {
     }
 
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            focus_main_window(app);
+
+            match CliArgs::from_argv(&argv) {
+                Ok(parsed_args) => {
+                    if let Err(error) = apply_cli_launch_request(app, parsed_args) {
+                        error!(?error, "Failed to apply routed CLI launch request");
+                    }
+                }
+                Err(error) => {
+                    warn!(?error, ?argv, "Failed to parse routed CLI arguments");
+                }
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .menu(menu::build_menu)

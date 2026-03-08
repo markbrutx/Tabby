@@ -26,4 +26,7 @@ export interface WorkspaceTransportInterface {
   listenToPaneLifecycle: (
     handler: (payload: PaneLifecycleEvent) => void,
   ) => Promise<UnlistenFn>;
+  listenToWorkspaceChanged: (
+    handler: (workspace: WorkspaceSnapshot) => void,
+  ) => Promise<UnlistenFn>;
 }

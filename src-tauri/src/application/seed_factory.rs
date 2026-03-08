@@ -40,16 +40,7 @@ impl SeedFactory {
             request.startup_command.clone(),
             &settings.default_custom_command,
         )?;
-        let fallback_cwd = if settings.default_working_directory.trim().is_empty() {
-            settings.last_working_directory.as_deref().unwrap_or("")
-        } else {
-            &settings.default_working_directory
-        };
-        let cwd = request
-            .cwd
-            .as_deref()
-            .filter(|v| !v.trim().is_empty())
-            .unwrap_or(fallback_cwd);
+        let cwd = Self::resolve_effective_cwd(request.cwd.as_deref(), settings);
 
         let is_browser = resolved.id == BROWSER_PROFILE_ID;
 
@@ -57,9 +48,9 @@ impl SeedFactory {
         for _ in 0..pane_count {
             let pane_id = create_pane_id();
             if is_browser {
-                seeds.push(self.create_browser_seed(pane_id, cwd, None));
+                seeds.push(self.create_browser_seed(pane_id, &cwd, None));
             } else {
-                seeds.push(self.create_terminal_seed(pane_id, cwd, &resolved)?);
+                seeds.push(self.create_terminal_seed(pane_id, &cwd, &resolved)?);
             }
         }
         Ok(seeds)
@@ -68,6 +59,7 @@ impl SeedFactory {
     pub fn seeds_from_pane_configs(
         &self,
         configs: &[PaneConfig],
+        settings: &AppSettings,
         fallback_custom_command: &str,
     ) -> Result<Vec<PaneSeed>, TabbyError> {
         let mut seeds = Vec::with_capacity(configs.len());
@@ -77,21 +69,15 @@ impl SeedFactory {
                 config.startup_command.clone(),
                 fallback_custom_command,
             )?;
-            let cwd = if config.cwd.trim().is_empty() {
-                return Err(TabbyError::Validation(String::from(
-                    "Pane config cwd cannot be empty",
-                )));
-            } else {
-                &config.cwd
-            };
+            let cwd = Self::resolve_effective_cwd(Some(&config.cwd), settings);
 
             let pane_id = create_pane_id();
             let is_browser = resolved.id == BROWSER_PROFILE_ID;
 
             if is_browser {
-                seeds.push(self.create_browser_seed(pane_id, cwd, config.url.clone()));
+                seeds.push(self.create_browser_seed(pane_id, &cwd, config.url.clone()));
             } else {
-                seeds.push(self.create_terminal_seed(pane_id, cwd, &resolved)?);
+                seeds.push(self.create_terminal_seed(pane_id, &cwd, &resolved)?);
             }
         }
         Ok(seeds)
@@ -112,6 +98,26 @@ impl SeedFactory {
                 }
             });
         resolve_profile(profile_id, startup_command)
+    }
+
+    pub fn resolve_effective_cwd(explicit_cwd: Option<&str>, settings: &AppSettings) -> String {
+        explicit_cwd
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(String::from)
+            .or_else(|| {
+                let configured = settings.default_working_directory.trim();
+                (!configured.is_empty()).then(|| configured.to_string())
+            })
+            .or_else(|| {
+                settings
+                    .last_working_directory
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(String::from)
+            })
+            .unwrap_or_else(|| String::from("~"))
     }
 
     pub fn create_terminal_seed(
@@ -189,5 +195,40 @@ impl SeedFactory {
         if let Err(error) = self.app.emit(PANE_LIFECYCLE_EVENT_NAME, event) {
             warn!(?error, "Failed to emit pane lifecycle event");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SeedFactory;
+    use crate::settings::domain::app_settings::default_settings;
+
+    #[test]
+    fn resolve_effective_cwd_prefers_explicit_value() {
+        let mut settings = default_settings();
+        settings.default_working_directory = String::from("/defaults");
+        settings.last_working_directory = Some(String::from("/last"));
+
+        let cwd = SeedFactory::resolve_effective_cwd(Some(" /projects/tabby "), &settings);
+
+        assert_eq!(cwd, "/projects/tabby");
+    }
+
+    #[test]
+    fn resolve_effective_cwd_falls_back_to_default_then_last_then_home() {
+        let mut settings = default_settings();
+        settings.default_working_directory = String::from("  ");
+        settings.last_working_directory = Some(String::from(" /last-known "));
+
+        let cwd = SeedFactory::resolve_effective_cwd(Some(" "), &settings);
+        assert_eq!(cwd, "/last-known");
+
+        settings.last_working_directory = None;
+        let cwd = SeedFactory::resolve_effective_cwd(None, &settings);
+        assert_eq!(cwd, "~");
+
+        settings.default_working_directory = String::from("/configured");
+        let cwd = SeedFactory::resolve_effective_cwd(None, &settings);
+        assert_eq!(cwd, "/configured");
     }
 }

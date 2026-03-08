@@ -133,7 +133,6 @@ export function SettingsModal({
                 }))
               }
             >
-              <option value="">No default (ask each time)</option>
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
                   {profile.label}

@@ -84,7 +84,9 @@ export function useBrowserWebview({
       if (createdRef.current) {
         createdRef.current = false;
         lastBoundsRef.current = null;
-        void bridge.closeBrowserWebview(pane.id).catch(() => undefined);
+        // Browser panes can transiently unmount during layout changes (for example split/remount).
+        // Hide instead of closing so the native webview survives those React tree moves.
+        void bridge.setBrowserWebviewVisible(pane.id, false).catch(() => undefined);
       }
     };
   }, [pane.id, isTauri]);

@@ -17,6 +17,7 @@ export type {
   ThemeMode,
   UpdatePaneCwdRequest,
   UpdatePaneProfileRequest,
+  WorkspaceChangedEvent,
   WorkspaceSnapshot,
 } from "@/lib/tauri-bindings";
 

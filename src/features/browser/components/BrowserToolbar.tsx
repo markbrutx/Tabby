@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, GripVertical, RotateCw, X } from "lucide-react";
+import { GripVertical, RotateCw, X } from "lucide-react";
 import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain";
 import { normalizeUrl } from "@/features/browser/hooks/useBrowserWebview";
 
@@ -80,24 +80,6 @@ export function BrowserToolbar({
         className="shrink-0 cursor-grab text-[var(--color-text-muted)]"
       />
 
-      <button
-        type="button"
-        className="rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
-        title="Back"
-        data-testid="browser-back-btn"
-        disabled
-      >
-        <ArrowLeft size={13} />
-      </button>
-      <button
-        type="button"
-        className="rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
-        title="Forward"
-        data-testid="browser-forward-btn"
-        disabled
-      >
-        <ArrowRight size={13} />
-      </button>
       <button
         type="button"
         className="rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"

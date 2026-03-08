@@ -271,4 +271,26 @@ describe("useBrowserWebview — visibility with modal overlay", () => {
     await act(async () => { vi.advanceTimersByTime(16); });
     expect(mockCreateWebview).toHaveBeenCalledTimes(1);
   });
+
+  it("hides instead of closing the native webview during unmount cleanup", async () => {
+    const pane = makePaneSnapshot();
+    const { unmount } = render(
+      <HookHarness
+        pane={pane}
+        visible={true}
+        modalOpen={false}
+      />,
+    );
+
+    await act(async () => { vi.advanceTimersByTime(16); });
+    expect(mockCreateWebview).toHaveBeenCalledTimes(1);
+
+    mockSetVisible.mockClear();
+    (mockBridge.closeBrowserWebview as Mock).mockClear();
+
+    unmount();
+
+    expect(mockSetVisible).toHaveBeenCalledWith(pane.id, false);
+    expect(mockBridge.closeBrowserWebview).not.toHaveBeenCalled();
+  });
 });

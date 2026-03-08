@@ -4,9 +4,12 @@ import {
   BROWSER_PROFILE_ID,
   CUSTOM_PROFILE_ID,
   type LayoutPreset,
+  type PaneLifecycleEvent,
+  type PaneProfile,
   type SplitPaneRequest,
   type UpdatePaneCwdRequest,
   type UpdatePaneProfileRequest,
+  type WorkspaceSettings,
   type WorkspaceSnapshot,
 } from "@/features/workspace/domain";
 import { asErrorMessage, bridge, type WorkspaceTransport } from "@/lib/bridge";
@@ -67,17 +70,23 @@ async function runWorkspaceMutation(
   try {
     const workspace = await mutation();
     const extra = onSuccess?.(workspace) ?? {};
-    set({ workspace, error: null, isWorking: false, ...extra });
+    set({
+      workspace,
+      error: null,
+      isWorking: false,
+      wizardTab: workspace.tabs.length === 0 ? makeWizardTab(workspace) : null,
+      ...extra,
+    });
   } catch (error) {
     set({ error: asErrorMessage(error), isWorking: false });
   }
 }
 
 interface SettingsAccessor {
-  loadSettings: (settings: import("@/features/workspace/domain").WorkspaceSettings, profiles: import("@/features/workspace/domain").PaneProfile[]) => void;
-  getSettings: () => import("@/features/workspace/domain").WorkspaceSettings | null;
-  getProfiles: () => import("@/features/workspace/domain").PaneProfile[];
-  updateSettings: (settings: import("@/features/workspace/domain").WorkspaceSettings) => Promise<void>;
+  loadSettings: (settings: WorkspaceSettings, profiles: PaneProfile[]) => void;
+  getSettings: () => WorkspaceSettings | null;
+  getProfiles: () => PaneProfile[];
+  updateSettings: (settings: WorkspaceSettings) => Promise<void>;
 }
 
 function createWorkspaceStoreState(
@@ -87,12 +96,12 @@ function createWorkspaceStoreState(
   return (set: SetFn, get: () => WorkspaceStore): WorkspaceStore => {
     let paneLifecycleUnlisten: (() => void) | null = null;
     let paneLifecycleInitPromise: Promise<void> | null = null;
+    let workspaceChangedUnlisten: (() => void) | null = null;
+    let workspaceChangedInitPromise: Promise<void> | null = null;
+    let browserUrlUnlisten: (() => void) | null = null;
+    let browserUrlInitPromise: Promise<void> | null = null;
 
-    const handlePaneLifecycle = (event: {
-      paneId: string;
-      sessionId: string | null;
-      status: WorkspaceSnapshot["tabs"][number]["panes"][number]["status"];
-    }) => {
+    const handlePaneLifecycle = (event: PaneLifecycleEvent) => {
       set((state) => {
         const workspace = state.workspace;
         if (!workspace) {
@@ -116,6 +125,42 @@ function createWorkspaceStoreState(
       });
     };
 
+    const handleWorkspaceChanged = (workspace: WorkspaceSnapshot) => {
+      set({
+        workspace,
+        error: null,
+        wizardTab: workspace.tabs.length === 0 ? makeWizardTab(workspace) : null,
+      });
+    };
+
+    const handleBrowserUrlChanged = (event: { paneId: string; url: string }) => {
+      set((state) => {
+        const workspace = state.workspace;
+        if (!workspace) {
+          return {};
+        }
+
+        let changed = false;
+        const tabs = workspace.tabs.map((tab) => ({
+          ...tab,
+          panes: tab.panes.map((pane) => {
+            if (pane.id !== event.paneId || pane.url === event.url) {
+              return pane;
+            }
+
+            changed = true;
+            return { ...pane, url: event.url };
+          }),
+        }));
+
+        if (!changed) {
+          return {};
+        }
+
+        return { workspace: { ...workspace, tabs } };
+      });
+    };
+
     const ensurePaneLifecycleListener = async () => {
       if (paneLifecycleUnlisten || paneLifecycleInitPromise) {
         await paneLifecycleInitPromise;
@@ -134,6 +179,42 @@ function createWorkspaceStoreState(
       await paneLifecycleInitPromise;
     };
 
+    const ensureWorkspaceChangedListener = async () => {
+      if (workspaceChangedUnlisten || workspaceChangedInitPromise) {
+        await workspaceChangedInitPromise;
+        return;
+      }
+
+      workspaceChangedInitPromise = transport
+        .listenToWorkspaceChanged(handleWorkspaceChanged)
+        .then((unlisten) => {
+          workspaceChangedUnlisten = unlisten;
+        })
+        .finally(() => {
+          workspaceChangedInitPromise = null;
+        });
+
+      await workspaceChangedInitPromise;
+    };
+
+    const ensureBrowserUrlListener = async () => {
+      if (browserUrlUnlisten || browserUrlInitPromise) {
+        await browserUrlInitPromise;
+        return;
+      }
+
+      browserUrlInitPromise = transport
+        .listenToBrowserUrlChanged(handleBrowserUrlChanged)
+        .then((unlisten) => {
+          browserUrlUnlisten = unlisten;
+        })
+        .finally(() => {
+          browserUrlInitPromise = null;
+        });
+
+      await browserUrlInitPromise;
+    };
+
     return {
       workspace: null,
       error: null,
@@ -146,7 +227,11 @@ function createWorkspaceStoreState(
 
         try {
           const payload = await transport.bootstrapWorkspace();
-          await ensurePaneLifecycleListener();
+          await Promise.all([
+            ensurePaneLifecycleListener(),
+            ensureWorkspaceChangedListener(),
+            ensureBrowserUrlListener(),
+          ]);
           settingsStoreAccessor().loadSettings(payload.settings, payload.profiles);
           const shouldShowWizard = payload.workspace.tabs.length === 0;
           set({
@@ -165,128 +250,127 @@ function createWorkspaceStoreState(
         }
       },
 
-    async createTab(preset, overrides = {}) {
-      const settings = settingsStoreAccessor().getSettings();
-      if (!settings) {
-        return;
-      }
-
-      const cwd = overrides.cwd ?? settings.defaultWorkingDirectory;
-      const profileId = overrides.profileId ?? settings.defaultProfileId;
-      const startupCommand =
-        overrides.startupCommand ??
-        (profileId === CUSTOM_PROFILE_ID ? settings.defaultCustomCommand : "");
-
-      await runWorkspaceMutation(set, () =>
-        transport.createTab({
-          preset,
-          cwd,
-          profileId,
-          startupCommand: startupCommand || null,
-        }),
-      );
-    },
-
-    async createTabFromWizard(config) {
-      set({ isWorking: true });
-
-      try {
-        const paneConfigs = config.groups.flatMap((group) => {
-          const isBrowser = group.profileId === BROWSER_PROFILE_ID;
-          return Array.from({ length: group.count }, () => ({
-            profileId: group.profileId,
-            cwd: isBrowser ? (group.workingDirectory || "~") : group.workingDirectory,
-            startupCommand: group.customCommand ?? null,
-            url: isBrowser ? (group.url || null) : null,
-          }));
-        });
-
-        const workspace = await transport.createTab({
-          preset: "1x1",
-          cwd: null,
-          profileId: null,
-          startupCommand: null,
-          paneConfigs,
-        });
-
-        const currentSettings = settingsStoreAccessor().getSettings();
-        if (currentSettings && !currentSettings.hasCompletedOnboarding) {
-          await settingsStoreAccessor().updateSettings({
-            ...currentSettings,
-            hasCompletedOnboarding: true,
-          });
+      async createTab(preset, overrides = {}) {
+        const settings = settingsStoreAccessor().getSettings();
+        if (!settings) {
+          return;
         }
 
-        set({
-          workspace,
-          error: null,
-          isWorking: false,
-          wizardTab: null,
-        });
-      } catch (error) {
-        set({ error: asErrorMessage(error), isWorking: false });
-      }
-    },
+        const cwd = overrides.cwd ?? settings.defaultWorkingDirectory;
+        const profileId = overrides.profileId || settings.defaultProfileId || "terminal";
+        const startupCommand =
+          overrides.startupCommand ??
+          (profileId === CUSTOM_PROFILE_ID ? settings.defaultCustomCommand : "");
 
-    openSetupWizard() {
-      set({ wizardTab: makeWizardTab(get().workspace) });
-    },
+        await runWorkspaceMutation(set, () =>
+          transport.createTab({
+            preset,
+            cwd,
+            profileId,
+            startupCommand: startupCommand || null,
+          }),
+        );
+      },
 
-    closeSetupWizard() {
-      const workspace = get().workspace;
-      if (workspace && workspace.tabs.length === 0) {
-        return;
-      }
-      set({ wizardTab: null });
-    },
+      async createTabFromWizard(config) {
+        set({ isWorking: true });
 
-    async closeTab(tabId) {
-      await runWorkspaceMutation(
-        set,
-        () => transport.closeTab(tabId),
-        (ws) => (ws.tabs.length === 0 ? { wizardTab: makeWizardTab(ws) } : {}),
-      );
-    },
+        try {
+          const currentSettings = settingsStoreAccessor().getSettings();
+          const defaultProfileId = currentSettings?.defaultProfileId || "terminal";
+          const paneConfigs = config.groups.flatMap((group) => {
+            const profileId = group.profileId || defaultProfileId;
+            const customCommand = group.customCommand?.trim() ?? "";
+            if (profileId === CUSTOM_PROFILE_ID && !customCommand) {
+              throw new Error("Custom profile requires a startup command");
+            }
 
-    async setActiveTab(tabId) {
-      await runWorkspaceMutation(set, () => transport.setActiveTab(tabId));
-    },
+            const isBrowser = profileId === BROWSER_PROFILE_ID;
+            return Array.from({ length: group.count }, () => ({
+              profileId,
+              cwd: isBrowser ? (group.workingDirectory || "~") : group.workingDirectory,
+              startupCommand: profileId === CUSTOM_PROFILE_ID ? customCommand : null,
+              url: isBrowser ? (group.url || null) : null,
+            }));
+          });
 
-    async focusPane(tabId, paneId) {
-      await runWorkspaceMutation(set, () => transport.focusPane(tabId, paneId));
-    },
+          const workspace = await transport.createTab({
+            preset: "1x1",
+            cwd: null,
+            profileId: null,
+            startupCommand: null,
+            paneConfigs,
+          });
 
-    async updatePaneProfile(request) {
-      await runWorkspaceMutation(set, () => transport.updatePaneProfile(request));
-    },
+          if (currentSettings && !currentSettings.hasCompletedOnboarding) {
+            await settingsStoreAccessor().updateSettings({
+              ...currentSettings,
+              hasCompletedOnboarding: true,
+            });
+          }
 
-    async updatePaneCwd(request) {
-      await runWorkspaceMutation(set, () => transport.updatePaneCwd(request));
-    },
+          set({
+            workspace,
+            error: null,
+            isWorking: false,
+            wizardTab: workspace.tabs.length === 0 ? makeWizardTab(workspace) : null,
+          });
+        } catch (error) {
+          set({ error: asErrorMessage(error), isWorking: false });
+        }
+      },
 
-    async restartPane(paneId) {
-      await runWorkspaceMutation(set, () => transport.restartPane(paneId));
-    },
+      openSetupWizard() {
+        set({ wizardTab: makeWizardTab(get().workspace) });
+      },
 
-    async splitPane(request) {
-      await runWorkspaceMutation(set, () => transport.splitPane(request));
-    },
+      closeSetupWizard() {
+        const workspace = get().workspace;
+        if (workspace && workspace.tabs.length === 0) {
+          return;
+        }
+        set({ wizardTab: null });
+      },
 
-    async closePane(paneId) {
-      await runWorkspaceMutation(
-        set,
-        () => transport.closePane(paneId),
-        (ws) => (ws.tabs.length === 0 ? { wizardTab: makeWizardTab(ws) } : {}),
-      );
-    },
+      async closeTab(tabId) {
+        await runWorkspaceMutation(set, () => transport.closeTab(tabId));
+      },
 
-    async swapPanes(paneIdA, paneIdB) {
-      await runWorkspaceMutation(set, () => transport.swapPanes(paneIdA, paneIdB));
-    },
+      async setActiveTab(tabId) {
+        await runWorkspaceMutation(set, () => transport.setActiveTab(tabId));
+      },
 
-    clearError() {
-      set({ error: null });
-    },
+      async focusPane(tabId, paneId) {
+        await runWorkspaceMutation(set, () => transport.focusPane(tabId, paneId));
+      },
+
+      async updatePaneProfile(request) {
+        await runWorkspaceMutation(set, () => transport.updatePaneProfile(request));
+      },
+
+      async updatePaneCwd(request) {
+        await runWorkspaceMutation(set, () => transport.updatePaneCwd(request));
+      },
+
+      async restartPane(paneId) {
+        await runWorkspaceMutation(set, () => transport.restartPane(paneId));
+      },
+
+      async splitPane(request) {
+        await runWorkspaceMutation(set, () => transport.splitPane(request));
+      },
+
+      async closePane(paneId) {
+        await runWorkspaceMutation(set, () => transport.closePane(paneId));
+      },
+
+      async swapPanes(paneIdA, paneIdB) {
+        await runWorkspaceMutation(set, () => transport.swapPanes(paneIdA, paneIdB));
+      },
+
+      clearError() {
+        set({ error: null });
+      },
     };
   };
 }

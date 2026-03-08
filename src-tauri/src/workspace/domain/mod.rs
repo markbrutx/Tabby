@@ -27,14 +27,14 @@ mod tests {
     }
 
     #[test]
-    fn launch_request_returns_none_when_defaults_are_empty() {
+    fn launch_request_uses_default_terminal_profile() {
         let settings = default_settings();
         let request = LaunchRequest::from_cli_args(CliArgs::default(), &settings)
             .expect("launch request should be created");
 
         assert_eq!(request.preset, LayoutPreset::OneByOne);
         assert_eq!(request.cwd, None);
-        assert_eq!(request.profile_id, None);
+        assert_eq!(request.profile_id.as_deref(), Some("terminal"));
     }
 
     #[test]

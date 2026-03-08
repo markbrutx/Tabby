@@ -241,8 +241,17 @@ impl TabManager {
         session_id: String,
         resolved: crate::settings::domain::profiles::ResolvedProfile,
         cwd: String,
+        status: PaneRuntimeStatus,
     ) -> Result<WorkspaceSnapshot, TabbyError> {
-        self.replace_pane_full(pane_id, session_id, resolved, cwd, PaneKind::Terminal, None)
+        self.replace_pane_full(
+            pane_id,
+            session_id,
+            resolved,
+            cwd,
+            PaneKind::Terminal,
+            None,
+            status,
+        )
     }
 
     pub fn replace_pane_full(
@@ -253,6 +262,7 @@ impl TabManager {
         cwd: String,
         pane_kind: PaneKind,
         url: Option<String>,
+        status: PaneRuntimeStatus,
     ) -> Result<WorkspaceSnapshot, TabbyError> {
         let mut state = self.lock_state()?;
 
@@ -270,6 +280,25 @@ impl TabManager {
         pane.cwd = cwd;
         pane.pane_kind = pane_kind;
         pane.url = url;
+        pane.status = status;
+
+        Ok(Self::workspace_snapshot(&state))
+    }
+
+    pub fn set_pane_status(
+        &self,
+        pane_id: &str,
+        status: PaneRuntimeStatus,
+    ) -> Result<WorkspaceSnapshot, TabbyError> {
+        let mut state = self.lock_state()?;
+        let pane = state
+            .tabs
+            .iter_mut()
+            .flat_map(|tab| tab.panes.iter_mut())
+            .find(|pane| pane.id == pane_id)
+            .ok_or_else(|| TabbyError::NotFound(format!("Pane {pane_id}")))?;
+
+        pane.status = status;
 
         Ok(Self::workspace_snapshot(&state))
     }
@@ -371,9 +400,11 @@ impl TabManager {
 #[cfg(test)]
 mod tests {
     use super::TabManager;
+    use crate::settings::domain::profiles::ResolvedProfile;
     use crate::workspace::domain::layout::presets::tree_from_preset;
     use crate::workspace::domain::layout::{LayoutPreset, SplitDirection};
     use crate::workspace::domain::pane::PaneSeed;
+    use crate::workspace::domain::snapshot::PaneRuntimeStatus;
 
     fn pane_seed(id: &str) -> PaneSeed {
         PaneSeed {
@@ -538,5 +569,61 @@ mod tests {
 
         assert!(removed_tab.is_some());
         assert!(snapshot.tabs.is_empty());
+    }
+
+    #[test]
+    fn set_pane_status_updates_runtime_without_replacing_session() {
+        let manager = TabManager::new();
+        let seeds = vec![pane_seed("a")];
+        let ids: Vec<String> = seeds.iter().map(|s| s.pane_id.clone()).collect();
+        manager
+            .create_tab(tree_from_preset(LayoutPreset::OneByOne, &ids), seeds)
+            .expect("tab created");
+
+        let snapshot = manager
+            .set_pane_status("pane-a", PaneRuntimeStatus::Restarting)
+            .expect("status update should succeed");
+
+        let pane = &snapshot.tabs[0].panes[0];
+        assert_eq!(pane.status, PaneRuntimeStatus::Restarting);
+        assert_eq!(pane.session_id, "session-a");
+    }
+
+    #[test]
+    fn replace_pane_full_updates_runtime_fields_and_status() {
+        let manager = TabManager::new();
+        let seeds = vec![pane_seed("a")];
+        let ids: Vec<String> = seeds.iter().map(|s| s.pane_id.clone()).collect();
+        manager
+            .create_tab(tree_from_preset(LayoutPreset::OneByOne, &ids), seeds)
+            .expect("tab created");
+
+        let snapshot = manager
+            .replace_pane_full(
+                "pane-a",
+                String::from("browser-session-1"),
+                ResolvedProfile {
+                    id: String::from("browser"),
+                    label: String::from("Browser"),
+                    startup_command: None,
+                },
+                String::from("/tmp/browser"),
+                crate::workspace::domain::pane::PaneKind::Browser,
+                Some(String::from("https://example.com")),
+                PaneRuntimeStatus::Running,
+            )
+            .expect("replace should succeed");
+
+        let pane = &snapshot.tabs[0].panes[0];
+        assert_eq!(pane.session_id, "browser-session-1");
+        assert_eq!(pane.profile_id, "browser");
+        assert_eq!(pane.profile_label, "Browser");
+        assert_eq!(pane.cwd, "/tmp/browser");
+        assert_eq!(pane.status, PaneRuntimeStatus::Running);
+        assert_eq!(
+            pane.pane_kind,
+            crate::workspace::domain::pane::PaneKind::Browser
+        );
+        assert_eq!(pane.url.as_deref(), Some("https://example.com"));
     }
 }

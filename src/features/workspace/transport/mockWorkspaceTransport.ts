@@ -1,4 +1,5 @@
 import {
+  BROWSER_PROFILE_ID,
   type BootstrapSnapshot,
   type NewTabRequest,
   type PaneLifecycleEvent,
@@ -30,6 +31,42 @@ import {
 
 export { createMockState, MOCK_DEFAULT_SETTINGS } from "./mockWorkspaceState";
 
+function resolveEffectiveCwd(state: MockState, cwd?: string | null): string {
+  const explicit = cwd?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const configured = state.settings.defaultWorkingDirectory.trim();
+  if (configured) {
+    return configured;
+  }
+
+  const last = state.settings.lastWorkingDirectory?.trim();
+  if (last) {
+    return last;
+  }
+
+  return "~";
+}
+
+function resolveEffectiveProfileId(state: MockState, profileId?: string | null): string {
+  const explicit = profileId?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  return state.settings.defaultProfileId || "terminal";
+}
+
+function publishWorkspace(state: MockState, workspace: WorkspaceSnapshot): WorkspaceSnapshot {
+  for (const listener of state.workspaceListeners) {
+    listener(workspace);
+  }
+
+  return workspace;
+}
+
 export function createMockWorkspaceTransport(
   state: MockState,
 ): WorkspaceTransportInterface {
@@ -41,8 +78,8 @@ export function createMockWorkspaceTransport(
           state.settings.defaultLayout,
           uniformSlots(
             state.settings.defaultLayout,
-            state.settings.defaultWorkingDirectory || "~",
-            state.settings.defaultProfileId || "terminal",
+            resolveEffectiveCwd(state),
+            resolveEffectiveProfileId(state),
             null,
           ),
         );
@@ -65,18 +102,18 @@ export function createMockWorkspaceTransport(
       const hasPaneConfigs = request.paneConfigs && request.paneConfigs.length > 0;
       const slots = hasPaneConfigs
         ? request.paneConfigs!.map((cfg) => ({
-            cwd: cfg.cwd,
-            profileId: cfg.profileId,
+            cwd: resolveEffectiveCwd(state, cfg.cwd),
+            profileId: resolveEffectiveProfileId(state, cfg.profileId),
             startupCommand: cfg.startupCommand,
             url: cfg.url,
           }))
         : uniformSlots(
             request.preset,
-            request.cwd ?? state.settings.defaultWorkingDirectory,
-            request.profileId ?? state.settings.defaultProfileId,
+            resolveEffectiveCwd(state, request.cwd),
+            resolveEffectiveProfileId(state, request.profileId),
             request.startupCommand ?? null,
           );
-      return addTab(state, request.preset, slots, !!hasPaneConfigs);
+      return publishWorkspace(state, addTab(state, request.preset, slots, !!hasPaneConfigs));
     },
 
     async closeTab(tabId: string): Promise<WorkspaceSnapshot> {
@@ -84,29 +121,29 @@ export function createMockWorkspaceTransport(
       state.tabs = state.tabs.filter((_, i) => i !== index);
 
       if (state.tabs.length === 0) {
-        return addTab(
+        return publishWorkspace(state, addTab(
           state,
           state.settings.defaultLayout,
           uniformSlots(
             state.settings.defaultLayout,
-            state.settings.defaultWorkingDirectory,
-            state.settings.defaultProfileId,
+            resolveEffectiveCwd(state),
+            resolveEffectiveProfileId(state),
             null,
           ),
-        );
+        ));
       }
 
       if (state.activeTabId === tabId) {
         state.activeTabId = state.tabs[Math.max(0, index - 1)].id;
       }
 
-      return snapshot(state);
+      return publishWorkspace(state, snapshot(state));
     },
 
     async setActiveTab(tabId: string): Promise<WorkspaceSnapshot> {
       findTabIndex(state, tabId);
       state.activeTabId = tabId;
-      return snapshot(state);
+      return publishWorkspace(state, snapshot(state));
     },
 
     async focusPane(tabId: string, paneId: string): Promise<WorkspaceSnapshot> {
@@ -120,7 +157,7 @@ export function createMockWorkspaceTransport(
         i === ti ? { ...t, activePaneId: paneId } : t,
       );
       state.activeTabId = tabId;
-      return snapshot(state);
+      return publishWorkspace(state, snapshot(state));
     },
 
     async updatePaneProfile(
@@ -128,7 +165,13 @@ export function createMockWorkspaceTransport(
     ): Promise<WorkspaceSnapshot> {
       const { tabIndex, paneIndex } = findPane(state, request.paneId);
       const resolved = resolveProfile(request.profileId, request.startupCommand);
-      const newSessionId = nextId("session");
+      const previousPane = state.tabs[tabIndex].panes[paneIndex];
+      const switchingToBrowser = resolved.id === BROWSER_PROFILE_ID;
+      const newSessionId = switchingToBrowser
+        ? previousPane.paneKind === "browser"
+          ? previousPane.sessionId
+          : nextId("browser")
+        : nextId("session");
 
       state.tabs = state.tabs.map((tab, ti) =>
         ti === tabIndex
@@ -142,6 +185,8 @@ export function createMockWorkspaceTransport(
                       profileId: resolved.id,
                       profileLabel: resolved.label,
                       startupCommand: resolved.startupCommand,
+                      paneKind: switchingToBrowser ? "browser" as const : "terminal" as const,
+                      url: switchingToBrowser ? (pane.url ?? "https://google.com") : null,
                       status: "running" as const,
                     }
                   : pane,
@@ -150,23 +195,42 @@ export function createMockWorkspaceTransport(
           : tab,
       );
 
-      const pane = state.tabs[tabIndex].panes[paneIndex];
-      setTimeout(() => {
-        emitMockOutput(
-          state,
-          pane.id,
-          newSessionId,
-          `\x1b[36m${resolved.label}\x1b[0m profile applied\r\n\x1b[32m\u279c\x1b[0m  `,
-        );
-      }, 50);
+      if (!switchingToBrowser) {
+        const pane = state.tabs[tabIndex].panes[paneIndex];
+        setTimeout(() => {
+          emitMockOutput(
+            state,
+            pane.id,
+            newSessionId,
+            `\x1b[36m${resolved.label}\x1b[0m profile applied\r\n\x1b[32m\u279c\x1b[0m  `,
+          );
+        }, 50);
+      }
 
-      return snapshot(state);
+      return publishWorkspace(state, snapshot(state));
     },
 
     async updatePaneCwd(
       request: UpdatePaneCwdRequest,
     ): Promise<WorkspaceSnapshot> {
       const { tabIndex, paneIndex } = findPane(state, request.paneId);
+      const nextCwd = resolveEffectiveCwd(state, request.cwd);
+      const pane = state.tabs[tabIndex].panes[paneIndex];
+      if (pane.paneKind === "browser") {
+        state.tabs = state.tabs.map((tab, ti) =>
+          ti === tabIndex
+            ? {
+                ...tab,
+                panes: tab.panes.map((candidate, pi) =>
+                  pi === paneIndex ? { ...candidate, cwd: nextCwd } : candidate,
+                ),
+              }
+            : tab,
+        );
+
+        return publishWorkspace(state, snapshot(state));
+      }
+
       const newSessionId = nextId("session");
 
       state.tabs = state.tabs.map((tab, ti) =>
@@ -178,7 +242,7 @@ export function createMockWorkspaceTransport(
                   ? {
                       ...pane,
                       sessionId: newSessionId,
-                      cwd: request.cwd,
+                      cwd: nextCwd,
                       status: "running" as const,
                     }
                   : pane,
@@ -187,21 +251,26 @@ export function createMockWorkspaceTransport(
           : tab,
       );
 
-      const pane = state.tabs[tabIndex].panes[paneIndex];
+      const updatedPane = state.tabs[tabIndex].panes[paneIndex];
       setTimeout(() => {
         emitMockOutput(
           state,
-          pane.id,
+          updatedPane.id,
           newSessionId,
-          `\x1b[33mcd ${request.cwd}\x1b[0m\r\n\x1b[32m\u279c\x1b[0m  `,
+          `\x1b[33mcd ${nextCwd}\x1b[0m\r\n\x1b[32m\u279c\x1b[0m  `,
         );
       }, 50);
 
-      return snapshot(state);
+      return publishWorkspace(state, snapshot(state));
     },
 
     async restartPane(paneId: string): Promise<WorkspaceSnapshot> {
       const { tabIndex, paneIndex } = findPane(state, paneId);
+      const restartingPane = state.tabs[tabIndex].panes[paneIndex];
+      if (restartingPane.paneKind === "browser") {
+        return snapshot(state);
+      }
+
       const newSessionId = nextId("session");
 
       state.tabs = state.tabs.map((tab, ti) =>
@@ -217,17 +286,17 @@ export function createMockWorkspaceTransport(
           : tab,
       );
 
-      const pane = state.tabs[tabIndex].panes[paneIndex];
+      const restartedPane = state.tabs[tabIndex].panes[paneIndex];
       setTimeout(() => {
         emitMockOutput(
           state,
-          pane.id,
+          restartedPane.id,
           newSessionId,
           `\x1b[90m[mock] Session restarted\x1b[0m\r\n\x1b[32m\u279c\x1b[0m  `,
         );
       }, 50);
 
-      return snapshot(state);
+      return publishWorkspace(state, snapshot(state));
     },
 
     async splitPane(request: SplitPaneRequest): Promise<WorkspaceSnapshot> {
@@ -236,10 +305,16 @@ export function createMockWorkspaceTransport(
       const sourcePaneIndex = tab.panes.findIndex((p) => p.id === request.paneId);
       const sourcePane = tab.panes[sourcePaneIndex];
 
-      const profileId = request.profileId ?? sourcePane.profileId;
-      const cwd = request.cwd ?? sourcePane.cwd;
+      const profileId = resolveEffectiveProfileId(state, request.profileId ?? sourcePane.profileId);
+      const cwd = request.cwd?.trim() ? request.cwd.trim() : sourcePane.cwd;
       const startupCommand = request.startupCommand ?? sourcePane.startupCommand;
-      const newPane = createPane(cwd, profileId, startupCommand, tab.panes.length);
+      const newPane = createPane(
+        cwd,
+        profileId,
+        startupCommand,
+        tab.panes.length,
+        profileId === BROWSER_PROFILE_ID ? sourcePane.url : null,
+      );
 
       const newLayout = treeSplitPane(tab.layout, request.paneId, request.direction, newPane.id);
       if (!newLayout) {
@@ -262,7 +337,7 @@ export function createMockWorkspaceTransport(
         );
       }, 80);
 
-      return snapshot(state);
+      return publishWorkspace(state, snapshot(state));
     },
 
     async closePane(paneId: string): Promise<WorkspaceSnapshot> {
@@ -279,23 +354,23 @@ export function createMockWorkspaceTransport(
         state.tabs = state.tabs.filter((_, i) => i !== tabIndex);
 
         if (state.tabs.length === 0) {
-          return addTab(
+          return publishWorkspace(state, addTab(
             state,
             state.settings.defaultLayout,
             uniformSlots(
               state.settings.defaultLayout,
-              state.settings.defaultWorkingDirectory,
-              state.settings.defaultProfileId,
+              resolveEffectiveCwd(state),
+              resolveEffectiveProfileId(state),
               null,
             ),
-          );
+          ));
         }
 
         if (state.activeTabId === tab.id) {
           state.activeTabId = state.tabs[Math.max(0, tabIndex - 1)].id;
         }
 
-        return snapshot(state);
+        return publishWorkspace(state, snapshot(state));
       }
 
       const newPanes = tab.panes.filter((p) => p.id !== paneId);
@@ -309,7 +384,7 @@ export function createMockWorkspaceTransport(
           : t,
       );
 
-      return snapshot(state);
+      return publishWorkspace(state, snapshot(state));
     },
 
     async swapPanes(paneIdA: string, paneIdB: string): Promise<WorkspaceSnapshot> {
@@ -332,7 +407,7 @@ export function createMockWorkspaceTransport(
         i === tabIndex ? { ...t, layout: newLayout } : t,
       );
 
-      return snapshot(state);
+      return publishWorkspace(state, snapshot(state));
     },
 
     async listenToPaneLifecycle(
@@ -341,6 +416,15 @@ export function createMockWorkspaceTransport(
       state.lifecycleListeners = [...state.lifecycleListeners, handler];
       return () => {
         state.lifecycleListeners = state.lifecycleListeners.filter((h) => h !== handler);
+      };
+    },
+
+    async listenToWorkspaceChanged(
+      handler: (workspace: WorkspaceSnapshot) => void,
+    ): Promise<UnlistenFn> {
+      state.workspaceListeners = [...state.workspaceListeners, handler];
+      return () => {
+        state.workspaceListeners = state.workspaceListeners.filter((h) => h !== handler);
       };
     },
   };

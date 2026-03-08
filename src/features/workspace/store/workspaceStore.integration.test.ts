@@ -255,4 +255,47 @@ describe("workspaceStore + mockTransport integration", () => {
     const tab = store.getState().workspace!.tabs[0];
     expect(tab.panes).toHaveLength(1);
   });
+
+  it("syncs browser url changes into workspace state", async () => {
+    const { store, transport } = await setup();
+    await store.getState().initialize();
+
+    await store.getState().updatePaneProfile({
+      paneId: store.getState().workspace!.tabs[0].panes[0].id,
+      profileId: "browser",
+      startupCommand: null,
+    });
+
+    const pane = store.getState().workspace!.tabs[0].panes[0];
+    await transport.navigateBrowser(pane.id, "https://docs.rs");
+
+    expect(store.getState().workspace!.tabs[0].panes[0].url).toBe("https://docs.rs");
+  });
+
+  it("split browser pane inherits the current url", async () => {
+    const { store, transport } = await setup();
+    await store.getState().initialize();
+
+    const firstPaneId = store.getState().workspace!.tabs[0].panes[0].id;
+    await store.getState().updatePaneProfile({
+      paneId: firstPaneId,
+      profileId: "browser",
+      startupCommand: null,
+    });
+
+    const browserPane = store.getState().workspace!.tabs[0].panes[0];
+    await transport.navigateBrowser(browserPane.id, "https://rust-lang.org");
+
+    await store.getState().splitPane({
+      paneId: browserPane.id,
+      direction: "horizontal",
+      profileId: "browser",
+      startupCommand: null,
+      cwd: null,
+    });
+
+    const tab = store.getState().workspace!.tabs[0];
+    expect(tab.panes).toHaveLength(2);
+    expect(tab.panes[1].url).toBe("https://rust-lang.org");
+  });
 });

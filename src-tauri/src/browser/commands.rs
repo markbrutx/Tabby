@@ -69,6 +69,26 @@ pub fn create_browser_webview(
         .parse()
         .map_err(|err| TabbyError::Validation(format!("Invalid URL: {err}")))?;
 
+    let position = child_webview_position(&window, x, y)?;
+    let size = tauri::Size::Logical(tauri::LogicalSize::new(width, height));
+
+    if let Some(existing) = window.get_webview(&label) {
+        existing
+            .set_position(position)
+            .map_err(|err| TabbyError::Io(format!("Failed to set position: {err}")))?;
+
+        existing
+            .set_size(size)
+            .map_err(|err| TabbyError::Io(format!("Failed to set size: {err}")))?;
+
+        existing
+            .show()
+            .map_err(|err| TabbyError::Io(format!("Failed to show webview: {err}")))?;
+
+        info!(label, "Browser webview reused");
+        return Ok(());
+    }
+
     let webview_url = tauri::WebviewUrl::External(parsed_url);
 
     let app_handle = window.app_handle().clone();
@@ -86,9 +106,6 @@ pub fn create_browser_webview(
             true
         },
     );
-
-    let position = child_webview_position(&window, x, y)?;
-    let size = tauri::Size::Logical(tauri::LogicalSize::new(width, height));
 
     window
         .add_child(builder, position, size)

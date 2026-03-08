@@ -1,7 +1,9 @@
 import {
   BROWSER_PROFILE_ID,
+  DEFAULT_BROWSER_URL,
   CUSTOM_PROFILE_ID,
   type LayoutPreset,
+  type BrowserUrlChangedEvent,
   type PaneKind,
   type PaneLifecycleEvent,
   type PaneProfile,
@@ -19,7 +21,7 @@ import {
 
 export const MOCK_DEFAULT_SETTINGS: WorkspaceSettings = {
   defaultLayout: "1x1",
-  defaultProfileId: "",
+  defaultProfileId: "terminal",
   defaultWorkingDirectory: "",
   defaultCustomCommand: "",
   fontSize: 13,
@@ -63,7 +65,7 @@ export const BUILT_IN_PROFILES: PaneProfile[] = [
   {
     id: BROWSER_PROFILE_ID,
     label: "Browser",
-    description: "Launch Google Chrome with a specific profile and URL",
+    description: "Open an embedded browser pane inside Tabby",
     startupCommand: null,
   },
 ];
@@ -77,11 +79,23 @@ export function resolveProfile(
     return { id: profileId, label: profileId, startupCommand };
   }
 
+  if (profile.id === CUSTOM_PROFILE_ID) {
+    const command = startupCommand?.trim() ?? "";
+    if (!command) {
+      throw new Error("Custom profile requires a startup command");
+    }
+
+    return {
+      id: profile.id,
+      label: profile.label,
+      startupCommand: command,
+    };
+  }
+
   return {
     id: profile.id,
     label: profile.label,
-    startupCommand:
-      profile.id === CUSTOM_PROFILE_ID ? startupCommand : profile.startupCommand,
+    startupCommand: profile.startupCommand,
   };
 }
 
@@ -106,7 +120,7 @@ export function createPane(
     startupCommand: resolved.startupCommand,
     status: "running",
     paneKind,
-    url: isBrowser ? (url ?? null) : null,
+    url: isBrowser ? (url ?? DEFAULT_BROWSER_URL) : null,
   };
 }
 
@@ -148,6 +162,8 @@ export interface MockState {
   nextTabIndex: number;
   outputListeners: Array<(payload: PtyOutputEvent) => void>;
   lifecycleListeners: Array<(payload: PaneLifecycleEvent) => void>;
+  workspaceListeners: Array<(payload: WorkspaceSnapshot) => void>;
+  browserUrlListeners: Array<(payload: BrowserUrlChangedEvent) => void>;
 }
 
 export function snapshot(state: MockState): WorkspaceSnapshot {
@@ -207,6 +223,8 @@ export function createMockState(): MockState {
     nextTabIndex: 1,
     outputListeners: [],
     lifecycleListeners: [],
+    workspaceListeners: [],
+    browserUrlListeners: [],
   };
 }
 

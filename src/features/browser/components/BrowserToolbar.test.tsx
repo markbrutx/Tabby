@@ -35,13 +35,13 @@ describe("BrowserToolbar", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 2. Renders nav buttons (back, forward, reload)
+  // 2. Renders only the supported controls for v1
   // -----------------------------------------------------------------------
-  it("renders back, forward, and reload buttons", () => {
+  it("renders reload button without back and forward placeholders", () => {
     renderToolbar();
-    expect(screen.getByTestId("browser-back-btn")).toBeTruthy();
-    expect(screen.getByTestId("browser-forward-btn")).toBeTruthy();
     expect(screen.getByTestId("browser-reload-btn")).toBeTruthy();
+    expect(screen.queryByTestId("browser-back-btn")).toBeNull();
+    expect(screen.queryByTestId("browser-forward-btn")).toBeNull();
   });
 
   // -----------------------------------------------------------------------

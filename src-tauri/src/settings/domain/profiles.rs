@@ -58,10 +58,16 @@ pub fn built_in_profiles() -> Vec<PaneProfile> {
         PaneProfile {
             id: String::from(BROWSER_PROFILE_ID),
             label: String::from("Browser"),
-            description: String::from("Launch Google Chrome with a specific profile and URL"),
+            description: String::from("Open an embedded browser pane inside Tabby"),
             startup_command: None,
         },
     ]
+}
+
+pub fn is_known_profile_id(profile_id: &str) -> bool {
+    built_in_profiles()
+        .into_iter()
+        .any(|candidate| candidate.id == profile_id)
 }
 
 pub fn resolve_profile(

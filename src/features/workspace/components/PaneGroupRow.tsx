@@ -73,7 +73,6 @@ export function PaneGroupRow({
             onChange={(e) => onChange({ profileId: e.target.value })}
             className="text-sm"
           >
-            <option value="">Select profile...</option>
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}

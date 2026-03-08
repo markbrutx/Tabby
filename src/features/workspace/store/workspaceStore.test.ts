@@ -80,6 +80,7 @@ function createTransportMock(overrides: Partial<WorkspaceTransport> = {}): Works
     resetAppSettings: vi.fn().mockResolvedValue(settings),
     listenToPtyOutput: vi.fn().mockResolvedValue(() => undefined),
     listenToPaneLifecycle: vi.fn().mockResolvedValue(() => undefined),
+    listenToWorkspaceChanged: vi.fn().mockResolvedValue(() => undefined),
     trackPaneCwd: vi.fn().mockResolvedValue(undefined),
     swapPanes: vi.fn().mockResolvedValue(workspace),
     createBrowserWebview: vi.fn().mockResolvedValue(undefined),
@@ -317,6 +318,89 @@ describe("createWorkspaceStore", () => {
     expect(transport.focusPane).toHaveBeenCalledWith("tab-1", "pane-1");
     expect(transport.closeTab).toHaveBeenCalledWith("tab-1");
     expect(store.getState().workspace?.activeTabId).toBe("tab-2");
+  });
+
+  it("workspace-changed listener replaces workspace and clears wizard tab", async () => {
+    const handler: { current: ((workspace: WorkspaceSnapshot) => void) | null } = { current: null };
+    const externalWorkspace: WorkspaceSnapshot = {
+      activeTabId: "tab-2",
+      tabs: [
+        {
+          id: "tab-2",
+          title: "Workspace 2",
+          layout: singleLayout,
+          activePaneId: "pane-2",
+          panes: [
+            {
+              id: "pane-2",
+              sessionId: "session-2",
+              title: "Pane 1",
+              cwd: "/external",
+              profileId: "browser",
+              profileLabel: "Browser",
+              startupCommand: null,
+              status: "running",
+              paneKind: "browser",
+              url: "https://docs.rs",
+            },
+          ],
+        },
+      ],
+    };
+    const transport = createTransportMock({
+      listenToWorkspaceChanged: vi.fn(async (listener: (next: WorkspaceSnapshot) => void) => {
+        handler.current = listener;
+        return () => { handler.current = null; };
+      }),
+    });
+    const store = createWorkspaceStore(transport);
+
+    await store.getState().initialize();
+    store.getState().openSetupWizard();
+
+    handler.current?.(externalWorkspace);
+
+    expect(store.getState().workspace).toEqual(externalWorkspace);
+    expect(store.getState().wizardTab).toBeNull();
+  });
+
+  it("browser-url-changed listener updates pane url in workspace state", async () => {
+    const handler: { current: ((event: { paneId: string; url: string }) => void) | null } = {
+      current: null,
+    };
+    const browserWorkspace: WorkspaceSnapshot = {
+      activeTabId: "tab-1",
+      tabs: [
+        {
+          ...workspace.tabs[0],
+          panes: [
+            {
+              ...workspace.tabs[0].panes[0],
+              paneKind: "browser",
+              profileId: "browser",
+              profileLabel: "Browser",
+              url: "https://example.com",
+            },
+          ],
+        },
+      ],
+    };
+    const transport = createTransportMock({
+      bootstrapWorkspace: vi.fn().mockResolvedValue({
+        ...bootstrapPayload,
+        workspace: browserWorkspace,
+      }),
+      listenToBrowserUrlChanged: vi.fn(async (listener: (event: { paneId: string; url: string }) => void) => {
+        handler.current = listener;
+        return () => { handler.current = null; };
+      }),
+    });
+    const store = createWorkspaceStore(transport);
+
+    await store.getState().initialize();
+    handler.current?.({ paneId: "pane-1", url: "https://rust-lang.org" });
+
+    expect(store.getState().workspace?.tabs[0].panes[0].url).toBe("https://rust-lang.org");
   });
 
   it("reuses the existing lifecycle subscription across repeated initialize calls", async () => {

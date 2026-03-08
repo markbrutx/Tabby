@@ -2,12 +2,30 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
-import type { PaneProfile, WorkspaceSettings } from "@/features/workspace/domain";
+import {
+  CUSTOM_PROFILE_ID,
+  type PaneProfile,
+  type WorkspaceSettings,
+} from "@/features/workspace/domain";
 import type { PaneGroupConfig, SetupWizardConfig } from "@/features/workspace/store/types";
 import { LayoutPreview } from "./LayoutPreview";
 import { PaneGroupRow } from "./PaneGroupRow";
 
 const MAX_PANES = 9;
+
+function resolveDefaultProfileId(
+  settings: WorkspaceSettings,
+  profiles: PaneProfile[],
+): string {
+  const configured = settings.defaultProfileId?.trim();
+  if (configured && profiles.some((profile) => profile.id === configured)) {
+    return configured;
+  }
+
+  return profiles.find((profile) => profile.id === "terminal")?.id
+    ?? profiles[0]?.id
+    ?? "terminal";
+}
 
 interface WorkspaceSetupWizardProps {
   profiles: PaneProfile[];
@@ -17,9 +35,12 @@ interface WorkspaceSetupWizardProps {
   onCancel?: () => void;
 }
 
-function makeDefaultGroup(settings: WorkspaceSettings): PaneGroupConfig {
+function makeDefaultGroup(
+  settings: WorkspaceSettings,
+  profiles: PaneProfile[],
+): PaneGroupConfig {
   return {
-    profileId: settings.defaultProfileId ?? "",
+    profileId: resolveDefaultProfileId(settings, profiles),
     workingDirectory: settings.defaultWorkingDirectory ?? "",
     customCommand: settings.defaultCustomCommand ?? "",
     count: 1,
@@ -34,12 +55,18 @@ export function WorkspaceSetupWizard({
   onCancel,
 }: WorkspaceSetupWizardProps) {
   const [groups, setGroups] = useState<PaneGroupConfig[]>([
-    makeDefaultGroup(settings),
+    makeDefaultGroup(settings, profiles),
   ]);
 
   useEscapeKey(onCancel);
 
   const totalPanes = groups.reduce((sum, g) => sum + g.count, 0);
+  const hasInvalidGroup = groups.some((group) =>
+    !group.profileId || (
+      group.profileId === CUSTOM_PROFILE_ID
+      && !(group.customCommand?.trim())
+    )
+  );
 
   function handleUpdateGroup(index: number, update: Partial<PaneGroupConfig>) {
     setGroups((prev) =>
@@ -52,10 +79,14 @@ export function WorkspaceSetupWizard({
   }
 
   function handleAddGroup() {
-    setGroups((prev) => [...prev, makeDefaultGroup(settings)]);
+    setGroups((prev) => [...prev, makeDefaultGroup(settings, profiles)]);
   }
 
   function handleSubmit() {
+    if (hasInvalidGroup || totalPanes === 0) {
+      return;
+    }
+
     onComplete({ groups });
   }
 
@@ -127,7 +158,7 @@ export function WorkspaceSetupWizard({
             ) : null}
             <Button
               data-testid="wizard-create"
-              disabled={totalPanes === 0}
+              disabled={totalPanes === 0 || hasInvalidGroup}
               onClick={handleSubmit}
             >
               Create Workspace

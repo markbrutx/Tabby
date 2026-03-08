@@ -63,6 +63,19 @@ describe("WorkspaceSetupWizard", () => {
     expect(screen.getByTestId("group-count-0")).toHaveTextContent("1");
   });
 
+  it("falls back to terminal when settings default profile is empty", () => {
+    render(
+      <WorkspaceSetupWizard
+        profiles={profiles}
+        settings={{ ...settings, defaultProfileId: "" }}
+        isFirstLaunch={true}
+        onComplete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("group-profile-0")).toHaveValue("terminal");
+  });
+
   it("add group button adds a new group", () => {
     render(
       <WorkspaceSetupWizard
@@ -149,6 +162,43 @@ describe("WorkspaceSetupWizard", () => {
       target: { value: "custom" },
     });
     expect(screen.getByTestId("group-command-0")).toBeInTheDocument();
+  });
+
+  it("disables create when custom profile has no command", () => {
+    render(
+      <WorkspaceSetupWizard
+        profiles={profiles}
+        settings={settings}
+        isFirstLaunch={true}
+        onComplete={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("group-profile-0"), {
+      target: { value: "custom" },
+    });
+
+    expect(screen.getByTestId("wizard-create")).toBeDisabled();
+  });
+
+  it("re-enables create when custom profile command is provided", () => {
+    render(
+      <WorkspaceSetupWizard
+        profiles={profiles}
+        settings={settings}
+        isFirstLaunch={true}
+        onComplete={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("group-profile-0"), {
+      target: { value: "custom" },
+    });
+    fireEvent.change(screen.getByTestId("group-command-0"), {
+      target: { value: "npm run dev" },
+    });
+
+    expect(screen.getByTestId("wizard-create")).not.toBeDisabled();
   });
 
   it("create button calls onComplete with SetupWizardConfig", () => {

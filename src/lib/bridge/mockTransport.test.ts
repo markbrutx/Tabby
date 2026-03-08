@@ -20,7 +20,7 @@ describe("mockTransport", () => {
 
     expect(result.workspace.tabs).toHaveLength(0);
     expect(result.settings.hasCompletedOnboarding).toBe(false);
-    expect(result.settings.defaultProfileId).toBe("");
+    expect(result.settings.defaultProfileId).toBe("terminal");
     expect(result.settings.defaultWorkingDirectory).toBe("");
     expect(result.profiles).toHaveLength(5);
   });
@@ -307,6 +307,27 @@ describe("mockTransport", () => {
     expect(tab.layout.type).toBe("split");
   });
 
+  it("falls back to settings cwd when pane config cwd is blank", async () => {
+    const transport = await setupOnboarded();
+    await transport.updateAppSettings({
+      ...(await transport.getAppSettings()),
+      defaultWorkingDirectory: "/fallback",
+    });
+    await transport.bootstrapWorkspace();
+
+    const snapshot = await transport.createTab({
+      preset: "1x1",
+      cwd: null,
+      profileId: null,
+      startupCommand: null,
+      paneConfigs: [
+        { profileId: "terminal", cwd: "   ", startupCommand: null, url: null },
+      ],
+    });
+
+    expect(snapshot.tabs[1].panes[0].cwd).toBe("/fallback");
+  });
+
   it("trackPaneCwd updates lastWorkingDirectory in settings", async () => {
     const transport = await setupOnboarded();
     const bootstrap = await transport.bootstrapWorkspace();
@@ -375,6 +396,32 @@ describe("mockTransport", () => {
     expect(pane.paneKind).toBe("browser");
     expect(pane.profileId).toBe("browser");
     expect(pane.profileLabel).toBe("Browser");
+  });
+
+  it("split browser pane inherits the current url", async () => {
+    const transport = await setupOnboarded();
+    const bootstrap = await transport.bootstrapWorkspace();
+    const paneId = bootstrap.workspace.tabs[0].panes[0].id;
+
+    const browserTab = await transport.updatePaneProfile({
+      paneId,
+      profileId: "browser",
+      startupCommand: null,
+    });
+    const browserPane = browserTab.tabs[0].panes[0];
+
+    await transport.navigateBrowser(browserPane.id, "https://docs.rs");
+
+    const afterSplit = await transport.splitPane({
+      paneId: browserPane.id,
+      direction: "horizontal",
+      profileId: "browser",
+      startupCommand: null,
+      cwd: null,
+    });
+
+    expect(afterSplit.tabs[0].panes).toHaveLength(2);
+    expect(afterSplit.tabs[0].panes[1].url).toBe("https://docs.rs");
   });
 
   it("writePty is a no-op for browser panes", async () => {

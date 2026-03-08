@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use crate::application::coordinator::Coordinator;
 use crate::cli::CliArgs;
@@ -20,12 +20,20 @@ pub struct LaunchOverrides(pub Mutex<Option<CliArgs>>);
 #[tauri::command]
 #[specta::specta]
 pub fn bootstrap_workspace(
+    coordinator: State<'_, Arc<Coordinator>>,
     tab_manager: State<'_, Arc<TabManager>>,
     settings_manager: State<'_, Arc<SettingsManager>>,
+    launch_overrides: State<'_, LaunchOverrides>,
 ) -> Result<BootstrapSnapshot, TabbyError> {
+    let settings = settings_manager.get_settings()?;
+    let workspace = match consume_launch_request(&launch_overrides, &settings)? {
+        Some(request) => coordinator.create_tab(&request.into(), &settings)?,
+        None => tab_manager.snapshot()?,
+    };
+
     Ok(BootstrapSnapshot {
-        workspace: tab_manager.snapshot()?,
-        settings: settings_manager.get_settings()?,
+        workspace,
+        settings,
         profiles: built_in_profiles(),
     })
 }
@@ -142,16 +150,50 @@ pub fn swap_panes(
 }
 
 // TODO(phase-4): re-enable when single-instance CLI routing is wired
-#[allow(dead_code)]
 fn consume_launch_request(
     launch_overrides: &LaunchOverrides,
     settings: &AppSettings,
-) -> Result<LaunchRequest, TabbyError> {
+) -> Result<Option<LaunchRequest>, TabbyError> {
     let mut overrides = launch_overrides
         .0
         .lock()
         .map_err(|_| TabbyError::State(String::from("CLI overrides lock poisoned")))?;
     let cli_args = overrides.take().unwrap_or_default();
 
-    LaunchRequest::from_cli_args(cli_args, settings)
+    if !cli_args.has_launch_overrides() {
+        return Ok(None);
+    }
+
+    LaunchRequest::from_cli_args(cli_args, settings).map(Some)
+}
+
+fn set_launch_request(
+    launch_overrides: &LaunchOverrides,
+    cli_args: CliArgs,
+) -> Result<(), TabbyError> {
+    let mut overrides = launch_overrides
+        .0
+        .lock()
+        .map_err(|_| TabbyError::State(String::from("CLI overrides lock poisoned")))?;
+    *overrides = Some(cli_args);
+    Ok(())
+}
+
+pub fn apply_cli_launch_request(app: &AppHandle, cli_args: CliArgs) -> Result<(), TabbyError> {
+    let launch_overrides = app.state::<LaunchOverrides>();
+    if !cli_args.has_launch_overrides() {
+        return Ok(());
+    }
+
+    set_launch_request(&launch_overrides, cli_args)?;
+
+    let settings_manager = app.state::<Arc<SettingsManager>>();
+    let coordinator = app.state::<Arc<Coordinator>>();
+    let settings = settings_manager.get_settings()?;
+
+    if let Some(request) = consume_launch_request(&launch_overrides, &settings)? {
+        coordinator.create_tab(&request.into(), &settings)?;
+    }
+
+    Ok(())
 }

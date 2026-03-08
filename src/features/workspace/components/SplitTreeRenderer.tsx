@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import {
   Panel,
   PanelGroup,
@@ -81,13 +81,6 @@ function PaneLeaf({ paneId }: { paneId: string }) {
   const pane = findPaneById(tab, paneId);
   const browserPaneRef = useRef<BrowserPaneHandle | null>(null);
   const isBrowser = pane?.paneKind === "browser";
-  const [browserUrl, setBrowserUrl] = useState(pane?.url ?? DEFAULT_BROWSER_URL);
-
-  useEffect(() => {
-    if (isBrowser) {
-      setBrowserUrl(pane?.url ?? DEFAULT_BROWSER_URL);
-    }
-  }, [isBrowser, pane?.id, pane?.url]);
 
   if (!pane) return null;
 
@@ -157,15 +150,14 @@ function PaneLeaf({ paneId }: { paneId: string }) {
       <div className={`flex h-full flex-col ${isDragSource ? "opacity-50" : ""}`}>
         {isBrowser ? (
           <BrowserToolbar
-            url={browserUrl}
+            url={pane.url ?? DEFAULT_BROWSER_URL}
             isActive={isActive}
             paneCount={tab.panes.length}
             onNavigate={(url) => {
-              setBrowserUrl(url);
               browserPaneRef.current?.navigate(url);
             }}
             onReload={() => {
-              browserPaneRef.current?.navigate(browserUrl);
+              browserPaneRef.current?.navigate(pane.url ?? DEFAULT_BROWSER_URL);
             }}
             onClose={() => onClosePane(pane.id)}
             {...dragProps}
@@ -191,7 +183,6 @@ function PaneLeaf({ paneId }: { paneId: string }) {
               active={isActive}
               visible={visible}
               modalOpen={modalOpen}
-              onUrlChange={setBrowserUrl}
             />
           ) : (
             <TerminalPane

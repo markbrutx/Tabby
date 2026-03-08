@@ -3,6 +3,7 @@ import type {
   BootstrapSnapshot,
   NewTabRequest,
   PaneLifecycleEvent,
+  WorkspaceChangedEvent,
   SplitPaneRequest,
   UpdatePaneCwdRequest,
   UpdatePaneProfileRequest,
@@ -14,6 +15,7 @@ import { ensureTauri, unwrapResult, type UnlistenFn } from "@/lib/bridge/shared"
 import type { WorkspaceTransportInterface } from "./workspaceTransport";
 
 const PANE_LIFECYCLE_EVENT_NAME = "pane-lifecycle";
+const WORKSPACE_CHANGED_EVENT_NAME = "workspace-changed";
 
 export function createTauriWorkspaceTransport(): WorkspaceTransportInterface {
   return {
@@ -83,6 +85,18 @@ export function createTauriWorkspaceTransport(): WorkspaceTransportInterface {
 
       return listen<PaneLifecycleEvent>(PANE_LIFECYCLE_EVENT_NAME, (event) => {
         handler(event.payload);
+      });
+    },
+
+    async listenToWorkspaceChanged(
+      handler: (workspace: WorkspaceSnapshot) => void,
+    ): Promise<UnlistenFn> {
+      if (!isTauriRuntime()) {
+        return () => undefined;
+      }
+
+      return listen<WorkspaceChangedEvent>(WORKSPACE_CHANGED_EVENT_NAME, (event) => {
+        handler(event.payload.workspace);
       });
     },
   };

@@ -6,7 +6,7 @@ use tracing::{info, warn};
 use crate::application::seed_factory::SeedFactory;
 use crate::browser::commands::webview_label;
 use crate::settings::domain::app_settings::AppSettings;
-use crate::settings::domain::profiles::{resolve_profile, BROWSER_PROFILE_ID};
+use crate::settings::domain::profiles::{resolve_profile, ResolvedProfile, BROWSER_PROFILE_ID};
 use crate::shared::error::TabbyError;
 use crate::shared::events::WorkspaceChangedEvent;
 use crate::terminal::service::pty_service::PtyManager;
@@ -14,7 +14,7 @@ use crate::workspace::domain::layout::presets::{tree_from_count, tree_from_prese
 use crate::workspace::domain::pane::{create_pane_id, PaneKind};
 use crate::workspace::domain::requests::{NewTabRequest, SplitPaneRequest};
 use crate::workspace::domain::snapshot::{PaneRuntimeStatus, WorkspaceSnapshot};
-use crate::workspace::service::tab_service::TabManager;
+use crate::workspace::service::tab_service::{LocatedPane, TabManager};
 
 const WORKSPACE_CHANGED_EVENT: &str = "workspace-changed";
 
@@ -54,7 +54,11 @@ impl Coordinator {
                         configs.len(),
                     )));
                 }
-                factory.seeds_from_pane_configs(configs, &settings.default_custom_command)?
+                factory.seeds_from_pane_configs(
+                    configs,
+                    settings,
+                    &settings.default_custom_command,
+                )?
             }
             None => {
                 let pane_count = usize::from(preset.pane_count());
@@ -102,7 +106,12 @@ impl Coordinator {
             .profile_id
             .as_deref()
             .unwrap_or(&located.pane.profile_id);
-        let cwd = request.cwd.as_deref().unwrap_or(&located.pane.cwd);
+        let cwd = request
+            .cwd
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(&located.pane.cwd);
         let explicit_command = request
             .startup_command
             .clone()
@@ -117,7 +126,7 @@ impl Coordinator {
         let is_browser = resolved.id == BROWSER_PROFILE_ID;
 
         let seed = if is_browser {
-            factory.create_browser_seed(new_pane_id.clone(), cwd, None)
+            factory.create_browser_seed(new_pane_id.clone(), cwd, located.pane.url.clone())
         } else {
             factory.create_terminal_seed(new_pane_id.clone(), cwd, &resolved)?
         };
@@ -160,38 +169,12 @@ impl Coordinator {
             return self.tab_manager.snapshot();
         }
 
-        let factory = self.seed_factory();
-        let old_session_id = located.pane.session_id.clone();
-
-        factory.emit_lifecycle(
-            pane_id,
-            Some(&old_session_id),
-            PaneRuntimeStatus::Restarting,
-            None,
-        );
-
         let resolved = resolve_profile(
             &located.pane.profile_id,
             located.pane.startup_command.clone(),
         )?;
-
-        let new_session_id = factory.spawn_pty(pane_id, &located.pane.cwd, &resolved)?;
-        factory.kill_session_quiet(&old_session_id);
-
-        let snapshot = self.tab_manager.replace_pane(
-            pane_id,
-            new_session_id.clone(),
-            resolved,
-            located.pane.cwd,
-        )?;
-
-        factory.emit_lifecycle(
-            pane_id,
-            Some(&new_session_id),
-            PaneRuntimeStatus::Running,
-            None,
-        );
-        self.emit_workspace_changed(&snapshot);
+        let snapshot =
+            self.transition_to_terminal_session(&located, resolved, located.pane.cwd.clone())?;
 
         info!(pane_id, "Pane restarted");
         Ok(snapshot)
@@ -215,44 +198,27 @@ impl Coordinator {
             if !was_browser {
                 factory.kill_session_quiet(&old_session_id);
             }
-            let sentinel_id = format!("browser-{}", uuid::Uuid::new_v4());
+            let session_id = if was_browser {
+                located.pane.session_id.clone()
+            } else {
+                format!("browser-{}", uuid::Uuid::new_v4())
+            };
             let snapshot = self.tab_manager.replace_pane_full(
                 pane_id,
-                sentinel_id,
+                session_id,
                 resolved,
-                located.pane.cwd,
+                located.pane.cwd.clone(),
                 PaneKind::Browser,
-                None,
+                located.pane.url.clone(),
+                PaneRuntimeStatus::Running,
             )?;
             self.emit_workspace_changed(&snapshot);
             info!(pane_id, profile_id, "Pane switched to browser");
             return Ok(snapshot);
         }
 
-        let new_session_id = factory.spawn_pty(pane_id, &located.pane.cwd, &resolved)?;
-        if was_browser {
-            self.close_browser_webviews_quiet(&[String::from(pane_id)]);
-        }
-        if !was_browser {
-            factory.kill_session_quiet(&old_session_id);
-        }
-
-        let snapshot = self.tab_manager.replace_pane_full(
-            pane_id,
-            new_session_id.clone(),
-            resolved,
-            located.pane.cwd,
-            PaneKind::Terminal,
-            None,
-        )?;
-
-        factory.emit_lifecycle(
-            pane_id,
-            Some(&new_session_id),
-            PaneRuntimeStatus::Running,
-            None,
-        );
-        self.emit_workspace_changed(&snapshot);
+        let snapshot =
+            self.transition_to_terminal_session(&located, resolved, located.pane.cwd.clone())?;
 
         info!(pane_id, profile_id, "Pane profile updated");
         Ok(snapshot)
@@ -271,27 +237,11 @@ impl Coordinator {
         }
 
         let located = self.tab_manager.locate_pane(pane_id)?;
-        let factory = self.seed_factory();
-        let old_session_id = located.pane.session_id.clone();
         let resolved = resolve_profile(
             &located.pane.profile_id,
             located.pane.startup_command.clone(),
         )?;
-
-        let new_session_id = factory.spawn_pty(pane_id, &next_cwd, &resolved)?;
-        factory.kill_session_quiet(&old_session_id);
-
-        let snapshot =
-            self.tab_manager
-                .replace_pane(pane_id, new_session_id.clone(), resolved, next_cwd)?;
-
-        factory.emit_lifecycle(
-            pane_id,
-            Some(&new_session_id),
-            PaneRuntimeStatus::Running,
-            None,
-        );
-        self.emit_workspace_changed(&snapshot);
+        let snapshot = self.transition_to_terminal_session(&located, resolved, next_cwd)?;
 
         info!(pane_id, cwd, "Pane cwd updated");
         Ok(snapshot)
@@ -369,5 +319,67 @@ impl Coordinator {
                 }
             }
         }
+    }
+
+    fn transition_to_terminal_session(
+        &self,
+        located: &LocatedPane,
+        resolved: ResolvedProfile,
+        cwd: String,
+    ) -> Result<WorkspaceSnapshot, TabbyError> {
+        let pane_id = located.pane.id.as_str();
+        let was_browser = located.pane.pane_kind == PaneKind::Browser;
+        let old_session_id = located.pane.session_id.clone();
+
+        let restarting = self
+            .tab_manager
+            .set_pane_status(pane_id, PaneRuntimeStatus::Restarting)?;
+        self.emit_workspace_changed(&restarting);
+
+        let factory = self.seed_factory();
+        let new_session_id = match factory.spawn_pty(pane_id, &cwd, &resolved) {
+            Ok(session_id) => session_id,
+            Err(error) => {
+                let rollback = self
+                    .tab_manager
+                    .set_pane_status(pane_id, PaneRuntimeStatus::Running)?;
+                self.emit_workspace_changed(&rollback);
+                return Err(error);
+            }
+        };
+
+        if was_browser {
+            self.close_browser_webviews_quiet(&[String::from(pane_id)]);
+        } else {
+            factory.kill_session_quiet(&old_session_id);
+        }
+
+        let snapshot = match self.tab_manager.replace_pane(
+            pane_id,
+            new_session_id.clone(),
+            resolved,
+            cwd,
+            PaneRuntimeStatus::Running,
+        ) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                factory.kill_session_quiet(&new_session_id);
+                let rollback = self
+                    .tab_manager
+                    .set_pane_status(pane_id, PaneRuntimeStatus::Running)?;
+                self.emit_workspace_changed(&rollback);
+                return Err(error);
+            }
+        };
+
+        factory.emit_lifecycle(
+            pane_id,
+            Some(&new_session_id),
+            PaneRuntimeStatus::Running,
+            None,
+        );
+        self.emit_workspace_changed(&snapshot);
+
+        Ok(snapshot)
     }
 }

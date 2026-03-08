@@ -5,6 +5,7 @@ import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import {
   CUSTOM_PROFILE_ID,
+  BROWSER_PROFILE_ID,
   type PaneProfile,
   type SplitDirection,
 } from "@/features/workspace/domain";
@@ -27,9 +28,14 @@ export function SplitPopup({
   onConfirm,
   onCancel,
 }: SplitPopupProps) {
-  const [profileId, setProfileId] = useState(defaultProfileId);
+  const resolvedDefaultProfileId = profiles.some((profile) => profile.id === defaultProfileId)
+    ? defaultProfileId
+    : (profiles.find((profile) => profile.id === "terminal")?.id ?? "terminal");
+  const [profileId, setProfileId] = useState(resolvedDefaultProfileId);
   const [cwd, setCwd] = useState(defaultCwd);
   const [customCommand, setCustomCommand] = useState("");
+  const isCustomProfileInvalid =
+    profileId === CUSTOM_PROFILE_ID && !customCommand.trim();
 
   const stateRef = useRef({ profileId, cwd, customCommand });
   useEffect(() => {
@@ -42,12 +48,16 @@ export function SplitPopup({
         event.preventDefault();
         onCancel();
       } else if (event.key === "Enter") {
-        event.preventDefault();
         const { profileId: pid, cwd: dir, customCommand: cmd } = stateRef.current;
+        if (pid === CUSTOM_PROFILE_ID && !cmd.trim()) {
+          return;
+        }
+
+        event.preventDefault();
         onConfirm(
           pid,
           dir,
-          pid === CUSTOM_PROFILE_ID ? cmd || null : null,
+          pid === CUSTOM_PROFILE_ID ? cmd.trim() || null : null,
         );
       }
     }
@@ -63,10 +73,14 @@ export function SplitPopup({
   }
 
   function handleConfirm() {
+    if (isCustomProfileInvalid) {
+      return;
+    }
+
     onConfirm(
       profileId,
       cwd,
-      profileId === CUSTOM_PROFILE_ID ? customCommand || null : null,
+      profileId === CUSTOM_PROFILE_ID ? customCommand.trim() || null : null,
     );
   }
 
@@ -108,24 +122,26 @@ export function SplitPopup({
             />
           ) : null}
 
-          <div className="flex gap-2">
-            <Input
-              value={cwd}
-              onChange={(event) => setCwd(event.target.value)}
-              placeholder="Working directory"
-              className="text-sm"
-            />
-            <Button variant="secondary" size="sm" onClick={() => void handlePickDirectory()}>
-              <FolderOpen size={14} />
-            </Button>
-          </div>
+          {profileId !== BROWSER_PROFILE_ID ? (
+            <div className="flex gap-2">
+              <Input
+                value={cwd}
+                onChange={(event) => setCwd(event.target.value)}
+                placeholder="Working directory"
+                className="text-sm"
+              />
+              <Button variant="secondary" size="sm" onClick={() => void handlePickDirectory()}>
+                <FolderOpen size={14} />
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-3 flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onCancel}>
             Cancel
           </Button>
-          <Button size="sm" onClick={handleConfirm}>
+          <Button size="sm" disabled={isCustomProfileInvalid} onClick={handleConfirm}>
             Split
           </Button>
         </div>
