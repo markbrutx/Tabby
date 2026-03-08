@@ -1,5 +1,6 @@
 pub mod cli;
 
+mod application;
 mod commands;
 mod menu;
 mod shell;

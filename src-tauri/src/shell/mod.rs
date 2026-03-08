@@ -1,18 +1,17 @@
 pub(crate) mod browser_surface;
 pub mod error;
-mod mapping;
+pub(crate) mod mapping;
 mod pty;
 
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 use tracing::warn;
 
 use tabby_contracts::{
-    LayoutPresetDto, PaneRuntimeView, RuntimeCommandDto, RuntimeStatusChangedEvent,
-    SettingsCommandDto, SettingsProjectionUpdatedEvent, SettingsView, WorkspaceBootstrapView,
-    WorkspaceCommandDto, WorkspaceProjectionUpdatedEvent, WorkspaceView,
+    LayoutPresetDto, RuntimeCommandDto, SettingsCommandDto, SettingsView, WorkspaceBootstrapView,
+    WorkspaceCommandDto, WorkspaceView,
 };
 use tabby_runtime::{RuntimeRegistry, RuntimeStatus};
 use tabby_settings::{
@@ -25,6 +24,7 @@ use tabby_workspace::{
     PaneSpec, TabLayoutStrategy, WorkspaceError, WorkspaceEvent, WorkspaceSession,
 };
 
+use crate::application::ProjectionPublisher;
 use crate::cli::CliArgs;
 use crate::shell::browser_surface::navigate_browser;
 use crate::shell::error::ShellError;
@@ -57,6 +57,7 @@ pub struct AppShell {
     workspace: Mutex<WorkspaceSession>,
     runtimes: Mutex<RuntimeRegistry>,
     pty_manager: PtyManager,
+    publisher: ProjectionPublisher,
     launch_overrides: Mutex<Option<CliArgs>>,
 }
 
@@ -67,6 +68,7 @@ impl AppShell {
             workspace: Mutex::new(WorkspaceSession::default()),
             runtimes: Mutex::new(RuntimeRegistry::default()),
             pty_manager: PtyManager::new(app.clone()),
+            publisher: ProjectionPublisher::new(app.clone()),
             launch_overrides: Mutex::new(Some(cli_args)),
             app,
         })
@@ -490,37 +492,15 @@ impl AppShell {
     }
 
     fn emit_workspace_projection(&self, workspace: &WorkspaceView) {
-        if let Err(error) = self.app.emit(
-            WORKSPACE_PROJECTION_UPDATED_EVENT,
-            WorkspaceProjectionUpdatedEvent {
-                workspace: workspace.clone(),
-            },
-        ) {
-            warn!(?error, "Failed to emit workspace projection update");
-        }
+        self.publisher.emit_workspace_projection(workspace);
     }
 
     fn emit_settings_projection(&self, settings: &SettingsView) {
-        if let Err(error) = self.app.emit(
-            SETTINGS_PROJECTION_UPDATED_EVENT,
-            SettingsProjectionUpdatedEvent {
-                settings: settings.clone(),
-                profile_catalog: profile_catalog_view_from_catalog(&built_in_profile_catalog()),
-            },
-        ) {
-            warn!(?error, "Failed to emit settings projection update");
-        }
+        self.publisher.emit_settings_projection(settings);
     }
 
-    fn emit_runtime_status(&self, runtime: &PaneRuntimeView) {
-        if let Err(error) = self.app.emit(
-            RUNTIME_STATUS_CHANGED_EVENT,
-            RuntimeStatusChangedEvent {
-                runtime: runtime.clone(),
-            },
-        ) {
-            warn!(?error, "Failed to emit runtime status update");
-        }
+    fn emit_runtime_status(&self, runtime: &tabby_contracts::PaneRuntimeView) {
+        self.publisher.emit_runtime_status(runtime);
     }
 }
 
