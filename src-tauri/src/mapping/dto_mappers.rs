@@ -314,23 +314,6 @@ pub fn runtime_command_from_dto(dto: RuntimeCommandDto) -> RuntimeCommand {
 }
 
 // ---------------------------------------------------------------------------
-// Persistence helpers — keep DTO knowledge in the mapping layer
-// ---------------------------------------------------------------------------
-
-pub fn serialize_preferences(
-    preferences: &UserPreferences,
-) -> Result<serde_json::Value, serde_json::Error> {
-    let view = settings_view_from_preferences(preferences);
-    serde_json::to_value(view)
-}
-
-pub fn deserialize_preferences(value: serde_json::Value) -> Result<UserPreferences, SettingsError> {
-    let view: SettingsView =
-        serde_json::from_value(value).map_err(|e| SettingsError::Validation(e.to_string()))?;
-    preferences_from_settings_view(&view)
-}
-
-// ---------------------------------------------------------------------------
 // Internal conversion helpers
 // ---------------------------------------------------------------------------
 
@@ -1011,32 +994,6 @@ mod tests {
             view.runtime_session_id.as_deref(),
             Some(wire_session.as_str())
         );
-    }
-
-    // -- Persistence helpers ------------------------------------------------
-
-    #[test]
-    fn serialize_deserialize_preferences_round_trips() {
-        let preferences = UserPreferences {
-            default_layout: String::from("1x2"),
-            default_terminal_profile_id: ProfileId::new("claude"),
-            default_working_directory: WorkingDirectory::new("/home").expect("valid path"),
-            default_custom_command: String::new(),
-            font_size: FontSize::new(18).expect("valid size"),
-            theme: ThemeMode::Midnight,
-            launch_fullscreen: false,
-            has_completed_onboarding: true,
-            last_working_directory: Some(String::from("/var")),
-        };
-
-        let value = serialize_preferences(&preferences).expect("should serialize");
-        let restored = deserialize_preferences(value).expect("should deserialize");
-
-        assert_eq!(restored.default_layout, "1x2");
-        assert_eq!(restored.default_terminal_profile_id, "claude");
-        assert_eq!(restored.font_size.value(), 18);
-        assert!(matches!(restored.theme, ThemeMode::Midnight));
-        assert_eq!(restored.last_working_directory.as_deref(), Some("/var"));
     }
 
     // -- Bootstrap view composition -----------------------------------------

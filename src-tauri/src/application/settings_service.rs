@@ -9,7 +9,6 @@ use tabby_settings::{
 
 use crate::application::commands::SettingsCommand;
 use crate::application::ports::PreferencesRepository;
-use crate::mapping::dto_mappers;
 use crate::shell::error::ShellError;
 
 #[derive(Debug, Clone)]
@@ -91,7 +90,7 @@ fn decode_preferences(value: Option<serde_json::Value>) -> Result<LoadedPreferen
         });
     };
 
-    match dto_mappers::deserialize_preferences(value) {
+    match tabby_settings::persistence::deserialize_preferences(value) {
         Ok(raw) => {
             let preferences = normalize_preferences(raw);
             validate_preferences(&preferences).map_err(settings_error_to_shell)?;
@@ -160,7 +159,7 @@ mod tests {
         }
 
         fn save(&self, preferences: &UserPreferences) -> Result<(), ShellError> {
-            let value = dto_mappers::serialize_preferences(preferences)
+            let value = tabby_settings::persistence::serialize_preferences(preferences)
                 .map_err(|e| ShellError::Serialization(e.to_string()))?;
             let mut guard = self
                 .stored

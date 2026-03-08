@@ -1,3 +1,4 @@
+pub mod persistence;
 mod value_objects;
 
 pub use value_objects::{FontSize, ProfileId, WorkingDirectory};
