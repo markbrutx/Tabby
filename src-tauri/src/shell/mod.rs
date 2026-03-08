@@ -1,18 +1,18 @@
-mod browser_surface;
+pub(crate) mod browser_surface;
 pub mod error;
 mod mapping;
 mod pty;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 use tracing::warn;
 
 use tabby_contracts::{
-    BrowserSurfaceCommandDto, LayoutPresetDto, PaneRuntimeView, RuntimeCommandDto,
-    RuntimeStatusChangedEvent, SettingsCommandDto, SettingsProjectionUpdatedEvent, SettingsView,
-    WorkspaceBootstrapView, WorkspaceCommandDto, WorkspaceProjectionUpdatedEvent, WorkspaceView,
+    LayoutPresetDto, PaneRuntimeView, RuntimeCommandDto, RuntimeStatusChangedEvent,
+    SettingsCommandDto, SettingsProjectionUpdatedEvent, SettingsView, WorkspaceBootstrapView,
+    WorkspaceCommandDto, WorkspaceProjectionUpdatedEvent, WorkspaceView,
 };
 use tabby_runtime::{RuntimeRegistry, RuntimeStatus};
 use tabby_settings::{
@@ -26,7 +26,7 @@ use tabby_workspace::{
 };
 
 use crate::cli::CliArgs;
-use crate::shell::browser_surface::{execute_browser_surface_command, navigate_browser};
+use crate::shell::browser_surface::navigate_browser;
 use crate::shell::error::ShellError;
 use crate::shell::mapping::{
     layout_preset_from_dto, pane_runtime_to_view, pane_spec_from_dto,
@@ -581,51 +581,6 @@ fn settings_error_to_shell(error: SettingsError) -> ShellError {
     match error {
         SettingsError::Validation(message) => ShellError::Validation(message),
     }
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn bootstrap_shell(
-    state: State<'_, Arc<AppShell>>,
-) -> Result<WorkspaceBootstrapView, ShellError> {
-    state.bootstrap()
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn dispatch_workspace_command(
-    state: State<'_, Arc<AppShell>>,
-    command: WorkspaceCommandDto,
-) -> Result<WorkspaceView, ShellError> {
-    state.dispatch_workspace_command(command)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn dispatch_settings_command(
-    state: State<'_, Arc<AppShell>>,
-    command: SettingsCommandDto,
-) -> Result<SettingsView, ShellError> {
-    state.dispatch_settings_command(command)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn dispatch_runtime_command(
-    window: tauri::Window,
-    state: State<'_, Arc<AppShell>>,
-    command: RuntimeCommandDto,
-) -> Result<(), ShellError> {
-    state.dispatch_runtime_command(&window, command)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn dispatch_browser_surface_command(
-    window: tauri::Window,
-    command: BrowserSurfaceCommandDto,
-) -> Result<(), ShellError> {
-    execute_browser_surface_command(&window, command)
 }
 
 #[cfg(test)]

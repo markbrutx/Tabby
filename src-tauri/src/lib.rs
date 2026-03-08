@@ -1,5 +1,6 @@
 pub mod cli;
 
+mod commands;
 mod menu;
 mod shell;
 
@@ -32,11 +33,11 @@ fn init_tracing() {
 fn specta_builder() -> SpectaBuilder<Wry> {
     SpectaBuilder::<Wry>::new()
         .commands(collect_commands![
-            shell::bootstrap_shell,
-            shell::dispatch_workspace_command,
-            shell::dispatch_settings_command,
-            shell::dispatch_runtime_command,
-            shell::dispatch_browser_surface_command,
+            commands::shell::bootstrap_shell,
+            commands::shell::dispatch_workspace_command,
+            commands::shell::dispatch_settings_command,
+            commands::shell::dispatch_runtime_command,
+            commands::shell::dispatch_browser_surface_command,
         ])
         .typ::<WorkspaceBootstrapView>()
         .typ::<WorkspaceCommandDto>()
