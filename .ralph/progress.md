@@ -651,3 +651,44 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - Debug format assertions are a lightweight way to verify enum variants don't carry unexpected fields
   - Compile-time type annotation tests (let _: Type = ...) are effective for proving API boundary purity
 ---
+
+## [2026-03-09 00:05] - US-018: Separate persistence schema from IPC schema for settings
+Thread:
+Run: 20260308-215923-84117 (iteration 19)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-19.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-19.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 2e2a668 feat: separate persistence schema from IPC schema for settings (US-018)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (162 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (237 tests: 141 app + 10 runtime + 35 settings + 51 workspace)
+- Files changed:
+  - src-tauri/crates/tabby-settings/Cargo.toml (added serde, serde_json dependencies)
+  - src-tauri/crates/tabby-settings/src/lib.rs (registered persistence module)
+  - src-tauri/crates/tabby-settings/src/persistence.rs (new — PersistedPreferences struct, serialize/deserialize, 8 tests)
+  - src-tauri/src/application/settings_service.rs (uses tabby_settings::persistence instead of dto_mappers for deserialization)
+  - src-tauri/src/infrastructure/tauri_store_preferences_repository.rs (uses tabby_settings::persistence instead of dto_mappers for serialization)
+  - src-tauri/src/mapping/dto_mappers.rs (removed serialize_preferences/deserialize_preferences and their test)
+  - src-tauri/Cargo.lock (updated for new tabby-settings deps)
+- What was implemented:
+  - Created PersistedPreferences struct in tabby_settings::persistence with its own PersistedThemeMode enum
+  - Persistence schema uses #[serde(rename_all = "camelCase")] for backward compatibility with existing stored data
+  - Added #[serde(default)] on last_working_directory for migration from older formats missing that field
+  - PersistedPreferences has from_domain() and to_domain() methods for domain ↔ persistence conversion
+  - Public serialize_preferences() and deserialize_preferences() functions in the persistence module
+  - Removed serialize_preferences/deserialize_preferences from dto_mappers.rs (they were coupling persistence to IPC DTO)
+  - Updated TauriStorePreferencesRepository.save() to use persistence module instead of dto_mappers
+  - Updated settings_service decode_preferences() to use persistence module instead of dto_mappers
+  - Updated MockPreferencesRepository in test to use persistence module
+  - 8 new tests: round_trip, defaults, invalid font_size, backward_compatible legacy format, missing lastWorkingDirectory, malformed JSON, empty object, camelCase format verification
+- **Learnings for future iterations:**
+  - PersistedPreferences and SettingsView have identical JSON shapes currently, but they are decoupled at the type level — either can evolve independently
+  - The persistence module lives in the domain crate (tabby-settings), not the mapping layer — this is correct per DDD: persistence format is a domain concern
+  - serde/serde_json added to tabby-settings crate — these are the first serde deps in a domain crate, justified since persistence serialization is intrinsic to domain model lifecycle
+---
