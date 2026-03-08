@@ -6,7 +6,7 @@ import {
   findAdjacentPane,
   findNextPane,
   findPreviousPane,
-} from "@/features/workspace/splitTree";
+} from "@/features/workspace/layoutReadModel";
 import { isTauriRuntime } from "@/lib/runtime";
 
 interface WorkspaceShortcutsProps {

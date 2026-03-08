@@ -90,10 +90,9 @@ fn ensure_browser_surface(
         tauri::webview::WebviewBuilder::new(&label, tauri::WebviewUrl::External(parsed_url))
             .on_navigation(move |next_url: &url::Url| {
                 if let Some(shell) = app.try_state::<Arc<AppShell>>() {
-                    if let Err(error) = shell.handle_browser_location_observation(
-                        &pane_id_for_nav,
-                        next_url.as_ref(),
-                    ) {
+                    if let Err(error) = shell
+                        .handle_browser_location_observation(&pane_id_for_nav, next_url.as_ref())
+                    {
                         warn!(?error, "Failed to observe browser location");
                     }
                 }

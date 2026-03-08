@@ -1,16 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { SplitNode } from "@/features/workspace/domain";
 import {
-  splitPane,
-  closePane,
   collectPaneIds,
   treeFromCount,
   computePaneRects,
   findAdjacentPane,
   findNextPane,
   findPreviousPane,
-  swapPanes,
-} from "@/features/workspace/splitTree";
+} from "@/features/workspace/layoutReadModel";
 
 const singlePane: SplitNode = { type: "pane", paneId: "p1" };
 
@@ -22,7 +19,7 @@ const twoPane: SplitNode = {
   second: { type: "pane", paneId: "p2" },
 };
 
-describe("splitTree", () => {
+describe("layoutReadModel", () => {
   describe("collectPaneIds", () => {
     it("returns single pane id", () => {
       expect(collectPaneIds(singlePane)).toEqual(["p1"]);
@@ -30,41 +27,6 @@ describe("splitTree", () => {
 
     it("returns all pane ids from a split", () => {
       expect(collectPaneIds(twoPane)).toEqual(["p1", "p2"]);
-    });
-  });
-
-  describe("splitPane", () => {
-    it("replaces a leaf with a branch", () => {
-      const result = splitPane(singlePane, "p1", "horizontal", "p2");
-      expect(result).not.toBeNull();
-      expect(collectPaneIds(result!)).toEqual(["p1", "p2"]);
-    });
-
-    it("returns null for unknown pane", () => {
-      expect(splitPane(singlePane, "unknown", "horizontal", "p2")).toBeNull();
-    });
-
-    it("splits a nested pane correctly", () => {
-      const result = splitPane(twoPane, "p2", "vertical", "p3");
-      expect(result).not.toBeNull();
-      expect(collectPaneIds(result!)).toEqual(["p1", "p2", "p3"]);
-    });
-  });
-
-  describe("closePane", () => {
-    it("returns null for last pane (tree empty)", () => {
-      expect(closePane(singlePane, "p1")).toBeNull();
-    });
-
-    it("returns undefined for unknown pane", () => {
-      expect(closePane(singlePane, "unknown")).toBeUndefined();
-    });
-
-    it("collapses parent when closing one of two panes", () => {
-      const result = closePane(twoPane, "p1");
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      expect(collectPaneIds(result!)).toEqual(["p2"]);
     });
   });
 
@@ -127,30 +89,10 @@ describe("splitTree", () => {
       expect(findPreviousPane(twoPane, "p2")).toBe("p1");
       expect(findPreviousPane(twoPane, "p1")).toBe("p2");
     });
-  });
 
-  describe("swapPanes", () => {
-    it("swaps two panes in horizontal split", () => {
-      const result = swapPanes(twoPane, "p1", "p2");
-      expect(result).not.toBeNull();
-      expect(collectPaneIds(result!)).toEqual(["p2", "p1"]);
-    });
-
-    it("returns null for unknown pane", () => {
-      expect(swapPanes(twoPane, "p1", "unknown")).toBeNull();
-    });
-
-    it("self-swap returns same tree", () => {
-      const result = swapPanes(twoPane, "p1", "p1");
-      expect(result).not.toBeNull();
-      expect(collectPaneIds(result!)).toEqual(["p1", "p2"]);
-    });
-
-    it("deep tree swap (non-adjacent)", () => {
-      const fourPane = treeFromCount(["p1", "p2", "p3", "p4"]);
-      const result = swapPanes(fourPane, "p1", "p4");
-      expect(result).not.toBeNull();
-      expect(collectPaneIds(result!)).toEqual(["p4", "p2", "p3", "p1"]);
+    it("returns first pane for unknown current pane", () => {
+      expect(findNextPane(twoPane, "unknown")).toBe("p1");
+      expect(findPreviousPane(twoPane, "unknown")).toBe("p1");
     });
   });
 
@@ -167,6 +109,10 @@ describe("splitTree", () => {
       expect(findAdjacentPane(twoPane, "p1", "left")).toBeNull();
     });
 
+    it("returns null for unknown pane", () => {
+      expect(findAdjacentPane(twoPane, "unknown", "right")).toBeNull();
+    });
+
     it("navigates vertical splits", () => {
       const vertical: SplitNode = {
         type: "split",
@@ -177,6 +123,17 @@ describe("splitTree", () => {
       };
       expect(findAdjacentPane(vertical, "top", "down")).toBe("bottom");
       expect(findAdjacentPane(vertical, "bottom", "up")).toBe("top");
+    });
+  });
+
+  describe("no mutation functions exist", () => {
+    it("module exports only read-only helpers", async () => {
+      const mod = await import("@/features/workspace/layoutReadModel");
+      const exportedKeys = Object.keys(mod);
+      const mutationNames = ["splitPane", "closePane", "swapPanes"];
+      for (const name of mutationNames) {
+        expect(exportedKeys).not.toContain(name);
+      }
     });
   });
 });

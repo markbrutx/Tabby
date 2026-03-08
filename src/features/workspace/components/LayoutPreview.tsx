@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { treeFromCount, computePaneRects } from "@/features/workspace/splitTree";
+import { treeFromCount, computePaneRects } from "@/features/workspace/layoutReadModel";
 import type { PaneGroupConfig } from "@/features/workspace/store/types";
 
 const GROUP_COLORS = [

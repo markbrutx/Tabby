@@ -1,12 +1,4 @@
-import type { LayoutPreset, SplitDirection, SplitNode } from "@/features/workspace/domain";
-
-const PANE_COUNTS: Record<LayoutPreset, number> = {
-  "1x1": 1, "1x2": 2, "2x2": 4, "2x3": 6, "3x3": 9,
-};
-
-export function paneCountForPreset(preset: LayoutPreset): number {
-  return PANE_COUNTS[preset];
-}
+import type { SplitNode } from "@/features/workspace/domain";
 
 function leaf(id: string): SplitNode {
   return { type: "pane", paneId: id };
@@ -30,32 +22,6 @@ function hsplit4(a: string, b: string, c: string, d: string): SplitNode {
     first: hsplit(a, b),
     second: hsplit(c, d),
   };
-}
-
-export function treeFromPreset(preset: LayoutPreset, paneIds: string[]): SplitNode {
-  switch (preset) {
-    case "1x1": return leaf(paneIds[0]);
-    case "1x2": return hsplit(paneIds[0], paneIds[1]);
-    case "2x2": return {
-      type: "split", direction: "vertical", ratio: 500,
-      first: hsplit(paneIds[0], paneIds[1]),
-      second: hsplit(paneIds[2], paneIds[3]),
-    };
-    case "2x3": return {
-      type: "split", direction: "vertical", ratio: 500,
-      first: hsplit3(paneIds[0], paneIds[1], paneIds[2]),
-      second: hsplit3(paneIds[3], paneIds[4], paneIds[5]),
-    };
-    case "3x3": return {
-      type: "split", direction: "vertical", ratio: 333,
-      first: hsplit3(paneIds[0], paneIds[1], paneIds[2]),
-      second: {
-        type: "split", direction: "vertical", ratio: 500,
-        first: hsplit3(paneIds[3], paneIds[4], paneIds[5]),
-        second: hsplit3(paneIds[6], paneIds[7], paneIds[8]),
-      },
-    };
-  }
 }
 
 export function treeFromCount(paneIds: string[]): SplitNode {
@@ -110,103 +76,11 @@ export function treeFromCount(paneIds: string[]): SplitNode {
   }
 }
 
-export function splitPane(
-  root: SplitNode,
-  targetPaneId: string,
-  direction: SplitDirection,
-  newPaneId: string,
-): SplitNode | null {
-  if (root.type === "pane") {
-    if (root.paneId === targetPaneId) {
-      return {
-        type: "split",
-        direction,
-        ratio: 500,
-        first: { type: "pane", paneId: root.paneId },
-        second: { type: "pane", paneId: newPaneId },
-      };
-    }
-    return null;
-  }
-
-  const newFirst = splitPane(root.first, targetPaneId, direction, newPaneId);
-  if (newFirst) {
-    return { ...root, first: newFirst };
-  }
-
-  const newSecond = splitPane(root.second, targetPaneId, direction, newPaneId);
-  if (newSecond) {
-    return { ...root, second: newSecond };
-  }
-
-  return null;
-}
-
-export function closePane(
-  root: SplitNode,
-  targetPaneId: string,
-): SplitNode | null | undefined {
-  // Returns:
-  //   undefined  — pane not found
-  //   null       — last pane removed (tree empty)
-  //   SplitNode  — remaining tree after removal
-
-  if (root.type === "pane") {
-    return root.paneId === targetPaneId ? null : undefined;
-  }
-
-  const firstResult = closePane(root.first, targetPaneId);
-  if (firstResult !== undefined) {
-    return firstResult === null ? root.second : { ...root, first: firstResult };
-  }
-
-  const secondResult = closePane(root.second, targetPaneId);
-  if (secondResult !== undefined) {
-    return secondResult === null ? root.first : { ...root, second: secondResult };
-  }
-
-  return undefined;
-}
-
 export function collectPaneIds(root: SplitNode): string[] {
   if (root.type === "pane") {
     return [root.paneId];
   }
   return [...collectPaneIds(root.first), ...collectPaneIds(root.second)];
-}
-
-export function swapPanes(
-  root: SplitNode,
-  paneIdA: string,
-  paneIdB: string,
-): SplitNode | null {
-  const ids = collectPaneIds(root);
-  if (!ids.includes(paneIdA) || !ids.includes(paneIdB)) {
-    return null;
-  }
-  return swapPanesInner(root, paneIdA, paneIdB);
-}
-
-function swapPanesInner(
-  node: SplitNode,
-  paneIdA: string,
-  paneIdB: string,
-): SplitNode {
-  if (node.type === "pane") {
-    if (node.paneId === paneIdA) {
-      return { type: "pane", paneId: paneIdB };
-    }
-    if (node.paneId === paneIdB) {
-      return { type: "pane", paneId: paneIdA };
-    }
-    return node;
-  }
-
-  return {
-    ...node,
-    first: swapPanesInner(node.first, paneIdA, paneIdB),
-    second: swapPanesInner(node.second, paneIdA, paneIdB),
-  };
 }
 
 interface PaneRect {
