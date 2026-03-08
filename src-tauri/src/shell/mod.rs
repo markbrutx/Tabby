@@ -14,8 +14,8 @@ use tabby_workspace::WorkspaceDomainEvent;
 
 use crate::application::commands::WorkspaceCommand;
 use crate::application::{
-    BootstrapService, ProjectionPublisher, RuntimeApplicationService, SettingsApplicationService,
-    WorkspaceApplicationService,
+    BootstrapService, ProjectionPublisher, RuntimeApplicationService, RuntimeCoordinator,
+    SettingsApplicationService, WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
 use crate::mapping::dto_mappers;
@@ -188,7 +188,7 @@ impl AppShell {
     }
 
     fn apply_workspace_events(&self, events: Vec<WorkspaceDomainEvent>) -> Result<(), ShellError> {
-        BootstrapService::apply_workspace_events(
+        RuntimeCoordinator::handle_workspace_events(
             events,
             &self.settings_service,
             &self.runtime_service,

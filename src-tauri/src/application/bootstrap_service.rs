@@ -3,10 +3,11 @@ use std::sync::Mutex;
 use tabby_runtime::PaneRuntime;
 use tabby_settings::{resolve_default_working_directory, UserPreferences};
 use tabby_workspace::layout::LayoutPreset;
-use tabby_workspace::{PaneSpec, WorkspaceDomainEvent};
+use tabby_workspace::PaneSpec;
 
 use crate::application::{
-    RuntimeApplicationService, SettingsApplicationService, WorkspaceApplicationService,
+    RuntimeApplicationService, RuntimeCoordinator, SettingsApplicationService,
+    WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
 use crate::shell::error::ShellError;
@@ -96,7 +97,7 @@ impl BootstrapService {
             command_override: cli_args.command,
         });
         let events = workspace_service.open_tab(layout, false, vec![pane_spec])?;
-        Self::apply_workspace_events(events, settings_service, runtime_service)?;
+        RuntimeCoordinator::handle_workspace_events(events, settings_service, runtime_service)?;
         Ok(())
     }
 
@@ -115,31 +116,7 @@ impl BootstrapService {
             command_override: None,
         });
         let events = workspace_service.open_tab(layout, false, vec![pane_spec])?;
-        Self::apply_workspace_events(events, settings_service, runtime_service)?;
-        Ok(())
-    }
-
-    pub(crate) fn apply_workspace_events(
-        events: Vec<WorkspaceDomainEvent>,
-        settings_service: &SettingsApplicationService,
-        runtime_service: &RuntimeApplicationService,
-    ) -> Result<(), ShellError> {
-        let preferences = settings_service.preferences()?;
-        for event in events {
-            match event {
-                WorkspaceDomainEvent::PaneAdded { pane_id, spec }
-                | WorkspaceDomainEvent::PaneSpecReplaced { pane_id, spec } => {
-                    runtime_service.start_runtime(&pane_id, &spec, &preferences)?;
-                }
-                WorkspaceDomainEvent::PaneRemoved { pane_id, .. } => {
-                    runtime_service.stop_runtime(&pane_id);
-                }
-                WorkspaceDomainEvent::ActivePaneChanged { .. }
-                | WorkspaceDomainEvent::ActiveTabChanged { .. } => {
-                    // Focus events don't require runtime side-effects
-                }
-            }
-        }
+        RuntimeCoordinator::handle_workspace_events(events, settings_service, runtime_service)?;
         Ok(())
     }
 }
