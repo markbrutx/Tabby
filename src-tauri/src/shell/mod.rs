@@ -9,22 +9,17 @@ use tabby_contracts::{
     LayoutPresetDto, RuntimeCommandDto, SettingsCommandDto, SettingsView, WorkspaceBootstrapView,
     WorkspaceCommandDto, WorkspaceView,
 };
-use tabby_settings::{
-    built_in_profile_catalog, default_preferences, resolve_default_working_directory,
-};
+use tabby_settings::default_preferences;
 use tabby_workspace::layout::LayoutPreset;
-use tabby_workspace::{PaneSpec, WorkspaceEvent};
+use tabby_workspace::WorkspaceEvent;
 
 use crate::application::{
-    ProjectionPublisher, RuntimeApplicationService, SettingsApplicationService,
+    BootstrapService, ProjectionPublisher, RuntimeApplicationService, SettingsApplicationService,
     WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
 use crate::shell::error::ShellError;
-use crate::shell::mapping::{
-    layout_preset_from_dto, pane_spec_from_dto, profile_catalog_view_from_catalog,
-    split_direction_from_dto,
-};
+use crate::shell::mapping::{layout_preset_from_dto, pane_spec_from_dto, split_direction_from_dto};
 
 pub const WORKSPACE_PROJECTION_UPDATED_EVENT: &str = "workspace_projection_updated";
 pub const SETTINGS_PROJECTION_UPDATED_EVENT: &str = "settings_projection_updated";
@@ -34,82 +29,40 @@ pub const BROWSER_LOCATION_OBSERVED_EVENT: &str = "browser_location_observed";
 
 #[derive(Debug)]
 pub struct AppShell {
+    bootstrap_service: BootstrapService,
     settings_service: SettingsApplicationService,
     workspace_service: WorkspaceApplicationService,
     runtime_service: RuntimeApplicationService,
     publisher: ProjectionPublisher,
-    launch_overrides: std::sync::Mutex<Option<CliArgs>>,
 }
 
 impl AppShell {
     pub fn new(app: AppHandle, cli_args: CliArgs) -> Result<Self, ShellError> {
         let settings_service = SettingsApplicationService::new(app.clone())?;
         Ok(Self {
+            bootstrap_service: BootstrapService::new(cli_args),
             workspace_service: WorkspaceApplicationService::new(),
             runtime_service: RuntimeApplicationService::new(app.clone()),
             publisher: ProjectionPublisher::new(app),
-            launch_overrides: std::sync::Mutex::new(Some(cli_args)),
             settings_service,
         })
     }
 
     pub fn bootstrap(&self) -> Result<WorkspaceBootstrapView, ShellError> {
-        let cli_args = self
-            .launch_overrides
-            .lock()
-            .map_err(|_| ShellError::State(String::from("Launch overrides lock poisoned")))?
-            .take()
-            .unwrap_or_default();
-
-        if self.workspace_service.is_empty()? {
-            if cli_args.has_launch_overrides() {
-                self.apply_cli_launch_request(cli_args)?;
-            } else {
-                let preferences = self.settings_service.preferences()?;
-                if preferences.has_completed_onboarding {
-                    self.open_default_tab()?;
-                }
-            }
-        }
-
-        Ok(WorkspaceBootstrapView {
-            workspace: self.workspace_service.workspace_view()?,
-            settings: self.settings_service.settings_view()?,
-            profile_catalog: profile_catalog_view_from_catalog(&built_in_profile_catalog()),
-            runtime_projections: self.runtime_service.snapshot()?,
-        })
+        self.bootstrap_service.bootstrap(
+            &self.workspace_service,
+            &self.settings_service,
+            &self.runtime_service,
+        )
     }
 
     pub fn apply_cli_launch_request(&self, cli_args: CliArgs) -> Result<(), ShellError> {
-        if !cli_args.has_launch_overrides() {
-            return Ok(());
-        }
-
-        let preferences = self.settings_service.preferences()?;
-        let layout = cli_args
-            .layout
-            .as_deref()
-            .map(LayoutPreset::parse)
-            .transpose()
-            .map_err(|error| ShellError::Validation(error.to_string()))?
-            .unwrap_or_else(|| {
-                LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne)
-            });
-        let profile_id = cli_args
-            .profile
-            .unwrap_or_else(|| preferences.default_terminal_profile_id.clone());
-        let working_directory =
-            resolve_default_working_directory(cli_args.cwd.as_deref(), &preferences);
-        let pane_spec = PaneSpec::Terminal(tabby_workspace::TerminalPaneSpec {
-            launch_profile_id: profile_id,
-            working_directory,
-            command_override: cli_args.command,
-        });
-        let events = self
-            .workspace_service
-            .open_tab(layout, false, vec![pane_spec])?;
-        self.apply_workspace_events(events)?;
-        Ok(())
+        self.bootstrap_service.apply_cli_launch_request(
+            cli_args,
+            &self.workspace_service,
+            &self.settings_service,
+            &self.runtime_service,
+        )
     }
 
     pub fn dispatch_workspace_command(
@@ -232,37 +185,12 @@ impl AppShell {
             .dispatch_runtime_command(window, command)
     }
 
-    fn open_default_tab(&self) -> Result<(), ShellError> {
-        let preferences = self.settings_service.preferences()?;
-        let layout =
-            LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne);
-        let pane_spec = PaneSpec::Terminal(tabby_workspace::TerminalPaneSpec {
-            launch_profile_id: preferences.default_terminal_profile_id.clone(),
-            working_directory: resolve_default_working_directory(None, &preferences),
-            command_override: None,
-        });
-        let events = self
-            .workspace_service
-            .open_tab(layout, false, vec![pane_spec])?;
-        self.apply_workspace_events(events)?;
-        Ok(())
-    }
-
     fn apply_workspace_events(&self, events: Vec<WorkspaceEvent>) -> Result<(), ShellError> {
-        let preferences = self.settings_service.preferences()?;
-        for event in events {
-            match event {
-                WorkspaceEvent::PaneAdded { pane_id, spec }
-                | WorkspaceEvent::PaneSpecReplaced { pane_id, spec } => {
-                    self.runtime_service
-                        .start_runtime(&pane_id, &spec, &preferences)?;
-                }
-                WorkspaceEvent::PaneRemoved { pane_id, .. } => {
-                    self.runtime_service.stop_runtime(&pane_id);
-                }
-            }
-        }
-        Ok(())
+        BootstrapService::apply_workspace_events(
+            events,
+            &self.settings_service,
+            &self.runtime_service,
+        )
     }
 
     fn emit_workspace_projection(&self, workspace: &WorkspaceView) {
