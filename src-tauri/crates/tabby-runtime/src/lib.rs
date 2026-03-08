@@ -28,6 +28,7 @@ pub struct PaneRuntime {
     pub status: RuntimeStatus,
     pub last_error: Option<String>,
     pub browser_location: Option<String>,
+    pub terminal_cwd: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -54,6 +55,7 @@ impl RuntimeRegistry {
             status: RuntimeStatus::Running,
             last_error: None,
             browser_location: None,
+            terminal_cwd: None,
         };
         self.runtimes.insert(String::from(pane_id), runtime.clone());
         runtime
@@ -72,6 +74,7 @@ impl RuntimeRegistry {
             status: RuntimeStatus::Running,
             last_error: None,
             browser_location: Some(initial_url),
+            terminal_cwd: None,
         };
         self.runtimes.insert(String::from(pane_id), runtime.clone());
         runtime
@@ -118,6 +121,19 @@ impl RuntimeRegistry {
         Ok(runtime.clone())
     }
 
+    pub fn update_terminal_cwd(
+        &mut self,
+        pane_id: &str,
+        cwd: String,
+    ) -> Result<PaneRuntime, RuntimeError> {
+        let runtime = self
+            .runtimes
+            .get_mut(pane_id)
+            .ok_or_else(|| RuntimeError::NotFound(String::from(pane_id)))?;
+        runtime.terminal_cwd = Some(cwd);
+        Ok(runtime.clone())
+    }
+
     pub fn remove(&mut self, pane_id: &str) -> Option<PaneRuntime> {
         self.runtimes.remove(pane_id)
     }
@@ -151,6 +167,27 @@ mod tests {
             .mark_terminal_exit("pane-1", Some(&session_id), false, None)
             .expect("runtime should exist");
         assert_eq!(runtime.status, RuntimeStatus::Exited);
+    }
+
+    #[test]
+    fn terminal_cwd_updates() {
+        let mut registry = RuntimeRegistry::default();
+        registry.register_terminal("pane-1", RuntimeSessionId::from(String::from("session-1")));
+
+        let runtime = registry
+            .update_terminal_cwd("pane-1", String::from("/projects/tabby"))
+            .expect("runtime should exist");
+        assert_eq!(runtime.terminal_cwd.as_deref(), Some("/projects/tabby"));
+    }
+
+    #[test]
+    fn terminal_cwd_update_for_nonexistent_pane_returns_error() {
+        let mut registry = RuntimeRegistry::default();
+        let result = registry.update_terminal_cwd("nonexistent", String::from("/tmp"));
+        assert!(
+            result.is_err(),
+            "updating cwd for nonexistent pane should fail"
+        );
     }
 
     #[test]

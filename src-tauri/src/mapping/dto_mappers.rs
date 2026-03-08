@@ -147,6 +147,7 @@ pub fn pane_runtime_to_view(runtime: &PaneRuntime) -> PaneRuntimeView {
         status: runtime_status_to_dto(runtime.status),
         last_error: runtime.last_error.clone(),
         browser_location: runtime.browser_location.clone(),
+        terminal_cwd: runtime.terminal_cwd.clone(),
     }
 }
 
@@ -576,6 +577,7 @@ mod tests {
             status: RuntimeStatus::Running,
             last_error: None,
             browser_location: None,
+            terminal_cwd: None,
         };
 
         let view = pane_runtime_to_view(&runtime);
@@ -596,6 +598,7 @@ mod tests {
             status: RuntimeStatus::Running,
             last_error: None,
             browser_location: Some(String::from("https://example.com")),
+            terminal_cwd: None,
         };
 
         let view = pane_runtime_to_view(&runtime);
@@ -616,6 +619,7 @@ mod tests {
             status: RuntimeStatus::Failed,
             last_error: Some(String::from("spawn failed")),
             browser_location: None,
+            terminal_cwd: None,
         };
 
         let view = pane_runtime_to_view(&runtime);
@@ -1000,6 +1004,7 @@ mod tests {
             status: RuntimeStatus::Running,
             last_error: None,
             browser_location: None,
+            terminal_cwd: None,
         };
         let view = pane_runtime_to_view(&runtime);
         assert_eq!(

@@ -124,13 +124,8 @@ impl AppShell {
                 self.runtime_service.observe_terminal_cwd(
                     &pane_id,
                     &working_directory,
-                    &self.workspace_service,
                     &self.settings_service,
                 )?;
-                let view = self
-                    .workspace_service
-                    .with_session(dto_mappers::workspace_view_from_session)?;
-                self.publisher.emit_workspace_projection_from_view(&view);
             }
             RuntimeCommand::ObserveBrowserLocation { pane_id, url } => {
                 self.runtime_service

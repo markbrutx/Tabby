@@ -382,3 +382,42 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - `#[cfg(test)]` on standalone functions prevents dead_code warnings for test-only utilities
   - Borrow checker requires index-based access when mutating content_store and tabs simultaneously
 ---
+
+## 2026-03-08 23:06 - US-011: Update WorkspaceDomainEvent payloads and mapper layer for PaneSlot split
+Thread:
+Run: 20260308-215923-84117 (iteration 12)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-12.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-12.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: f49d5a2 feat: update WorkspaceDomainEvent payloads and mapper layer for PaneSlot split (US-011)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (162 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (208 Rust tests: 129 app + 8 runtime + 27 settings + 44 workspace)
+- Files changed:
+  - src-tauri/crates/tabby-workspace/src/lib.rs (WorkspaceDomainEvent enum, WorkspaceSession methods, spec_from_content made public, domain tests)
+  - src-tauri/src/application/runtime_coordinator.rs (handle_workspace_events, all test event constructions)
+  - src-tauri/src/application/runtime_lifecycle_tests.rs (apply_events function updated for new event shape)
+  - src-tauri/src/application/workspace_service.rs (replace_pane_spec test updated for old_content/new_content)
+- What was implemented:
+  - WorkspaceDomainEvent::PaneAdded and PaneRemoved now carry `content: PaneContentDefinition` instead of `spec: PaneSpec`
+  - WorkspaceDomainEvent::PaneSpecReplaced now carries `old_content` and `new_content` PaneContentDefinition — old content id is never reused
+  - PaneRemoved events are only emitted for panes that have content definitions (filter_map instead of unwrap_or fallback)
+  - close_pane returns error if content is missing (was silently falling back to empty spec)
+  - spec_from_content made public for RuntimeCoordinator to convert content → PaneSpec at the coordinator boundary
+  - RuntimeCoordinator uses spec_from_content() to extract PaneSpec from PaneContentDefinition for start_runtime calls
+  - Removed unused terminal_spec/browser_spec test helpers from coordinator tests (replaced by terminal_content/browser_content)
+  - Frontend snapshot mappers unchanged — WorkspaceView projection shape (PaneSpecDto) is unchanged at the transport boundary
+  - dto_mappers.rs already has pane_content_to_spec_dto for converting PaneContentDefinition to PaneSpecDto at the transport boundary
+- **Learnings for future iterations:**
+  - The event payload change from PaneSpec to PaneContentDefinition propagated to 4 files but was straightforward because PaneSpec was only used in event payloads
+  - PaneSpecReplaced with old_content + new_content enables future stories to track content lifecycle transitions (e.g., resource cleanup)
+  - The coordinator remains at the boundary between domain events and runtime operations — it converts PaneContentDefinition → PaneSpec as needed
+  - Frontend didn't need changes because the workspace projection (WorkspaceView) is independent of domain events — events are internal Rust-side
+  - close_tab's PaneRemoved now uses filter_map — silently skips panes with missing content instead of using a fallback empty spec
+---

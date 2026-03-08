@@ -84,7 +84,7 @@ export function buildWorkspaceSnapshotModel(
           id: pane.paneId,
           title: pane.title,
           sessionId: runtime?.runtimeSessionId ?? null,
-          cwd: pane.spec.workingDirectory,
+          cwd: runtime?.terminalCwd ?? pane.spec.workingDirectory,
           profileId: pane.spec.launchProfileId,
           profileLabel: findProfileLabel(pane.spec.launchProfileId, profiles),
           startupCommand:

@@ -139,6 +139,7 @@ pub struct PaneRuntimeView {
     pub status: RuntimeStatusDto,
     pub last_error: Option<String>,
     pub browser_location: Option<String>,
+    pub terminal_cwd: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]

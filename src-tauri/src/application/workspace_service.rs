@@ -113,16 +113,6 @@ impl WorkspaceApplicationService {
             .map_err(workspace_error_to_shell)
     }
 
-    pub fn track_terminal_working_directory(
-        &self,
-        pane_id: &PaneId,
-        working_directory: &str,
-    ) -> Result<(), ShellError> {
-        self.lock_workspace()?
-            .track_terminal_working_directory(pane_id, working_directory)
-            .map_err(workspace_error_to_shell)
-    }
-
     fn lock_workspace(&self) -> Result<std::sync::MutexGuard<'_, WorkspaceSession>, ShellError> {
         self.workspace
             .lock()
@@ -404,14 +394,6 @@ mod tests {
             .expect("with_session");
 
         let result = service.focus_pane(&tab_id, &PaneId::from(String::from("nonexistent-pane")));
-        assert!(result.is_err(), "should return error for nonexistent pane");
-    }
-
-    #[test]
-    fn track_working_directory_on_nonexistent_pane_returns_error() {
-        let service = WorkspaceApplicationService::new();
-        let result = service
-            .track_terminal_working_directory(&PaneId::from(String::from("nonexistent")), "/tmp");
         assert!(result.is_err(), "should return error for nonexistent pane");
     }
 }

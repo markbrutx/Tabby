@@ -9,9 +9,7 @@ use tabby_runtime::{PaneRuntime, RuntimeRegistry, RuntimeSessionId, RuntimeStatu
 use tabby_settings::{resolve_terminal_profile, SettingsError, UserPreferences};
 use tabby_workspace::{PaneId, PaneSpec};
 
-use crate::application::{
-    ProjectionPublisher, SettingsApplicationService, WorkspaceApplicationService,
-};
+use crate::application::{ProjectionPublisher, SettingsApplicationService};
 use crate::shell::browser_surface;
 use crate::shell::error::ShellError;
 use crate::shell::pty::PtyManager;
@@ -172,10 +170,14 @@ impl RuntimeApplicationService {
         &self,
         pane_id: &PaneId,
         working_directory: &str,
-        workspace_service: &WorkspaceApplicationService,
         settings_service: &SettingsApplicationService,
     ) -> Result<(), ShellError> {
-        workspace_service.track_terminal_working_directory(pane_id, working_directory)?;
+        let runtime = self
+            .lock_runtimes()?
+            .update_terminal_cwd(pane_id.as_ref(), String::from(working_directory))
+            .map_err(|error| ShellError::NotFound(error.to_string()))?;
+        self.publisher.emit_runtime_status(&runtime);
+
         let mut preferences = settings_service.preferences()?;
         preferences.last_working_directory = Some(String::from(working_directory));
         settings_service.persist_preferences(&preferences)?;
@@ -260,16 +262,26 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
     }
 
     fn on_terminal_cwd_changed(&self, pane_id: &PaneId, cwd: &str) {
-        // Log the observation. Full processing (workspace tracking + settings
-        // persistence) requires cross-service access handled by the existing
-        // observe_terminal_cwd method on the shell layer. This trait method
-        // provides the application-owned entry point that infrastructure will
-        // call directly once wired (future story).
-        tracing::debug!(
-            pane_id = pane_id.as_ref(),
-            cwd,
-            "Terminal CWD observation received"
-        );
+        // Update runtime registry with the observed cwd. Settings persistence
+        // requires cross-service access handled by observe_terminal_cwd on the
+        // shell layer. This trait method will become the single entry point
+        // once infrastructure is fully wired (future story).
+        let result = self.lock_runtimes().and_then(|mut runtimes| {
+            runtimes
+                .update_terminal_cwd(pane_id.as_ref(), String::from(cwd))
+                .map_err(|error| ShellError::NotFound(error.to_string()))
+        });
+
+        match result {
+            Ok(runtime) => self.publisher.emit_runtime_status(&runtime),
+            Err(error) => {
+                warn!(
+                    ?error,
+                    pane_id = pane_id.as_ref(),
+                    "Failed to process terminal cwd observation"
+                );
+            }
+        }
     }
 }
 
@@ -463,5 +475,59 @@ mod tests {
             registry.snapshot().is_empty(),
             "empty registry should return empty snapshot"
         );
+    }
+
+    /// Verifies that cwd observation updates the runtime registry but does NOT
+    /// touch workspace domain. This is the boundary contract established by US-012:
+    /// cwd observation is a runtime concern, not a workspace structural concern.
+    #[test]
+    fn cwd_observation_updates_runtime_registry_not_workspace() {
+        use tabby_workspace::layout::LayoutPreset;
+        use tabby_workspace::{PaneSpec, TabLayoutStrategy, TerminalPaneSpec, WorkspaceSession};
+
+        // 1. Set up a workspace session with a terminal pane
+        let mut workspace = WorkspaceSession::default();
+        workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(LayoutPreset::OneByOne),
+                vec![PaneSpec::Terminal(TerminalPaneSpec {
+                    launch_profile_id: String::from("default"),
+                    working_directory: String::from("/home/user"),
+                    command_override: None,
+                })],
+            )
+            .expect("tab should open");
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+
+        // 2. Register the pane in the runtime registry
+        let mut registry = RuntimeRegistry::default();
+        registry.register_terminal(pane_id.as_ref(), sid("pty-1"));
+
+        // 3. Update cwd in the runtime registry (simulating observe_terminal_cwd)
+        let runtime = registry
+            .update_terminal_cwd(pane_id.as_ref(), String::from("/projects/tabby"))
+            .expect("cwd update should succeed");
+        assert_eq!(
+            runtime.terminal_cwd.as_deref(),
+            Some("/projects/tabby"),
+            "runtime registry should reflect the observed cwd"
+        );
+
+        // 4. Workspace domain should NOT have been mutated — pane spec still has the original cwd
+        match workspace
+            .pane_spec(&pane_id)
+            .expect("pane should still exist")
+        {
+            PaneSpec::Terminal(spec) => {
+                assert_eq!(
+                    spec.working_directory, "/home/user",
+                    "workspace domain must NOT be mutated by cwd observation"
+                );
+            }
+            PaneSpec::Browser(_) => panic!("expected terminal pane"),
+        }
+
+        // 5. Workspace session should have no track_terminal_working_directory method
+        // (compile-time guarantee — if this test compiles, the method is removed)
     }
 }

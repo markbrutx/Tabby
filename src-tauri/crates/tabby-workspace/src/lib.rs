@@ -467,39 +467,6 @@ impl WorkspaceSession {
         }])
     }
 
-    pub fn track_terminal_working_directory(
-        &mut self,
-        pane_id: &PaneId,
-        working_directory: &str,
-    ) -> Result<(), WorkspaceError> {
-        let content_id = self
-            .tabs
-            .iter()
-            .flat_map(|tab| tab.panes.iter())
-            .find(|pane| pane.pane_id == *pane_id)
-            .map(|pane| pane.content_id.clone())
-            .ok_or_else(|| WorkspaceError::NotFound(format!("pane {pane_id}")))?;
-
-        let content = self.content_store.get_mut(&content_id).ok_or_else(|| {
-            WorkspaceError::State(format!("content not found for pane {pane_id}"))
-        })?;
-
-        match content {
-            PaneContentDefinition::Terminal {
-                working_directory: wd,
-                ..
-            } => {
-                *wd = String::from(working_directory);
-            }
-            PaneContentDefinition::Browser { .. } => {
-                return Err(WorkspaceError::Validation(String::from(
-                    "browser panes do not track working directories",
-                )))
-            }
-        }
-        self.validate()
-    }
-
     pub fn pane_spec(&self, pane_id: &PaneId) -> Option<PaneSpec> {
         self.tabs
             .iter()
@@ -931,27 +898,6 @@ mod tests {
             .close_pane(&pane_id)
             .expect("close should succeed");
         workspace.validate().expect("workspace should remain valid");
-    }
-
-    #[test]
-    fn track_terminal_working_directory_updates_terminal_spec() {
-        let mut workspace = WorkspaceSession::default();
-        workspace
-            .open_tab(
-                TabLayoutStrategy::Preset(LayoutPreset::OneByOne),
-                vec![terminal("/tmp")],
-            )
-            .expect("tab should open");
-        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
-
-        workspace
-            .track_terminal_working_directory(&pane_id, "/projects/tabby")
-            .expect("cwd should update");
-
-        match workspace.pane_spec(&pane_id).expect("pane should exist") {
-            PaneSpec::Terminal(spec) => assert_eq!(spec.working_directory, "/projects/tabby"),
-            PaneSpec::Browser(_) => panic!("expected terminal pane"),
-        }
     }
 
     #[test]

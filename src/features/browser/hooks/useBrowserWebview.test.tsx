@@ -89,6 +89,7 @@ function makePaneSnapshot(id = "pane-1"): PaneSnapshotModel {
       status: "running",
       lastError: null,
       browserLocation: "https://example.com",
+      terminalCwd: null,
     },
   };
 }

@@ -17,6 +17,7 @@ export interface RuntimeReadModel {
   readonly status: RuntimeStatus;
   readonly lastError: string | null;
   readonly browserLocation: string | null;
+  readonly terminalCwd: string | null;
 }
 
 // ---------------------------------------------------------------------------
