@@ -341,3 +341,44 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-it
   - BrowserUrl created as local value object within workspace crate — future stories may unify into shared kernel
   - The id_newtype! macro in ids.rs is the standard pattern for all ID newtypes in this crate
 ---
+
+## 2026-03-08 22:56 - US-010: Migrate workspace Pane to use PaneSlot with content reference
+Thread:
+Run: 20260308-215923-84117 (iteration 11)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-11.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-11.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 09bd416 feat: migrate workspace Pane to use PaneSlot with content reference (US-010)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (162 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (209 Rust tests: 129 app + 8 runtime + 27 settings + 44 workspace + 1 doc)
+- Files changed:
+  - src-tauri/crates/tabby-workspace/src/lib.rs (PaneSlot uses content_id, WorkspaceSession has content_store, all methods updated, 8 new tests)
+  - src-tauri/src/mapping/dto_mappers.rs (workspace_view_from_session resolves spec through pane_content(), pane_spec_to_dto moved to #[cfg(test)])
+- What was implemented:
+  - PaneSlot now holds `content_id: PaneContentId` instead of `spec: PaneSpec`
+  - WorkspaceSession stores `content_store: HashMap<PaneContentId, PaneContentDefinition>` for 1:1 content ownership
+  - open_tab creates PaneContentDefinition for each pane, stores in content_store
+  - close_pane destroys the associated PaneContentDefinition from content_store
+  - close_tab destroys all content for removed tab's panes
+  - replace_pane_spec atomically destroys old content and creates new content with fresh PaneContentId
+  - split_pane creates content for the new pane
+  - pane_spec() and track_terminal_working_directory() look up content through content_store
+  - Added pane_content() public method for external content lookup by content_id
+  - validate() enforces bidirectional invariant: every pane references existing content AND no orphaned content exists
+  - Helper functions: content_from_spec (PaneSpec → PaneContentDefinition), spec_from_content (PaneContentDefinition → PaneSpec)
+  - dto_mappers uses pane_content_to_spec_dto helper to convert PaneContentDefinition → PaneSpecDto
+  - 8 new domain tests: pane_slot_holds_content_id_not_spec, open_tab_creates_content_definitions, close_pane_destroys_content, close_tab_destroys_all_content, replace_destroys_old_creates_new, spec_accessed_through_content, no_orphans_after_split_close, close_last_pane_destroys_content
+- **Learnings for future iterations:**
+  - content.rs intentionally does NOT import structural types (Tab, PaneSlot, PaneSpec) — conversion helpers live in lib.rs
+  - Events still carry PaneSpec (not PaneContentDefinition) to minimize blast radius on RuntimeCoordinator
+  - Clippy catches redundant closures: `.map(|c| spec_from_content(c))` → `.map(spec_from_content)`
+  - `#[cfg(test)]` on standalone functions prevents dead_code warnings for test-only utilities
+  - Borrow checker requires index-based access when mutating content_store and tabs simultaneously
+---
