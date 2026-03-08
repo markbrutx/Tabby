@@ -18,17 +18,17 @@ use tabby_settings::{
     resolve_terminal_profile, SettingsError,
 };
 use tabby_workspace::layout::LayoutPreset;
-use tabby_workspace::{
-    PaneSpec, TabLayoutStrategy, WorkspaceError, WorkspaceEvent, WorkspaceSession,
-};
+use tabby_workspace::{PaneSpec, WorkspaceEvent};
 
-use crate::application::{ProjectionPublisher, SettingsApplicationService};
+use crate::application::{
+    ProjectionPublisher, SettingsApplicationService, WorkspaceApplicationService,
+};
 use crate::cli::CliArgs;
 use crate::shell::browser_surface::navigate_browser;
 use crate::shell::error::ShellError;
 use crate::shell::mapping::{
     layout_preset_from_dto, pane_runtime_to_view, pane_spec_from_dto,
-    profile_catalog_view_from_catalog, split_direction_from_dto, workspace_view_from_session,
+    profile_catalog_view_from_catalog, split_direction_from_dto,
 };
 use crate::shell::pty::PtyManager;
 
@@ -42,7 +42,7 @@ pub const BROWSER_LOCATION_OBSERVED_EVENT: &str = "browser_location_observed";
 pub struct AppShell {
     app: AppHandle,
     settings_service: SettingsApplicationService,
-    workspace: Mutex<WorkspaceSession>,
+    workspace_service: WorkspaceApplicationService,
     runtimes: Mutex<RuntimeRegistry>,
     pty_manager: PtyManager,
     publisher: ProjectionPublisher,
@@ -53,7 +53,7 @@ impl AppShell {
     pub fn new(app: AppHandle, cli_args: CliArgs) -> Result<Self, ShellError> {
         let settings_service = SettingsApplicationService::new(app.clone())?;
         Ok(Self {
-            workspace: Mutex::new(WorkspaceSession::default()),
+            workspace_service: WorkspaceApplicationService::new(),
             runtimes: Mutex::new(RuntimeRegistry::default()),
             pty_manager: PtyManager::new(app.clone()),
             publisher: ProjectionPublisher::new(app.clone()),
@@ -71,7 +71,7 @@ impl AppShell {
             .take()
             .unwrap_or_default();
 
-        if self.workspace_view()?.tabs.is_empty() {
+        if self.workspace_service.is_empty()? {
             if cli_args.has_launch_overrides() {
                 self.apply_cli_launch_request(cli_args)?;
             } else {
@@ -83,7 +83,7 @@ impl AppShell {
         }
 
         Ok(WorkspaceBootstrapView {
-            workspace: self.workspace_view()?,
+            workspace: self.workspace_service.workspace_view()?,
             settings: self.settings_service.settings_view()?,
             profile_catalog: profile_catalog_view_from_catalog(&built_in_profile_catalog()),
             runtime_projections: self
@@ -122,7 +122,10 @@ impl AppShell {
             working_directory,
             command_override: cli_args.command,
         });
-        self.open_tab(layout, false, vec![pane_spec])?;
+        let events = self
+            .workspace_service
+            .open_tab(layout, false, vec![pane_spec])?;
+        self.apply_workspace_events(events)?;
         Ok(())
     }
 
@@ -155,83 +158,57 @@ impl AppShell {
                     .into_iter()
                     .map(pane_spec_from_dto)
                     .collect::<Vec<_>>();
-                self.open_tab(layout_preset_from_dto(layout), auto_layout, specs)?;
+                let events = self.workspace_service.open_tab(
+                    layout_preset_from_dto(layout),
+                    auto_layout,
+                    specs,
+                )?;
+                self.apply_workspace_events(events)?;
             }
             WorkspaceCommandDto::CloseTab { tab_id } => {
-                let events = self
-                    .workspace
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-                    .close_tab(&tab_id)
-                    .map_err(workspace_error_to_shell)?;
+                let events = self.workspace_service.close_tab(&tab_id)?;
                 self.apply_workspace_events(events)?;
             }
             WorkspaceCommandDto::SetActiveTab { tab_id } => {
-                self.workspace
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-                    .set_active_tab(&tab_id)
-                    .map_err(workspace_error_to_shell)?;
+                self.workspace_service.set_active_tab(&tab_id)?;
             }
             WorkspaceCommandDto::FocusPane { tab_id, pane_id } => {
-                self.workspace
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-                    .focus_pane(&tab_id, &pane_id)
-                    .map_err(workspace_error_to_shell)?;
+                self.workspace_service.focus_pane(&tab_id, &pane_id)?;
             }
             WorkspaceCommandDto::SplitPane {
                 pane_id,
                 direction,
                 pane_spec,
             } => {
-                let events = self
-                    .workspace
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-                    .split_pane(
-                        &pane_id,
-                        split_direction_from_dto(direction),
-                        pane_spec_from_dto(pane_spec),
-                    )
-                    .map_err(workspace_error_to_shell)?;
+                let events = self.workspace_service.split_pane(
+                    &pane_id,
+                    split_direction_from_dto(direction),
+                    pane_spec_from_dto(pane_spec),
+                )?;
                 self.apply_workspace_events(events)?;
             }
             WorkspaceCommandDto::ClosePane { pane_id } => {
-                let events = self
-                    .workspace
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-                    .close_pane(&pane_id)
-                    .map_err(workspace_error_to_shell)?;
+                let events = self.workspace_service.close_pane(&pane_id)?;
                 self.apply_workspace_events(events)?;
             }
             WorkspaceCommandDto::SwapPaneSlots {
                 pane_id_a,
                 pane_id_b,
             } => {
-                self.workspace
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-                    .swap_pane_slots(&pane_id_a, &pane_id_b)
-                    .map_err(workspace_error_to_shell)?;
+                self.workspace_service
+                    .swap_pane_slots(&pane_id_a, &pane_id_b)?;
             }
             WorkspaceCommandDto::ReplacePaneSpec { pane_id, pane_spec } => {
                 self.stop_runtime_for_pane(&pane_id);
                 let events = self
-                    .workspace
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-                    .replace_pane_spec(&pane_id, pane_spec_from_dto(pane_spec))
-                    .map_err(workspace_error_to_shell)?;
+                    .workspace_service
+                    .replace_pane_spec(&pane_id, pane_spec_from_dto(pane_spec))?;
                 self.apply_workspace_events(events)?;
             }
             WorkspaceCommandDto::RestartPaneRuntime { pane_id } => {
                 let spec = self
-                    .workspace
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-                    .pane_spec(&pane_id)
+                    .workspace_service
+                    .pane_spec(&pane_id)?
                     .ok_or_else(|| ShellError::NotFound(format!("pane {pane_id}")))?;
                 self.stop_runtime_for_pane(&pane_id);
                 self.start_runtime_for_pane(&pane_id, &spec)?;
@@ -240,18 +217,15 @@ impl AppShell {
                 pane_id,
                 working_directory,
             } => {
-                self.workspace
-                    .lock()
-                    .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-                    .track_terminal_working_directory(&pane_id, &working_directory)
-                    .map_err(workspace_error_to_shell)?;
+                self.workspace_service
+                    .track_terminal_working_directory(&pane_id, &working_directory)?;
                 let mut preferences = self.settings_service.preferences()?;
                 preferences.last_working_directory = Some(working_directory);
                 self.settings_service.persist_preferences(&preferences)?;
             }
         }
 
-        let view = self.workspace_view()?;
+        let view = self.workspace_service.workspace_view()?;
         self.emit_workspace_projection(&view);
         Ok(view)
     }
@@ -319,30 +293,11 @@ impl AppShell {
             working_directory: resolve_default_working_directory(None, &preferences),
             command_override: None,
         });
-        self.open_tab(layout, false, vec![pane_spec])?;
-        Ok(())
-    }
-
-    fn open_tab(
-        &self,
-        layout: LayoutPreset,
-        auto_layout: bool,
-        pane_specs: Vec<PaneSpec>,
-    ) -> Result<(), ShellError> {
         let events = self
-            .workspace
-            .lock()
-            .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?
-            .open_tab(
-                if auto_layout {
-                    TabLayoutStrategy::AutoCount
-                } else {
-                    TabLayoutStrategy::Preset(layout)
-                },
-                pane_specs,
-            )
-            .map_err(workspace_error_to_shell)?;
-        self.apply_workspace_events(events)
+            .workspace_service
+            .open_tab(layout, false, vec![pane_spec])?;
+        self.apply_workspace_events(events)?;
+        Ok(())
     }
 
     fn apply_workspace_events(&self, events: Vec<WorkspaceEvent>) -> Result<(), ShellError> {
@@ -440,14 +395,6 @@ impl AppShell {
         }
     }
 
-    fn workspace_view(&self) -> Result<WorkspaceView, ShellError> {
-        let workspace = self
-            .workspace
-            .lock()
-            .map_err(|_| ShellError::State(String::from("Workspace lock poisoned")))?;
-        Ok(workspace_view_from_session(&workspace))
-    }
-
     fn emit_workspace_projection(&self, workspace: &WorkspaceView) {
         self.publisher.emit_workspace_projection(workspace);
     }
@@ -458,14 +405,6 @@ impl AppShell {
 
     fn emit_runtime_status(&self, runtime: &tabby_contracts::PaneRuntimeView) {
         self.publisher.emit_runtime_status(runtime);
-    }
-}
-
-fn workspace_error_to_shell(error: WorkspaceError) -> ShellError {
-    match error {
-        WorkspaceError::Validation(message) => ShellError::Validation(message),
-        WorkspaceError::NotFound(message) => ShellError::NotFound(message),
-        WorkspaceError::State(message) => ShellError::State(message),
     }
 }
 
