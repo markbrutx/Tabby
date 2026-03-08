@@ -2,7 +2,8 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
-import { CUSTOM_PROFILE_ID, type PaneProfile, type WorkspaceSettings } from "@/features/workspace/domain";
+import { CUSTOM_PROFILE_ID } from "@/features/workspace/domain/models";
+import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
 import type { PaneGroupConfig, SetupWizardConfig } from "@/features/workspace/store/types";
 import { LayoutPreview } from "./LayoutPreview";
 import { PaneGroupRow } from "./PaneGroupRow";
@@ -10,8 +11,8 @@ import { PaneGroupRow } from "./PaneGroupRow";
 const MAX_PANES = 9;
 
 function resolveDefaultProfileId(
-  settings: WorkspaceSettings,
-  profiles: PaneProfile[],
+  settings: SettingsReadModel,
+  profiles: ProfileReadModel[],
 ): string {
   const configured = settings.defaultTerminalProfileId?.trim();
   if (configured && profiles.some((profile) => profile.id === configured)) {
@@ -24,8 +25,8 @@ function resolveDefaultProfileId(
 }
 
 function makeDefaultGroup(
-  settings: WorkspaceSettings,
-  profiles: PaneProfile[],
+  settings: SettingsReadModel,
+  profiles: ProfileReadModel[],
 ): PaneGroupConfig {
   return {
     mode: "terminal",
@@ -38,8 +39,8 @@ function makeDefaultGroup(
 }
 
 interface WorkspaceSetupWizardProps {
-  profiles: PaneProfile[];
-  settings: WorkspaceSettings;
+  profiles: ProfileReadModel[];
+  settings: SettingsReadModel;
   isFirstLaunch: boolean;
   onComplete: (config: SetupWizardConfig) => void;
   onCancel?: () => void;

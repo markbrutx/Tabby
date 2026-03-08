@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SplitNode } from "@/features/workspace/domain";
+import type { SplitNode } from "@/features/workspace/domain/models";
 import type { WorkspaceSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import {
   selectActivePane,
@@ -44,9 +44,9 @@ const workspace: WorkspaceSnapshotModel = {
           url: null,
           spec: {
             kind: "terminal",
-            launch_profile_id: "terminal",
-            working_directory: "/tmp/alpha",
-            command_override: null,
+            launchProfileId: "terminal",
+            workingDirectory: "/tmp/alpha",
+            commandOverride: null,
           },
           runtime: null,
         },
@@ -63,9 +63,9 @@ const workspace: WorkspaceSnapshotModel = {
           url: null,
           spec: {
             kind: "terminal",
-            launch_profile_id: "claude",
-            working_directory: "/tmp/bravo",
-            command_override: "claude",
+            launchProfileId: "claude",
+            workingDirectory: "/tmp/bravo",
+            commandOverride: "claude",
           },
           runtime: null,
         },
@@ -90,9 +90,9 @@ const workspace: WorkspaceSnapshotModel = {
           url: null,
           spec: {
             kind: "terminal",
-            launch_profile_id: "terminal",
-            working_directory: "/tmp/charlie",
-            command_override: null,
+            launchProfileId: "terminal",
+            workingDirectory: "/tmp/charlie",
+            commandOverride: null,
           },
           runtime: null,
         },
@@ -109,9 +109,9 @@ const workspace: WorkspaceSnapshotModel = {
           url: null,
           spec: {
             kind: "terminal",
-            launch_profile_id: "codex",
-            working_directory: "/tmp/delta",
-            command_override: "codex",
+            launchProfileId: "codex",
+            workingDirectory: "/tmp/delta",
+            commandOverride: "codex",
           },
           runtime: null,
         },

@@ -1,13 +1,13 @@
+import type { PaneRuntimeView } from "@/contracts/tauri-bindings";
 import {
   BROWSER_PROFILE_ID,
   DEFAULT_BROWSER_URL,
-  type PaneProfile,
-  type PaneRuntimeStatus,
-  type PaneRuntimeView,
-  type PaneSpecDto,
+  type PaneSpec,
   type SplitNode,
-  type WorkspaceView,
-} from "@/features/workspace/domain";
+  type WorkspaceReadModel,
+} from "@/features/workspace/domain/models";
+import type { ProfileReadModel } from "@/features/settings/domain/models";
+import type { RuntimeStatus } from "@/features/runtime/domain/models";
 
 export interface PaneSnapshotModel {
   id: string;
@@ -17,10 +17,10 @@ export interface PaneSnapshotModel {
   profileId: string;
   profileLabel: string;
   startupCommand: string | null;
-  status: PaneRuntimeStatus | null;
+  status: RuntimeStatus | null;
   paneKind: "terminal" | "browser";
   url: string | null;
-  spec: PaneSpecDto;
+  spec: PaneSpec;
   runtime: PaneRuntimeView | null;
 }
 
@@ -37,18 +37,18 @@ export interface WorkspaceSnapshotModel {
   tabs: TabSnapshotModel[];
 }
 
-function findProfileLabel(profileId: string, profiles: PaneProfile[]): string {
+function findProfileLabel(profileId: string, profiles: readonly ProfileReadModel[]): string {
   return profiles.find((profile) => profile.id === profileId)?.label ?? profileId;
 }
 
-function defaultStartupCommand(profileId: string, profiles: PaneProfile[]): string | null {
+function defaultStartupCommand(profileId: string, profiles: readonly ProfileReadModel[]): string | null {
   return profiles.find((profile) => profile.id === profileId)?.startupCommandTemplate ?? null;
 }
 
 export function buildWorkspaceSnapshotModel(
-  workspace: WorkspaceView | null,
+  workspace: WorkspaceReadModel | null,
   runtimes: Record<string, PaneRuntimeView>,
-  profiles: PaneProfile[],
+  profiles: readonly ProfileReadModel[],
 ): WorkspaceSnapshotModel | null {
   if (!workspace) {
     return null;
@@ -74,7 +74,7 @@ export function buildWorkspaceSnapshotModel(
             startupCommand: null,
             status: runtime?.status ?? null,
             paneKind: "browser" as const,
-            url: runtime?.browserLocation ?? pane.spec.initial_url ?? DEFAULT_BROWSER_URL,
+            url: runtime?.browserLocation ?? pane.spec.initialUrl ?? DEFAULT_BROWSER_URL,
             spec: pane.spec,
             runtime,
           };
@@ -84,12 +84,12 @@ export function buildWorkspaceSnapshotModel(
           id: pane.paneId,
           title: pane.title,
           sessionId: runtime?.runtimeSessionId ?? null,
-          cwd: pane.spec.working_directory,
-          profileId: pane.spec.launch_profile_id,
-          profileLabel: findProfileLabel(pane.spec.launch_profile_id, profiles),
+          cwd: pane.spec.workingDirectory,
+          profileId: pane.spec.launchProfileId,
+          profileLabel: findProfileLabel(pane.spec.launchProfileId, profiles),
           startupCommand:
-            pane.spec.command_override ??
-            defaultStartupCommand(pane.spec.launch_profile_id, profiles),
+            pane.spec.commandOverride ??
+            defaultStartupCommand(pane.spec.launchProfileId, profiles),
           status: runtime?.status ?? null,
           paneKind: "terminal" as const,
           url: null,

@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { WorkspaceSetupWizard } from "./WorkspaceSetupWizard";
-import type { PaneProfile, WorkspaceSettings } from "@/features/workspace/domain";
+import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
 
 vi.mock("@/lib/pickDirectory", () => ({
   pickDirectory: vi.fn().mockResolvedValue(null),
 }));
 
-const profiles: PaneProfile[] = [
+const profiles: ProfileReadModel[] = [
   { id: "terminal", label: "Terminal", description: "Shell", startupCommandTemplate: null },
   { id: "claude", label: "Claude Code", description: "AI assistant", startupCommandTemplate: "claude" },
   { id: "custom", label: "Custom", description: "Run any command", startupCommandTemplate: null },
 ];
 
-const settings: WorkspaceSettings = {
+const settings: SettingsReadModel = {
   defaultLayout: "1x1",
   defaultTerminalProfileId: "terminal",
   defaultWorkingDirectory: "/Users/test",

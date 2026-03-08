@@ -1,20 +1,24 @@
 import { create } from "zustand";
 import { asErrorMessage, shellClients } from "@/app-shell/clients";
+import type {
+  PaneSpecDto,
+  WorkspaceCommandDto,
+  WorkspaceView,
+} from "@/contracts/tauri-bindings";
 import {
-  BROWSER_PROFILE_ID,
   CUSTOM_PROFILE_ID,
-  type LayoutPreset,
-  type PaneSpecDto,
-  type SplitDirection,
-  type WorkspaceCommandDto,
-  type WorkspaceView,
-} from "@/features/workspace/domain";
+} from "@/features/workspace/domain/models";
+import type {
+  SplitDirection,
+  WorkspaceReadModel,
+} from "@/features/workspace/domain/models";
+import { mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
 import { useRuntimeStore } from "@/contexts/runtime/store";
 import { useSettingsStore } from "@/contexts/settings/store";
 import type { SetupWizardConfig, WizardTab } from "@/features/workspace/store/types";
 
 interface WorkspaceStore {
-  workspace: WorkspaceView | null;
+  workspace: WorkspaceReadModel | null;
   error: string | null;
   isHydrating: boolean;
   isWorking: boolean;
@@ -47,7 +51,7 @@ type SetFn = (
 
 let workspaceListenersReady: Promise<void> | null = null;
 
-function makeWizardTab(workspace?: WorkspaceView | null): WizardTab {
+function makeWizardTab(workspace?: WorkspaceReadModel | null): WizardTab {
   const nextIndex = (workspace?.tabs.length ?? 0) + 1;
   return {
     id: `__wizard_${Date.now()}__`,
@@ -58,11 +62,12 @@ function makeWizardTab(workspace?: WorkspaceView | null): WizardTab {
 async function runWorkspaceMutation(
   set: SetFn,
   mutation: () => Promise<WorkspaceView>,
-  onSuccess?: (workspace: WorkspaceView) => Partial<WorkspaceStore>,
+  onSuccess?: (workspace: WorkspaceReadModel) => Partial<WorkspaceStore>,
 ) {
   set({ isWorking: true });
   try {
-    const workspace = await mutation();
+    const dto = await mutation();
+    const workspace = mapWorkspaceFromDto(dto);
     set({
       workspace,
       error: null,
@@ -114,7 +119,8 @@ function createWorkspaceStoreState() {
 
         if (!workspaceListenersReady) {
           workspaceListenersReady = shellClients.workspace
-            .listenProjectionUpdated((workspace) => {
+            .listenProjectionUpdated((dto) => {
+              const workspace = mapWorkspaceFromDto(dto);
               set({
                 workspace,
                 error: null,
@@ -125,12 +131,13 @@ function createWorkspaceStoreState() {
         }
         await workspaceListenersReady;
 
-        const shouldShowWizard = payload.workspace.tabs.length === 0;
+        const workspace = mapWorkspaceFromDto(payload.workspace);
+        const shouldShowWizard = workspace.tabs.length === 0;
         set({
-          workspace: payload.workspace,
+          workspace,
           error: null,
           isHydrating: false,
-          wizardTab: shouldShowWizard ? makeWizardTab(payload.workspace) : null,
+          wizardTab: shouldShowWizard ? makeWizardTab(workspace) : null,
         });
       } catch (error) {
         set({
@@ -213,13 +220,16 @@ function createWorkspaceStoreState() {
     },
 
     async restartPaneRuntime(paneId) {
-      await runWorkspaceMutation(set, async () => {
+      set({ isWorking: true });
+      try {
         await shellClients.workspace.dispatch({
           kind: "restartPaneRuntime",
           pane_id: paneId,
         } satisfies WorkspaceCommandDto);
-        return get().workspace ?? { activeTabId: "", tabs: [] };
-      });
+        set({ isWorking: false, error: null });
+      } catch (error) {
+        set({ error: asErrorMessage(error), isWorking: false });
+      }
     },
 
     async splitPane(paneId, direction, paneSpec) {

@@ -3,13 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { CUSTOM_PROFILE_ID, type PaneProfile, type PaneSpecDto, type SplitDirection } from "@/features/workspace/domain";
+import type { PaneSpecDto } from "@/contracts/tauri-bindings";
+import { CUSTOM_PROFILE_ID, type PaneSpec, type SplitDirection } from "@/features/workspace/domain/models";
+import type { ProfileReadModel } from "@/features/settings/domain/models";
 import { pickDirectory } from "@/lib/pickDirectory";
 
 interface SplitPopupProps {
   direction: SplitDirection;
-  profiles: PaneProfile[];
-  defaultSpec: PaneSpecDto;
+  profiles: readonly ProfileReadModel[];
+  defaultSpec: PaneSpec;
   onConfirm: (paneSpec: PaneSpecDto) => void;
   onCancel: () => void;
 }
@@ -24,16 +26,16 @@ export function SplitPopup({
   const initialMode = defaultSpec.kind === "browser" ? "browser" : "terminal";
   const [mode, setMode] = useState<"terminal" | "browser">(initialMode);
   const [profileId, setProfileId] = useState(
-    defaultSpec.kind === "terminal" ? defaultSpec.launch_profile_id : "terminal",
+    defaultSpec.kind === "terminal" ? defaultSpec.launchProfileId : "terminal",
   );
   const [cwd, setCwd] = useState(
-    defaultSpec.kind === "terminal" ? defaultSpec.working_directory : "~",
+    defaultSpec.kind === "terminal" ? defaultSpec.workingDirectory : "~",
   );
   const [customCommand, setCustomCommand] = useState(
-    defaultSpec.kind === "terminal" ? defaultSpec.command_override ?? "" : "",
+    defaultSpec.kind === "terminal" ? defaultSpec.commandOverride ?? "" : "",
   );
   const [url, setUrl] = useState(
-    defaultSpec.kind === "browser" ? defaultSpec.initial_url : "https://google.com",
+    defaultSpec.kind === "browser" ? defaultSpec.initialUrl : "https://google.com",
   );
 
   const stateRef = useRef({ mode, profileId, cwd, customCommand, url });

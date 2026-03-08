@@ -4,7 +4,9 @@ import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { CUSTOM_PROFILE_ID, type LayoutPreset, type PaneProfile, type WorkspaceSettings } from "@/features/workspace/domain";
+import { CUSTOM_PROFILE_ID } from "@/features/workspace/domain/models";
+import type { LayoutPreset } from "@/features/settings/domain/models";
+import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
 import { pickDirectory } from "@/lib/pickDirectory";
 
 const LAYOUT_OPTIONS: { value: LayoutPreset; label: string }[] = [
@@ -22,10 +24,10 @@ const THEME_OPTIONS = [
 ];
 
 interface SettingsModalProps {
-  settings: WorkspaceSettings;
-  profiles: PaneProfile[];
+  settings: SettingsReadModel;
+  profiles: readonly ProfileReadModel[];
   onClose: () => void;
-  onSave: (settings: WorkspaceSettings) => Promise<void>;
+  onSave: (settings: SettingsReadModel) => Promise<void>;
   onReset: () => Promise<void>;
 }
 
@@ -212,7 +214,7 @@ export function SettingsModal({
               onChange={(event) =>
                 setDraft((current) => ({
                   ...current,
-                  theme: event.target.value as WorkspaceSettings["theme"],
+                  theme: event.target.value as SettingsReadModel["theme"],
                 }))
               }
             >

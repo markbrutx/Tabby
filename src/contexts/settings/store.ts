@@ -1,14 +1,36 @@
 import { create } from "zustand";
 import { asErrorMessage, shellClients } from "@/app-shell/clients";
-import type { PaneProfile, SettingsCommandDto, WorkspaceSettings } from "@/features/workspace/domain";
+import type { SettingsCommandDto, SettingsView } from "@/contracts/tauri-bindings";
+import type {
+  ProfileReadModel,
+  SettingsReadModel,
+} from "@/features/settings/domain/models";
+import {
+  mapProfileFromDto,
+  mapSettingsFromDto,
+} from "@/features/settings/application/snapshot-mappers";
 
 interface SettingsState {
-  settings: WorkspaceSettings | null;
-  profiles: PaneProfile[];
-  loadBootstrap: (settings: WorkspaceSettings, profiles: PaneProfile[]) => void;
+  settings: SettingsReadModel | null;
+  profiles: ProfileReadModel[];
+  loadBootstrap: (settings: SettingsView, profiles: readonly { id: string; label: string; description: string; startupCommandTemplate: string | null }[]) => void;
   initializeListeners: () => Promise<void>;
-  updateSettings: (settings: WorkspaceSettings) => Promise<void>;
+  updateSettings: (settings: SettingsReadModel) => Promise<void>;
   resetSettings: () => Promise<void>;
+}
+
+function toSettingsView(model: SettingsReadModel): SettingsView {
+  return {
+    defaultLayout: model.defaultLayout,
+    defaultTerminalProfileId: model.defaultTerminalProfileId,
+    defaultWorkingDirectory: model.defaultWorkingDirectory,
+    defaultCustomCommand: model.defaultCustomCommand,
+    fontSize: model.fontSize,
+    theme: model.theme,
+    launchFullscreen: model.launchFullscreen,
+    hasCompletedOnboarding: model.hasCompletedOnboarding,
+    lastWorkingDirectory: model.lastWorkingDirectory,
+  };
 }
 
 let settingsListenersReady: Promise<void> | null = null;
@@ -18,7 +40,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   profiles: [],
 
   loadBootstrap(settings, profiles) {
-    set({ settings, profiles });
+    set({
+      settings: mapSettingsFromDto(settings),
+      profiles: profiles.map(mapProfileFromDto),
+    });
     void get().initializeListeners();
   },
 
@@ -31,8 +56,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     settingsListenersReady = shellClients.settings
       .listenProjectionUpdated((payload) => {
         set({
-          settings: payload.settings,
-          profiles: payload.profileCatalog.terminalProfiles,
+          settings: mapSettingsFromDto(payload.settings),
+          profiles: payload.profileCatalog.terminalProfiles.map(mapProfileFromDto),
         });
       })
       .then(() => undefined);
@@ -42,11 +67,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   async updateSettings(settings) {
     try {
-      const next = await shellClients.settings.dispatch({
+      const nextDto = await shellClients.settings.dispatch({
         kind: "update",
-        settings,
+        settings: toSettingsView(settings),
       } satisfies SettingsCommandDto);
-      set({ settings: next });
+      set({ settings: mapSettingsFromDto(nextDto) });
     } catch (error) {
       throw new Error(asErrorMessage(error));
     }
@@ -54,10 +79,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   async resetSettings() {
     try {
-      const next = await shellClients.settings.dispatch({
+      const nextDto = await shellClients.settings.dispatch({
         kind: "reset",
       } satisfies SettingsCommandDto);
-      set({ settings: next });
+      set({ settings: mapSettingsFromDto(nextDto) });
     } catch (error) {
       throw new Error(asErrorMessage(error));
     }

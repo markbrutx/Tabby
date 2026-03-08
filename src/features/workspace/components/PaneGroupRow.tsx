@@ -2,7 +2,8 @@ import { FolderOpen, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { CUSTOM_PROFILE_ID, type PaneProfile } from "@/features/workspace/domain";
+import { CUSTOM_PROFILE_ID } from "@/features/workspace/domain/models";
+import type { ProfileReadModel } from "@/features/settings/domain/models";
 import type { PaneGroupConfig } from "@/features/workspace/store/types";
 import { pickDirectory } from "@/lib/pickDirectory";
 
@@ -17,7 +18,7 @@ const GROUP_DOT_COLORS = [
 interface PaneGroupRowProps {
   index: number;
   group: PaneGroupConfig;
-  profiles: PaneProfile[];
+  profiles: ProfileReadModel[];
   maxCount: number;
   canRemove: boolean;
   onChange: (update: Partial<PaneGroupConfig>) => void;

@@ -1,13 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SplitPopup } from "./SplitPopup";
-import type { PaneProfile } from "@/features/workspace/domain";
+import type { ProfileReadModel } from "@/features/settings/domain/models";
 
 vi.mock("@/lib/pickDirectory", () => ({
   pickDirectory: vi.fn().mockResolvedValue(null),
 }));
 
-const profiles: PaneProfile[] = [
+const profiles: ProfileReadModel[] = [
   { id: "terminal", label: "Terminal", description: "Shell", startupCommandTemplate: null },
   { id: "custom", label: "Custom", description: "Run any command", startupCommandTemplate: null },
 ];
@@ -20,9 +20,9 @@ describe("SplitPopup", () => {
         profiles={profiles}
         defaultSpec={{
           kind: "terminal",
-          launch_profile_id: "",
-          working_directory: "/tmp",
-          command_override: null,
+          launchProfileId: "",
+          workingDirectory: "/tmp",
+          commandOverride: null,
         }}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
@@ -39,9 +39,9 @@ describe("SplitPopup", () => {
         profiles={profiles}
         defaultSpec={{
           kind: "terminal",
-          launch_profile_id: "custom",
-          working_directory: "/tmp",
-          command_override: null,
+          launchProfileId: "custom",
+          workingDirectory: "/tmp",
+          commandOverride: null,
         }}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
@@ -59,9 +59,9 @@ describe("SplitPopup", () => {
         profiles={profiles}
         defaultSpec={{
           kind: "terminal",
-          launch_profile_id: "custom",
-          working_directory: "/tmp",
-          command_override: null,
+          launchProfileId: "custom",
+          workingDirectory: "/tmp",
+          commandOverride: null,
         }}
         onConfirm={onConfirm}
         onCancel={vi.fn()}
@@ -81,9 +81,9 @@ describe("SplitPopup", () => {
         profiles={profiles}
         defaultSpec={{
           kind: "terminal",
-          launch_profile_id: "custom",
-          working_directory: "/tmp",
-          command_override: null,
+          launchProfileId: "custom",
+          workingDirectory: "/tmp",
+          commandOverride: null,
         }}
         onConfirm={onConfirm}
         onCancel={vi.fn()}

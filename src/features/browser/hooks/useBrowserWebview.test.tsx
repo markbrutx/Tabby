@@ -73,7 +73,7 @@ function makePaneSnapshot(id = "pane-1"): PaneSnapshotModel {
     url: "https://example.com",
     spec: {
       kind: "browser",
-      initial_url: "https://example.com",
+      initialUrl: "https://example.com",
     },
     runtime: {
       paneId: id,
