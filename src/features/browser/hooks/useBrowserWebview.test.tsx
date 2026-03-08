@@ -2,10 +2,10 @@ import { act, render } from "@testing-library/react";
 import { useEffect, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeClient } from "@/app-shell/clients";
-import { AppShellContext } from "@/app-shell/context/AppShellContext";
 import type { BrowserSurfaceCommandDto } from "@/features/workspace/domain";
 import { normalizeUrl, useBrowserWebview } from "./useBrowserWebview";
 import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
+import { createRuntimeStore } from "@/features/runtime/application/store";
 
 describe("normalizeUrl", () => {
   it("returns default URL for empty input", () => {
@@ -58,6 +58,13 @@ const mockBridge = {
   listenTerminalOutput: vi.fn(() => Promise.resolve(() => {})),
   listenBrowserLocationObserved: vi.fn(() => Promise.resolve(() => {})),
 } satisfies RuntimeClient;
+
+// Create a real store backed by the mock client and wire it into the module mock
+const mockStore = createRuntimeStore(mockBridge);
+
+vi.mock("@/contexts/stores", () => ({
+  useRuntimeStore: (selector: (state: unknown) => unknown) => mockStore(selector),
+}));
 
 function makePaneSnapshot(id = "pane-1"): PaneSnapshotModel {
   return {
@@ -116,24 +123,7 @@ function renderHarness(props: {
   modalOpen: boolean;
   onSetModal?: (setter: (v: boolean) => void) => void;
 }) {
-  return render(
-    <AppShellContext.Provider
-      value={{
-        workspace: {
-          bootstrap: vi.fn(),
-          dispatch: vi.fn(),
-          listenProjectionUpdated: vi.fn(),
-        },
-        settings: {
-          dispatch: vi.fn(),
-          listenProjectionUpdated: vi.fn(),
-        },
-        runtime: mockBridge,
-      }}
-    >
-      <HookHarness {...props} />
-    </AppShellContext.Provider>,
-  );
+  return render(<HookHarness {...props} />);
 }
 
 describe("useBrowserWebview — visibility with modal overlay", () => {
@@ -269,26 +259,11 @@ describe("useBrowserWebview — visibility with modal overlay", () => {
     expect(mockDispatchBrowserSurface).not.toHaveBeenCalled();
 
     rerender(
-      <AppShellContext.Provider
-        value={{
-          workspace: {
-            bootstrap: vi.fn(),
-            dispatch: vi.fn(),
-            listenProjectionUpdated: vi.fn(),
-          },
-          settings: {
-            dispatch: vi.fn(),
-            listenProjectionUpdated: vi.fn(),
-          },
-          runtime: mockBridge,
-        }}
-      >
-        <HookHarness
-          pane={pane}
-          visible={true}
-          modalOpen={false}
-        />
-      </AppShellContext.Provider>,
+      <HookHarness
+        pane={pane}
+        visible={true}
+        modalOpen={false}
+      />,
     );
 
     await act(async () => { vi.advanceTimersByTime(16); });
@@ -317,48 +292,18 @@ describe("useBrowserWebview — visibility with modal overlay", () => {
     });
 
     rerender(
-      <AppShellContext.Provider
-        value={{
-          workspace: {
-            bootstrap: vi.fn(),
-            dispatch: vi.fn(),
-            listenProjectionUpdated: vi.fn(),
-          },
-          settings: {
-            dispatch: vi.fn(),
-            listenProjectionUpdated: vi.fn(),
-          },
-          runtime: mockBridge,
-        }}
-      >
-        <HookHarness
-          pane={pane}
-          visible={false}
-          modalOpen={false}
-        />
-      </AppShellContext.Provider>,
+      <HookHarness
+        pane={pane}
+        visible={false}
+        modalOpen={false}
+      />,
     );
     rerender(
-      <AppShellContext.Provider
-        value={{
-          workspace: {
-            bootstrap: vi.fn(),
-            dispatch: vi.fn(),
-            listenProjectionUpdated: vi.fn(),
-          },
-          settings: {
-            dispatch: vi.fn(),
-            listenProjectionUpdated: vi.fn(),
-          },
-          runtime: mockBridge,
-        }}
-      >
-        <HookHarness
-          pane={pane}
-          visible={true}
-          modalOpen={false}
-        />
-      </AppShellContext.Provider>,
+      <HookHarness
+        pane={pane}
+        visible={true}
+        modalOpen={false}
+      />,
     );
 
     await act(async () => { vi.advanceTimersByTime(16); });

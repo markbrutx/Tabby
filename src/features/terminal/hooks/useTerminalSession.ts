@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import { FitAddon } from "xterm-addon-fit";
 import { WebglAddon } from "xterm-addon-webgl";
 import { Terminal } from "xterm";
-import { useRuntimeClient } from "@/app-shell/context/AppShellContext";
+import { useRuntimeStore } from "@/contexts/stores";
 import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import { getTerminalTheme, type ResolvedTheme } from "@/features/workspace/theme";
-import { initDispatcher, registerPtyOutput, teardownDispatcher } from "@/features/terminal/ptyOutputDispatcher";
+import { registerPtyOutput } from "@/features/terminal/ptyOutputDispatcher";
 import { isTauriRuntime } from "@/lib/runtime";
 
 interface UseTerminalSessionOptions {
@@ -39,7 +39,12 @@ export function useTerminalSession({
   active,
   visible,
 }: UseTerminalSessionOptions) {
-  const runtimeClient = useRuntimeClient();
+  const writeTerminalInput = useRuntimeStore((s) => s.writeTerminalInput);
+  const observeTerminalCwd = useRuntimeStore((s) => s.observeTerminalCwd);
+  const resizeTerminal = useRuntimeStore((s) => s.resizeTerminal);
+  const initTerminalOutputDispatcher = useRuntimeStore((s) => s.initTerminalOutputDispatcher);
+  const teardownTerminalOutputDispatcher = useRuntimeStore((s) => s.teardownTerminalOutputDispatcher);
+
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const webglAddonRef = useRef<WebglAddon | null>(null);
@@ -52,7 +57,7 @@ export function useTerminalSession({
       return;
     }
 
-    void initDispatcher(runtimeClient);
+    void initTerminalOutputDispatcher();
 
     const unregister = registerPtyOutput(pane.id, pane.sessionId, (chunk) => {
       if (terminalRef.current && initializedRef.current) {
@@ -68,9 +73,9 @@ export function useTerminalSession({
 
     return () => {
       unregister();
-      teardownDispatcher();
+      teardownTerminalOutputDispatcher();
     };
-  }, [pane.id, pane.sessionId, runtimeClient]);
+  }, [pane.id, pane.sessionId, initTerminalOutputDispatcher, teardownTerminalOutputDispatcher]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -98,11 +103,7 @@ export function useTerminalSession({
     initializedRef.current = false;
 
     const dataDisposable = terminal.onData((data) => {
-      void runtimeClient.dispatch({
-        kind: "writeTerminalInput",
-        pane_id: pane.id,
-        input: data,
-      });
+      void writeTerminalInput(pane.id, data);
     });
 
     const oscDisposable = terminal.parser.registerOscHandler(7, (data) => {
@@ -110,11 +111,7 @@ export function useTerminalSession({
         const url = new URL(data);
         const cwd = decodeURIComponent(url.pathname);
         if (cwd) {
-          void runtimeClient.dispatch({
-            kind: "observeTerminalCwd",
-            pane_id: pane.id,
-            working_directory: cwd,
-          });
+          void observeTerminalCwd(pane.id, cwd);
         }
       } catch {
         // Malformed URL - ignore.
@@ -130,12 +127,7 @@ export function useTerminalSession({
       safeFit(fitAddon, container);
 
       if (isTauriRuntime()) {
-        void runtimeClient.dispatch({
-          kind: "resizeTerminal",
-          pane_id: pane.id,
-          cols: terminal.cols,
-          rows: terminal.rows,
-        });
+        void resizeTerminal(pane.id, terminal.cols, terminal.rows);
       }
     });
 
@@ -163,7 +155,7 @@ export function useTerminalSession({
       fitAddonRef.current = null;
       pendingDataRef.current = [];
     };
-  }, [fontSize, pane.id, pane.sessionId, runtimeClient, theme]);
+  }, [fontSize, pane.id, pane.sessionId, writeTerminalInput, observeTerminalCwd, resizeTerminal, theme]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -178,12 +170,7 @@ export function useTerminalSession({
       if (active) {
         safeFit(fitAddon, container);
         if (isTauriRuntime()) {
-          void runtimeClient.dispatch({
-            kind: "resizeTerminal",
-            pane_id: pane.id,
-            cols: terminal.cols,
-            rows: terminal.rows,
-          });
+          void resizeTerminal(pane.id, terminal.cols, terminal.rows);
         }
       }
       return;
@@ -211,12 +198,7 @@ export function useTerminalSession({
       safeFit(fitAddon, container);
 
       if (isTauriRuntime()) {
-        void runtimeClient.dispatch({
-          kind: "resizeTerminal",
-          pane_id: pane.id,
-          cols: terminal.cols,
-          rows: terminal.rows,
-        });
+        void resizeTerminal(pane.id, terminal.cols, terminal.rows);
         pendingDataRef.current = [];
       } else {
         const pending = pendingDataRef.current.splice(0);
@@ -233,7 +215,7 @@ export function useTerminalSession({
     });
 
     return () => cancelAnimationFrame(rafId);
-  }, [pane.id, runtimeClient, visible, active]);
+  }, [pane.id, resizeTerminal, visible, active]);
 
   useEffect(() => {
     if (!terminalRef.current || !initializedRef.current) {
