@@ -14,7 +14,7 @@ mod tests {
 
     use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
     use tabby_workspace::{
-        BrowserPaneSpec, PaneId, PaneSpec, TabLayoutStrategy, TerminalPaneSpec,
+        spec_from_content, BrowserPaneSpec, PaneId, PaneSpec, TabLayoutStrategy, TerminalPaneSpec,
         WorkspaceDomainEvent, WorkspaceSession,
     };
 
@@ -157,11 +157,17 @@ mod tests {
     fn apply_events(service: &TestRuntimeService, events: Vec<WorkspaceDomainEvent>) {
         for event in events {
             match event {
-                WorkspaceDomainEvent::PaneAdded { pane_id, spec } => {
+                WorkspaceDomainEvent::PaneAdded { pane_id, content } => {
+                    let spec = spec_from_content(&content);
                     service.start_runtime(pane_id.as_ref(), &spec);
                 }
-                WorkspaceDomainEvent::PaneSpecReplaced { pane_id, spec } => {
+                WorkspaceDomainEvent::PaneSpecReplaced {
+                    pane_id,
+                    new_content,
+                    ..
+                } => {
                     service.stop_runtime(pane_id.as_ref());
+                    let spec = spec_from_content(&new_content);
                     service.start_runtime(pane_id.as_ref(), &spec);
                 }
                 WorkspaceDomainEvent::PaneRemoved { pane_id, .. } => {

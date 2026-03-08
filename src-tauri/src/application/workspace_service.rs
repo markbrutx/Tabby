@@ -280,9 +280,18 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            WorkspaceDomainEvent::PaneSpecReplaced { pane_id: pid, spec } => {
+            WorkspaceDomainEvent::PaneSpecReplaced {
+                pane_id: pid,
+                old_content,
+                new_content,
+            } => {
                 assert_eq!(*pid, pane_id);
-                assert_eq!(*spec, new_spec);
+                // Old content was terminal
+                assert!(old_content.terminal_profile_id().is_some());
+                // New content is browser
+                assert!(new_content.browser_url().is_some());
+                // Old content id is never reused
+                assert_ne!(old_content.content_id(), new_content.content_id());
             }
             other => panic!("expected PaneSpecReplaced, got {other:?}"),
         }

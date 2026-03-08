@@ -74,11 +74,26 @@ pub enum TabLayoutStrategy {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceDomainEvent {
-    PaneAdded { pane_id: PaneId, spec: PaneSpec },
-    PaneRemoved { pane_id: PaneId, spec: PaneSpec },
-    PaneSpecReplaced { pane_id: PaneId, spec: PaneSpec },
-    ActivePaneChanged { pane_id: PaneId, tab_id: TabId },
-    ActiveTabChanged { tab_id: TabId },
+    PaneAdded {
+        pane_id: PaneId,
+        content: PaneContentDefinition,
+    },
+    PaneRemoved {
+        pane_id: PaneId,
+        content: PaneContentDefinition,
+    },
+    PaneSpecReplaced {
+        pane_id: PaneId,
+        old_content: PaneContentDefinition,
+        new_content: PaneContentDefinition,
+    },
+    ActivePaneChanged {
+        pane_id: PaneId,
+        tab_id: TabId,
+    },
+    ActiveTabChanged {
+        tab_id: TabId,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -132,11 +147,12 @@ impl WorkspaceSession {
             let content_id = content.content_id().clone();
             let pane_id = create_pane_id();
 
-            self.content_store.insert(content_id.clone(), content);
+            self.content_store
+                .insert(content_id.clone(), content.clone());
 
             pane_added_events.push(WorkspaceDomainEvent::PaneAdded {
                 pane_id: pane_id.clone(),
-                spec,
+                content,
             });
 
             panes.push(PaneSlot {
@@ -201,22 +217,12 @@ impl WorkspaceSession {
         let mut events: Vec<WorkspaceDomainEvent> = removed
             .panes
             .into_iter()
-            .map(|pane| {
-                let spec = self
-                    .content_store
-                    .remove(&pane.content_id)
-                    .map(|c| spec_from_content(&c))
-                    .unwrap_or_else(|| {
-                        PaneSpec::Terminal(TerminalPaneSpec {
-                            launch_profile_id: String::new(),
-                            working_directory: String::new(),
-                            command_override: None,
-                        })
-                    });
-                WorkspaceDomainEvent::PaneRemoved {
+            .filter_map(|pane| {
+                let content = self.content_store.remove(&pane.content_id)?;
+                Some(WorkspaceDomainEvent::PaneRemoved {
                     pane_id: pane.pane_id,
-                    spec,
-                }
+                    content,
+                })
             })
             .collect();
 
@@ -301,7 +307,8 @@ impl WorkspaceSession {
         let content_id = content.content_id().clone();
         let new_pane_id = create_pane_id();
 
-        self.content_store.insert(content_id.clone(), content);
+        self.content_store
+            .insert(content_id.clone(), content.clone());
 
         let new_pane = PaneSlot {
             pane_id: new_pane_id.clone(),
@@ -325,7 +332,7 @@ impl WorkspaceSession {
 
         Ok(vec![WorkspaceDomainEvent::PaneAdded {
             pane_id: new_pane_id,
-            spec,
+            content,
         }])
     }
 
@@ -342,17 +349,15 @@ impl WorkspaceSession {
         let removed = self.tabs[tab_index].panes.remove(pane_index);
 
         // Destroy the associated PaneContentDefinition (1:1 ownership)
-        let removed_spec = self
+        let removed_content = self
             .content_store
             .remove(&removed.content_id)
-            .map(|c| spec_from_content(&c))
-            .unwrap_or_else(|| {
-                PaneSpec::Terminal(TerminalPaneSpec {
-                    launch_profile_id: String::new(),
-                    working_directory: String::new(),
-                    command_override: None,
-                })
-            });
+            .ok_or_else(|| {
+                WorkspaceError::State(format!(
+                    "content not found for pane {} during close",
+                    removed.pane_id
+                ))
+            })?;
 
         let mut extra_events = Vec::new();
 
@@ -397,7 +402,7 @@ impl WorkspaceSession {
 
         let mut events = vec![WorkspaceDomainEvent::PaneRemoved {
             pane_id: removed.pane_id,
-            spec: removed_spec,
+            content: removed_content,
         }];
         events.extend(extra_events);
         Ok(events)
@@ -437,13 +442,18 @@ impl WorkspaceSession {
 
         // Destroy old content
         let old_content_id = self.tabs[tab_index].panes[pane_index].content_id.clone();
-        self.content_store.remove(&old_content_id);
+        let old_content = self.content_store.remove(&old_content_id).ok_or_else(|| {
+            WorkspaceError::State(format!(
+                "content not found for pane {} during replace",
+                pane_id
+            ))
+        })?;
 
         // Create new content with new id (atomic replace)
         let new_content = content_from_spec(&spec);
         let new_content_id = new_content.content_id().clone();
         self.content_store
-            .insert(new_content_id.clone(), new_content);
+            .insert(new_content_id.clone(), new_content.clone());
 
         // Update pane's content reference
         self.tabs[tab_index].panes[pane_index].content_id = new_content_id;
@@ -452,7 +462,8 @@ impl WorkspaceSession {
 
         Ok(vec![WorkspaceDomainEvent::PaneSpecReplaced {
             pane_id: pane_id.clone(),
-            spec,
+            old_content,
+            new_content,
         }])
     }
 
@@ -640,7 +651,7 @@ fn content_from_spec(spec: &PaneSpec) -> PaneContentDefinition {
     }
 }
 
-fn spec_from_content(content: &PaneContentDefinition) -> PaneSpec {
+pub fn spec_from_content(content: &PaneContentDefinition) -> PaneSpec {
     match content {
         PaneContentDefinition::Terminal {
             profile_id,
@@ -662,8 +673,8 @@ fn spec_from_content(content: &PaneContentDefinition) -> PaneSpec {
 mod tests {
     use super::{
         layout::{LayoutPreset, SplitDirection},
-        BrowserPaneSpec, PaneId, PaneSpec, TabId, TabLayoutStrategy, WorkspaceDomainEvent,
-        WorkspaceSession,
+        BrowserPaneSpec, PaneContentDefinition, PaneId, PaneSpec, TabId, TabLayoutStrategy,
+        WorkspaceDomainEvent, WorkspaceSession,
     };
 
     fn terminal(cwd: &str) -> PaneSpec {
@@ -711,7 +722,7 @@ mod tests {
 
         // PaneAdded
         assert!(
-            matches!(&events[0], WorkspaceDomainEvent::PaneAdded { pane_id: pid, spec: PaneSpec::Terminal(_) } if *pid == pane_id)
+            matches!(&events[0], WorkspaceDomainEvent::PaneAdded { pane_id: pid, content: PaneContentDefinition::Terminal { .. } } if *pid == pane_id)
         );
         // ActiveTabChanged
         assert!(
@@ -741,8 +752,12 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            WorkspaceDomainEvent::PaneAdded { spec, .. } => {
-                assert_eq!(*spec, browser_spec);
+            WorkspaceDomainEvent::PaneAdded { content, .. } => {
+                assert!(content.browser_url().is_some());
+                assert_eq!(
+                    content.browser_url().map(|u| u.as_str()),
+                    Some("https://example.com")
+                );
             }
             other => panic!("expected PaneAdded, got {other:?}"),
         }
@@ -765,7 +780,7 @@ mod tests {
 
         assert!(events.iter().any(|e| matches!(
             e,
-            WorkspaceDomainEvent::PaneRemoved { pane_id: pid, .. } if *pid == pane_id
+            WorkspaceDomainEvent::PaneRemoved { pane_id: pid, content: PaneContentDefinition::Terminal { .. } } if *pid == pane_id
         )));
     }
 
@@ -808,9 +823,22 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            WorkspaceDomainEvent::PaneSpecReplaced { pane_id: pid, spec } => {
+            WorkspaceDomainEvent::PaneSpecReplaced {
+                pane_id: pid,
+                old_content,
+                new_content,
+            } => {
                 assert_eq!(*pid, pane_id);
-                assert_eq!(*spec, new_spec);
+                // Old content was terminal
+                assert!(old_content.terminal_profile_id().is_some());
+                // New content is browser
+                assert!(new_content.browser_url().is_some());
+                assert_eq!(
+                    new_content.browser_url().map(|u| u.as_str()),
+                    Some("https://example.com")
+                );
+                // Old content id is never reused
+                assert_ne!(old_content.content_id(), new_content.content_id());
             }
             other => panic!("expected PaneSpecReplaced, got {other:?}"),
         }
@@ -928,11 +956,12 @@ mod tests {
 
     #[test]
     fn events_carry_no_transport_types() {
-        // Negative case: WorkspaceDomainEvent only uses domain types (newtypes, PaneSpec).
+        // Negative case: WorkspaceDomainEvent only uses domain types (newtypes, PaneContentDefinition).
         // This test verifies that events can be constructed without any Tauri/transport imports.
+        let content_id = super::create_content_id();
         let event = WorkspaceDomainEvent::PaneAdded {
             pane_id: PaneId::from(String::from("p1")),
-            spec: terminal("/tmp"),
+            content: PaneContentDefinition::terminal(content_id, "default", "/tmp", None),
         };
         let event2 = WorkspaceDomainEvent::ActivePaneChanged {
             pane_id: PaneId::from(String::from("p1")),

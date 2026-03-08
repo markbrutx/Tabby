@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tabby_workspace::WorkspaceDomainEvent;
+use tabby_workspace::{spec_from_content, WorkspaceDomainEvent};
 
 use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use crate::application::{RuntimeApplicationService, SettingsApplicationService};
@@ -19,10 +19,9 @@ impl RuntimeCoordinator {
     /// restarting runtimes as needed.
     ///
     /// Event mapping:
-    /// - `PaneAdded(TerminalSpec)` → start terminal runtime
-    /// - `PaneAdded(BrowserSpec)` → start browser runtime
-    /// - `PaneRemoved` → stop runtime
-    /// - `PaneSpecReplaced` → start runtime with new spec (old runtime already stopped)
+    /// - `PaneAdded` → start runtime from content definition
+    /// - `PaneRemoved` → stop runtime, content already destroyed
+    /// - `PaneSpecReplaced` → stop old runtime, start new runtime from new content
     /// - `ActivePaneChanged` / `ActiveTabChanged` → no runtime side-effects
     pub fn handle_workspace_events(
         events: Vec<WorkspaceDomainEvent>,
@@ -38,7 +37,8 @@ impl RuntimeCoordinator {
 
         for event in events {
             match event {
-                WorkspaceDomainEvent::PaneAdded { pane_id, spec } => {
+                WorkspaceDomainEvent::PaneAdded { pane_id, content } => {
+                    let spec = spec_from_content(&content);
                     runtime_service.start_runtime(
                         pane_id.as_ref(),
                         &spec,
@@ -46,8 +46,13 @@ impl RuntimeCoordinator {
                         Arc::clone(&observation_receiver),
                     )?;
                 }
-                WorkspaceDomainEvent::PaneSpecReplaced { pane_id, spec } => {
+                WorkspaceDomainEvent::PaneSpecReplaced {
+                    pane_id,
+                    new_content,
+                    ..
+                } => {
                     runtime_service.stop_runtime(pane_id.as_ref());
+                    let spec = spec_from_content(&new_content);
                     runtime_service.start_runtime(
                         pane_id.as_ref(),
                         &spec,
@@ -73,20 +78,22 @@ impl RuntimeCoordinator {
 mod tests {
     use super::*;
     use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
-    use tabby_workspace::{BrowserPaneSpec, PaneId, PaneSpec, TabId, TerminalPaneSpec};
+    use tabby_workspace::{BrowserUrl, PaneContentDefinition, PaneContentId, PaneId, TabId};
 
-    fn terminal_spec(profile_id: &str) -> PaneSpec {
-        PaneSpec::Terminal(TerminalPaneSpec {
-            launch_profile_id: String::from(profile_id),
-            working_directory: String::from("/tmp"),
-            command_override: None,
-        })
+    fn terminal_content(profile_id: &str) -> PaneContentDefinition {
+        PaneContentDefinition::terminal(
+            PaneContentId::from(uuid::Uuid::new_v4().to_string()),
+            profile_id,
+            "/tmp",
+            None,
+        )
     }
 
-    fn browser_spec(url: &str) -> PaneSpec {
-        PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: String::from(url),
-        })
+    fn browser_content(url: &str) -> PaneContentDefinition {
+        PaneContentDefinition::browser(
+            PaneContentId::from(uuid::Uuid::new_v4().to_string()),
+            BrowserUrl::new(url),
+        )
     }
 
     fn sid(s: &str) -> RuntimeSessionId {
@@ -108,7 +115,7 @@ mod tests {
     fn pane_added_is_runtime_event() {
         let event = WorkspaceDomainEvent::PaneAdded {
             pane_id: PaneId::from(String::from("pane-1")),
-            spec: terminal_spec("default"),
+            content: terminal_content("default"),
         };
         assert!(is_runtime_event(&event));
     }
@@ -117,7 +124,7 @@ mod tests {
     fn pane_removed_is_runtime_event() {
         let event = WorkspaceDomainEvent::PaneRemoved {
             pane_id: PaneId::from(String::from("pane-1")),
-            spec: terminal_spec("default"),
+            content: terminal_content("default"),
         };
         assert!(is_runtime_event(&event));
     }
@@ -126,7 +133,8 @@ mod tests {
     fn pane_spec_replaced_is_runtime_event() {
         let event = WorkspaceDomainEvent::PaneSpecReplaced {
             pane_id: PaneId::from(String::from("pane-1")),
-            spec: browser_spec("https://example.com"),
+            old_content: terminal_content("default"),
+            new_content: browser_content("https://example.com"),
         };
         assert!(is_runtime_event(&event));
     }
@@ -293,16 +301,17 @@ mod tests {
         // Verifies the coordinator mapping: PaneAdded(Terminal) → start_runtime
         let event = WorkspaceDomainEvent::PaneAdded {
             pane_id: PaneId::from(String::from("pane-t")),
-            spec: terminal_spec("default"),
+            content: terminal_content("default"),
         };
 
         // After coordinator processes PaneAdded, a terminal runtime should exist
         let mut registry = RuntimeRegistry::default();
         if let WorkspaceDomainEvent::PaneAdded {
             ref pane_id,
-            ref spec,
+            ref content,
         } = event
         {
+            let spec = spec_from_content(content);
             if matches!(spec, tabby_workspace::PaneSpec::Terminal(_)) {
                 let runtime = registry.register_terminal(pane_id.as_ref(), sid("pty-new"));
                 assert!(matches!(runtime.kind, RuntimeKind::Terminal));
@@ -321,7 +330,7 @@ mod tests {
 
         let event = WorkspaceDomainEvent::PaneRemoved {
             pane_id: PaneId::from(String::from("pane-1")),
-            spec: terminal_spec("default"),
+            content: terminal_content("default"),
         };
 
         if let WorkspaceDomainEvent::PaneRemoved { ref pane_id, .. } = event {
@@ -339,19 +348,23 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
         registry.register_terminal("pane-1", sid("pty-1"));
 
+        let new_content = browser_content("https://example.com");
         let event = WorkspaceDomainEvent::PaneSpecReplaced {
             pane_id: PaneId::from(String::from("pane-1")),
-            spec: browser_spec("https://example.com"),
+            old_content: terminal_content("default"),
+            new_content: new_content.clone(),
         };
 
         if let WorkspaceDomainEvent::PaneSpecReplaced {
             ref pane_id,
-            ref spec,
+            new_content: ref nc,
+            ..
         } = event
         {
             // Coordinator stops old runtime before starting new one
             registry.remove(pane_id.as_ref());
-            // Coordinator starts new runtime with new spec
+            // Coordinator starts new runtime with new content
+            let spec = spec_from_content(nc);
             match spec {
                 tabby_workspace::PaneSpec::Browser(browser) => {
                     let runtime = registry.register_browser(
@@ -392,14 +405,16 @@ mod tests {
         // 2. Workspace emits PaneSpecReplaced (this is what replace_pane_spec returns)
         let event = WorkspaceDomainEvent::PaneSpecReplaced {
             pane_id: PaneId::from(String::from("pane-1")),
-            spec: browser_spec("https://example.com"),
+            old_content: terminal_content("default"),
+            new_content: browser_content("https://example.com"),
         };
 
         // 3. Coordinator processes event: stop old → start new
         //    (mirrors handle_workspace_events logic for PaneSpecReplaced)
         if let WorkspaceDomainEvent::PaneSpecReplaced {
             ref pane_id,
-            ref spec,
+            new_content: ref nc,
+            ..
         } = event
         {
             // a) Stop old runtime — same as runtime_service.stop_runtime()
@@ -414,7 +429,8 @@ mod tests {
                 "removed runtime should be the old terminal"
             );
 
-            // b) Start new runtime with the replaced spec
+            // b) Start new runtime with the replaced content
+            let spec = spec_from_content(nc);
             match spec {
                 tabby_workspace::PaneSpec::Browser(browser) => {
                     let new_runtime = registry.register_browser(
@@ -470,13 +486,14 @@ mod tests {
         // RuntimeCoordinator handles PaneAdded → start_runtime.
         let split_event = WorkspaceDomainEvent::PaneAdded {
             pane_id: PaneId::from(String::from("pane-2")),
-            spec: terminal_spec("default"),
+            content: terminal_content("default"),
         };
         if let WorkspaceDomainEvent::PaneAdded {
             ref pane_id,
-            ref spec,
+            ref content,
         } = split_event
         {
+            let spec = spec_from_content(content);
             if matches!(spec, tabby_workspace::PaneSpec::Terminal(_)) {
                 registry.register_terminal(pane_id.as_ref(), sid("pty-2"));
             }
@@ -496,7 +513,7 @@ mod tests {
         // RuntimeCoordinator handles PaneRemoved → stop_runtime.
         let close_event = WorkspaceDomainEvent::PaneRemoved {
             pane_id: PaneId::from(String::from("pane-2")),
-            spec: terminal_spec("default"),
+            content: terminal_content("default"),
         };
         if let WorkspaceDomainEvent::PaneRemoved { ref pane_id, .. } = close_event {
             let removed = registry.remove(pane_id.as_ref());
@@ -521,11 +538,13 @@ mod tests {
         // RuntimeCoordinator handles PaneSpecReplaced → stop old + start new.
         let replace_event = WorkspaceDomainEvent::PaneSpecReplaced {
             pane_id: PaneId::from(String::from("pane-1")),
-            spec: browser_spec("https://example.com"),
+            old_content: terminal_content("default"),
+            new_content: browser_content("https://example.com"),
         };
         if let WorkspaceDomainEvent::PaneSpecReplaced {
             ref pane_id,
-            ref spec,
+            new_content: ref nc,
+            ..
         } = replace_event
         {
             // Coordinator stops old runtime
@@ -537,7 +556,8 @@ mod tests {
                 "removed runtime should be the old terminal"
             );
 
-            // Coordinator starts new runtime with replaced spec
+            // Coordinator starts new runtime with replaced content
+            let spec = spec_from_content(nc);
             if let tabby_workspace::PaneSpec::Browser(browser) = spec {
                 registry.register_browser(
                     pane_id.as_ref(),
@@ -656,11 +676,11 @@ mod tests {
         let events = vec![
             WorkspaceDomainEvent::PaneAdded {
                 pane_id: PaneId::from(String::from("pane-1")),
-                spec: terminal_spec("default"),
+                content: terminal_content("default"),
             },
             WorkspaceDomainEvent::PaneAdded {
                 pane_id: PaneId::from(String::from("pane-2")),
-                spec: browser_spec("https://example.com"),
+                content: browser_content("https://example.com"),
             },
             WorkspaceDomainEvent::ActivePaneChanged {
                 pane_id: PaneId::from(String::from("pane-1")),
@@ -671,21 +691,24 @@ mod tests {
         // Process events as the coordinator would
         for event in &events {
             match event {
-                WorkspaceDomainEvent::PaneAdded { pane_id, spec } => match spec {
-                    tabby_workspace::PaneSpec::Terminal(_) => {
-                        registry.register_terminal(
-                            pane_id.as_ref(),
-                            RuntimeSessionId::from(format!("pty-{}", pane_id)),
-                        );
+                WorkspaceDomainEvent::PaneAdded { pane_id, content } => {
+                    let spec = spec_from_content(content);
+                    match spec {
+                        tabby_workspace::PaneSpec::Terminal(_) => {
+                            registry.register_terminal(
+                                pane_id.as_ref(),
+                                RuntimeSessionId::from(format!("pty-{}", pane_id)),
+                            );
+                        }
+                        tabby_workspace::PaneSpec::Browser(browser) => {
+                            registry.register_browser(
+                                pane_id.as_ref(),
+                                RuntimeSessionId::from(format!("browser-{}", pane_id)),
+                                browser.initial_url.clone(),
+                            );
+                        }
                     }
-                    tabby_workspace::PaneSpec::Browser(browser) => {
-                        registry.register_browser(
-                            pane_id.as_ref(),
-                            RuntimeSessionId::from(format!("browser-{}", pane_id)),
-                            browser.initial_url.clone(),
-                        );
-                    }
-                },
+                }
                 WorkspaceDomainEvent::ActivePaneChanged { .. }
                 | WorkspaceDomainEvent::ActiveTabChanged { .. } => {
                     // No registry changes expected
