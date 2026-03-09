@@ -142,5 +142,33 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-it
   - The command handler signature changed from taking `window: tauri::Window` to `state: State<'_, Arc<AppShell>>` — Tauri injects both automatically
 ---
 
+## [2026-03-09 07:54] - DDD-006: Wire TauriBrowserSurfaceAdapter to BrowserSurfacePort fully
+Thread:
+Run: 20260309-073631-33953 (iteration 6)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-iter-6.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-iter-6.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: de5a287 chore: update progress log for DDD-006 completion
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (19 files, 203 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (303 tests: 172 app-lib + 2 arch + 0 contracts + 29 kernel + 11 runtime + 35 settings + 53 workspace)
+- Files changed:
+  - .ralph/progress.md (updated — progress entry only, no source code changes)
+- All acceptance criteria were already satisfied by DDD-005:
+  1. TauriBrowserSurfaceAdapter implements all 5 BrowserSurfacePort methods (ensure_surface, set_bounds, set_visible, close_surface, navigate)
+  2. No stub/unimplemented methods remain
+  3. RuntimeApplicationService uses BrowserSurfacePort for all browser operations (dispatch_browser_surface_command + stop_runtime)
+  4. All quality gates pass (203 frontend + 303 backend tests)
+- **Learnings for future iterations:**
+  - DDD-005 fully wired the adapter as part of routing commands through RuntimeApplicationService — DDD-006 was a verification-only story
+  - When a story's work is already done by a dependency, still run all quality gates to confirm before marking complete
+---
+
 ## Codebase Patterns
 - (add reusable patterns here)
