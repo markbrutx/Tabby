@@ -57,8 +57,8 @@ pub enum SettingsError {
     Validation(String),
 }
 
-impl From<tabby_contracts::ValueObjectError> for SettingsError {
-    fn from(err: tabby_contracts::ValueObjectError) -> Self {
+impl From<tabby_kernel::ValueObjectError> for SettingsError {
+    fn from(err: tabby_kernel::ValueObjectError) -> Self {
         Self::Validation(err.to_string())
     }
 }

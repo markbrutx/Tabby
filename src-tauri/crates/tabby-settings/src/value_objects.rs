@@ -1,7 +1,7 @@
 use crate::SettingsError;
 
-// Re-export WorkingDirectory from the shared kernel (tabby-contracts).
-pub use tabby_contracts::WorkingDirectory;
+// Re-export WorkingDirectory from the shared kernel (tabby-kernel).
+pub use tabby_kernel::WorkingDirectory;
 
 /// Font size in points, validated to be within 8–72.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,7 +130,7 @@ mod tests {
         assert_eq!(FontSize::new(16).unwrap().to_string(), "16");
     }
 
-    // -- WorkingDirectory (imported from tabby-contracts) ------------------
+    // -- WorkingDirectory (imported from tabby-kernel) ---------------------
 
     #[test]
     fn working_directory_accepts_valid_path() {

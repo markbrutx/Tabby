@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tabby-contracts = { path = "../tabby-contracts" }
+tabby-kernel = { path = "../tabby-kernel" }
 thiserror = "2.0.18"

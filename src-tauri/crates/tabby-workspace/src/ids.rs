@@ -1,7 +1,7 @@
 use std::fmt;
 
-// Re-export shared value objects from tabby-contracts (shared kernel).
-pub use tabby_contracts::{BrowserUrl, PaneId, TabId};
+// Re-export shared value objects from tabby-kernel (shared kernel).
+pub use tabby_kernel::{BrowserUrl, PaneId, TabId};
 
 /// Type-safe identifier for a pane's content definition.
 /// Each PaneContentId belongs to exactly one PaneSlot — never shared, never reused after destruction.

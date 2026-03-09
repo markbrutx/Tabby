@@ -2,7 +2,7 @@ pub mod ids;
 
 use std::collections::HashMap;
 
-use tabby_contracts::PaneId;
+use tabby_kernel::PaneId;
 use thiserror::Error;
 
 pub use ids::RuntimeSessionId;
@@ -157,7 +157,7 @@ impl RuntimeRegistry {
 #[cfg(test)]
 mod tests {
     use super::{RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
-    use tabby_contracts::PaneId;
+    use tabby_kernel::PaneId;
 
     fn pid(id: &str) -> PaneId {
         PaneId::from(String::from(id))

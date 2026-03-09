@@ -3643,7 +3643,7 @@ version = "0.1.0"
 name = "tabby-runtime"
 version = "0.1.0"
 dependencies = [
- "tabby-contracts",
+ "tabby-kernel",
  "thiserror 2.0.18",
 ]
 
@@ -3653,7 +3653,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "tabby-contracts",
+ "tabby-kernel",
  "thiserror 2.0.18",
 ]
 
@@ -3661,7 +3661,7 @@ dependencies = [
 name = "tabby-workspace"
 version = "0.1.0"
 dependencies = [
- "tabby-contracts",
+ "tabby-kernel",
  "thiserror 2.0.18",
  "uuid",
 ]
