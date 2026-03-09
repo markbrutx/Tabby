@@ -2,7 +2,9 @@ import { asErrorMessage } from "@/app-shell/clients";
 import type { WorkspaceClient } from "@/app-shell/clients";
 import type { WorkspaceBootstrapView } from "@/contracts/tauri-bindings";
 import type { WorkspaceReadModel } from "@/features/workspace/domain/models";
+import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
 import { mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
+import { mapProfileFromDto, mapSettingsFromDto } from "@/features/settings/application/snapshot-mappers";
 
 export interface BootstrapableWorkspaceStore {
   getState: () => {
@@ -16,8 +18,8 @@ export interface BootstrapableSettingsStore {
   getState: () => {
     settings: { readonly hasCompletedOnboarding: boolean } | null;
     loadBootstrap: (
-      settings: WorkspaceBootstrapView["settings"],
-      profiles: WorkspaceBootstrapView["profileCatalog"]["terminalProfiles"],
+      settings: SettingsReadModel,
+      profiles: readonly ProfileReadModel[],
     ) => void;
     markOnboardingComplete: () => Promise<void>;
   };
@@ -51,10 +53,9 @@ export function createAppBootstrapCoordinator(
       try {
         const payload = await deps.workspaceClient.bootstrap();
 
-        deps.settingsStore.getState().loadBootstrap(
-          payload.settings,
-          payload.profileCatalog.terminalProfiles,
-        );
+        const settingsReadModel = mapSettingsFromDto(payload.settings);
+        const profileReadModels = payload.profileCatalog.terminalProfiles.map(mapProfileFromDto);
+        deps.settingsStore.getState().loadBootstrap(settingsReadModel, profileReadModels);
 
         deps.runtimeStore.getState().loadBootstrap(payload.runtimeProjections);
 

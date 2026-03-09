@@ -3,6 +3,7 @@ import type { SettingsView, WorkspaceBootstrapView } from "@/contracts/tauri-bin
 import type { WorkspaceClient, SettingsClient } from "@/app-shell/clients";
 import { createSettingsStore } from "@/features/settings/application/store";
 import { mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
+import { mapSettingsFromDto, mapProfileFromDto } from "@/features/settings/application/snapshot-mappers";
 import {
   createAppBootstrapCoordinator,
   type AppBootstrapCoordinatorDeps,
@@ -165,8 +166,8 @@ describe("AppBootstrapCoordinator", () => {
     expect(workspaceClient.bootstrap).toHaveBeenCalledOnce();
     expect(beginBootstrap).toHaveBeenCalledOnce();
     expect(loadSettings).toHaveBeenCalledWith(
-      payload.settings,
-      payload.profileCatalog.terminalProfiles,
+      mapSettingsFromDto(payload.settings),
+      payload.profileCatalog.terminalProfiles.map(mapProfileFromDto),
     );
     expect(loadRuntime).toHaveBeenCalledWith(payload.runtimeProjections);
     expect(loadWorkspace).toHaveBeenCalledWith(mapWorkspaceFromDto(payload.workspace));
@@ -361,7 +362,7 @@ describe("AppBootstrapCoordinator + real SettingsStore integration", () => {
     // Bootstrap the real settings store with onboarding incomplete
     settingsStore
       .getState()
-      .loadBootstrap(makeSettingsView({ hasCompletedOnboarding: false }), []);
+      .loadBootstrap(mapSettingsFromDto(makeSettingsView({ hasCompletedOnboarding: false })), []);
 
     expect(settingsStore.getState().settings?.hasCompletedOnboarding).toBe(false);
 
@@ -405,7 +406,7 @@ describe("AppBootstrapCoordinator + real SettingsStore integration", () => {
 
     settingsStore
       .getState()
-      .loadBootstrap(makeSettingsView({ hasCompletedOnboarding: false }), []);
+      .loadBootstrap(mapSettingsFromDto(makeSettingsView({ hasCompletedOnboarding: false })), []);
 
     const coordinator = createAppBootstrapCoordinator({
       workspaceClient: {

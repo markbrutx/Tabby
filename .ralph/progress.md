@@ -1,5 +1,37 @@
 # Progress Log
 
+## [2026-03-10 00:25] - DDD-011: WorkspaceStore.loadBootstrap accepts WorkspaceReadModel not DTO
+Thread:
+Run: 20260310-000917-71928 (iteration 5)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-5.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-5.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 3f24e02 refactor: WorkspaceStore.loadBootstrap accepts WorkspaceReadModel not DTO (DDD-011)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (172 + 2 + 5 + 29 + 11 + 35 + 53 tests)
+- Files changed:
+  - src/app-shell/AppBootstrapCoordinator.ts
+  - src/app-shell/AppBootstrapCoordinator.test.ts
+  - src/features/workspace/application/store.ts
+  - src/features/workspace/application/store.test.ts
+- Changed WorkspaceStore.loadBootstrap parameter from WorkspaceBootstrapView (DTO) to WorkspaceReadModel (internal read model)
+- Moved DTO→ReadModel mapping (mapWorkspaceFromDto) into AppBootstrapCoordinator.initialize()
+- Removed WorkspaceBootstrapView import from workspace store
+- Updated BootstrapableWorkspaceStore interface in coordinator to match new signature
+- Updated all tests to pass WorkspaceReadModel instead of WorkspaceBootstrapView
+- **Learnings for future iterations:**
+  - The store test helper makeBootstrapPayload needed complete replacement with makeWorkspaceReadModel using camelCase domain model fields
+  - The coordinator test assertion for loadWorkspace needed updating to expect the mapped read model rather than the raw DTO payload
+  - The listenProjectionUpdated callback in the store still correctly maps DTOs internally since projections arrive as DTOs from the wire
+---
+
 ## [2026-03-09 07:38] - DDD-001: Document 7 DDD violations with exact file:line references
 Thread:
 Run: 20260309-073631-33953 (iteration 1)
@@ -195,6 +227,34 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-it
   - Integration tests in src-tauri/tests/ need pub visibility on application and shell modules in lib.rs
   - Pre-existing clippy warnings may surface when recompiling — fix them as part of the story
   - The lib crate is named `tabby_app_lib` (not `tabby`) in Cargo.toml [lib] section
+---
+
+## [2026-03-10 00:23] - DDD-010: ADR: terminal output hot-path exemption
+Thread:
+Run: 20260310-000917-71928 (iteration 4)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-4.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-4.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: cf09663 docs: add ADR-001 for terminal output hot-path exemption (DDD-010)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (19 files, 203 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (307 tests: 172 app-lib + 2 arch + 5 browser-cmd + 29 kernel + 11 runtime + 35 settings + 53 workspace)
+- Files changed:
+  - docs/adr/001-terminal-output-hot-path.md (created — ADR document)
+  - src-tauri/src/shell/pty.rs (added doc comment on emit call referencing ADR)
+  - src-tauri/src/application/runtime_observation_receiver.rs (added doc comment on trait method referencing ADR)
+  - src-tauri/src/application/runtime_service.rs (updated comment on no-op implementation referencing ADR)
+- Created ADR-001 explaining why terminal output bypasses RuntimeObservationReceiver: high-frequency byte stream, no domain state change, latency sensitivity. Documented that on_terminal_output_received is reserved for future OSC sequence detection. Added doc comments on pty.rs emit call, trait definition, and service implementation all referencing the ADR.
+- **Learnings for future iterations:**
+  - ADR documents belong in docs/adr/ directory (standard convention)
+  - Documentation-only stories still need all quality gates run
+  - The docs/ directory did not exist before — had to create it
 ---
 
 ## Codebase Patterns

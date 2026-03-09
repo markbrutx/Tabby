@@ -1,7 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SettingsView } from "@/contracts/tauri-bindings";
 import type { SettingsClient } from "@/app-shell/clients";
+import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
 import { createSettingsStore } from "./store";
+
+function makeSettingsReadModel(overrides?: Partial<SettingsReadModel>): SettingsReadModel {
+  return {
+    defaultLayout: "1x1",
+    defaultTerminalProfileId: "terminal",
+    defaultWorkingDirectory: "~",
+    defaultCustomCommand: "",
+    fontSize: 14,
+    theme: "midnight",
+    launchFullscreen: false,
+    hasCompletedOnboarding: true,
+    lastWorkingDirectory: null,
+    ...overrides,
+  };
+}
 
 function makeSettingsView(overrides?: Partial<SettingsView>): SettingsView {
   return {
@@ -36,8 +52,8 @@ describe("createSettingsStore", () => {
     expect(store.getState().settings).toBeNull();
     expect(store.getState().profiles).toEqual([]);
 
-    const settingsDto = makeSettingsView({ fontSize: 16 });
-    const profiles = [
+    const settingsModel = makeSettingsReadModel({ fontSize: 16 });
+    const profiles: ProfileReadModel[] = [
       {
         id: "zsh",
         label: "Zsh",
@@ -46,7 +62,7 @@ describe("createSettingsStore", () => {
       },
     ];
 
-    store.getState().loadBootstrap(settingsDto, profiles);
+    store.getState().loadBootstrap(settingsModel, profiles);
 
     expect(store.getState().settings).not.toBeNull();
     expect(store.getState().settings?.fontSize).toBe(16);
@@ -61,7 +77,7 @@ describe("createSettingsStore", () => {
     });
     const store = createSettingsStore(client);
 
-    store.getState().loadBootstrap(makeSettingsView(), []);
+    store.getState().loadBootstrap(makeSettingsReadModel(), []);
 
     const currentSettings = store.getState().settings;
     if (!currentSettings) throw new Error("settings should be loaded");
@@ -81,7 +97,7 @@ describe("createSettingsStore", () => {
     });
     const store = createSettingsStore(client);
 
-    store.getState().loadBootstrap(makeSettingsView({ fontSize: 20 }), []);
+    store.getState().loadBootstrap(makeSettingsReadModel({ fontSize: 20 }), []);
 
     await store.getState().resetSettings();
 
@@ -95,7 +111,7 @@ describe("createSettingsStore", () => {
     });
     const store = createSettingsStore(client);
 
-    store.getState().loadBootstrap(makeSettingsView(), []);
+    store.getState().loadBootstrap(makeSettingsReadModel(), []);
     const settings = store.getState().settings;
     if (!settings) throw new Error("settings should be loaded");
 
@@ -114,7 +130,7 @@ describe("createSettingsStore", () => {
       { id: "claude", label: "Claude", description: "AI agent", startupCommandTemplate: "claude --project ." },
     ];
 
-    store.getState().loadBootstrap(makeSettingsView(), profiles);
+    store.getState().loadBootstrap(makeSettingsReadModel(), profiles);
 
     expect(store.getState().profiles).toHaveLength(3);
     expect(store.getState().profiles[0].id).toBe("zsh");
@@ -126,7 +142,7 @@ describe("createSettingsStore", () => {
     const client = makeMockSettingsClient();
     const store = createSettingsStore(client);
 
-    store.getState().loadBootstrap(makeSettingsView(), []);
+    store.getState().loadBootstrap(makeSettingsReadModel(), []);
 
     expect(client.listenProjectionUpdated).toHaveBeenCalledOnce();
   });
@@ -137,7 +153,7 @@ describe("createSettingsStore", () => {
     });
     const store = createSettingsStore(client);
 
-    store.getState().loadBootstrap(makeSettingsView(), []);
+    store.getState().loadBootstrap(makeSettingsReadModel(), []);
 
     await expect(store.getState().resetSettings()).rejects.toThrow(
       "reset failed",
@@ -152,7 +168,7 @@ describe("createSettingsStore", () => {
       expect(store.getState().settings).toBeNull();
       expect(store.getState().profiles).toEqual([]);
 
-      store.getState().loadBootstrap(makeSettingsView(), []);
+      store.getState().loadBootstrap(makeSettingsReadModel(), []);
 
       expect(store.getState().settings).not.toBeNull();
     });

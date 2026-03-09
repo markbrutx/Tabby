@@ -14,7 +14,7 @@ import type { SettingsClient } from "@/app-shell/clients";
 export interface SettingsState {
   settings: SettingsReadModel | null;
   profiles: ProfileReadModel[];
-  loadBootstrap: (settings: SettingsView, profiles: readonly { id: string; label: string; description: string; startupCommandTemplate: string | null }[]) => void;
+  loadBootstrap: (settings: SettingsReadModel, profiles: readonly ProfileReadModel[]) => void;
   initializeListeners: () => Promise<void>;
   updateSettings: (settings: SettingsReadModel) => Promise<void>;
   markOnboardingComplete: () => Promise<void>;
@@ -44,8 +44,8 @@ export function createSettingsStore(settingsClient: SettingsClient) {
 
     loadBootstrap(settings, profiles) {
       set({
-        settings: mapSettingsFromDto(settings),
-        profiles: profiles.map(mapProfileFromDto),
+        settings,
+        profiles: [...profiles],
       });
       void get().initializeListeners();
     },
