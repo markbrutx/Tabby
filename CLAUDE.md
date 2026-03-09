@@ -19,7 +19,7 @@ Core stack:
 
 ## Architecture Map
 
-The codebase follows a layered architecture with four bounded contexts: **Workspace**, **Runtime**, **Settings**, and **Shell/Transport**.
+The codebase follows a layered architecture with four bounded contexts: **Workspace**, **Runtime**, **Settings**, and **Shell/Transport**. Application services depend on abstract port traits; infrastructure adapters implement those ports.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -29,52 +29,70 @@ The codebase follows a layered architecture with four bounded contexts: **Worksp
 ├─────────────────────────────────────────────────────────┤
 │              Transport Boundary (IPC)                    │
 │  contracts/tauri-bindings.ts  ↔  tabby-contracts crate  │
-│  app-shell/clients/ (tauriTransport | mockTransport)    │
+│  app-shell/clients/ (createTauriShellClients)            │
 │  src-tauri/src/mapping/ (DTO ↔ domain mappers)          │
 ├─────────────────────────────────────────────────────────┤
 │              Application Services (Rust)                 │
 │  src-tauri/src/application/                              │
 │    workspace_service · settings_service · runtime_service│
 │    runtime_coordinator · bootstrap_service               │
-│    projection_publisher · commands                       │
+│    ports (4 trait definitions)                            │
+│    runtime_observation_receiver (callback port)          │
+│    commands (internal command enums)                      │
 ├─────────────────────────────────────────────────────────┤
 │              Infrastructure (Rust)                       │
-│  src-tauri/src/shell/ (AppShell, PTY, browser surface)   │
+│  src-tauri/src/infrastructure/                           │
+│    TauriProjectionPublisher · TauriStorePreferencesRepo  │
+│    TauriBrowserSurfaceAdapter                            │
+│  src-tauri/src/shell/ (AppShell facade, PtyManager)      │
 │  src-tauri/src/commands/ (thin Tauri IPC handlers)       │
 ├─────────────────────────────────────────────────────────┤
 │              Domain Model (Rust crates)                  │
 │  tabby-workspace · tabby-runtime · tabby-settings       │
+│  tabby-contracts (shared DTOs and event structs)         │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Backend (Rust)
 
 - `src-tauri/src/lib.rs` — bootstraps Tauri, tracing, specta exports, single-instance plugin, and `AppShell`.
-- `src-tauri/src/application/` — application services: `WorkspaceApplicationService`, `SettingsApplicationService`, `RuntimeApplicationService`, `RuntimeCoordinator`, `BootstrapService`, `ProjectionPublisher`.
+- `src-tauri/src/application/` — application services and port definitions:
+  - `workspace_service.rs` — `WorkspaceApplicationService` (workspace aggregate operations)
+  - `settings_service.rs` — `SettingsApplicationService` (preferences load/save)
+  - `runtime_service.rs` — `RuntimeApplicationService` (runtime registry management)
+  - `runtime_coordinator.rs` — `RuntimeCoordinator` (reacts to workspace domain events for runtime lifecycle)
+  - `bootstrap_service.rs` — `BootstrapService` (CLI launch overrides, initial state)
+  - `ports.rs` — four port traits: `PreferencesRepository`, `ProjectionPublisherPort`, `TerminalProcessPort`, `BrowserSurfacePort`
+  - `runtime_observation_receiver.rs` — callback port for PTY output and terminal exit events
+  - `commands.rs` — internal command enums (`WorkspaceCommand`, `SettingsCommand`, `RuntimeCommand`)
+- `src-tauri/src/infrastructure/` — concrete port implementations:
+  - `tauri_projection_publisher.rs` — implements `ProjectionPublisherPort` (emits events to frontend)
+  - `tauri_store_preferences_repository.rs` — implements `PreferencesRepository` (Tauri plugin-store)
+  - `tauri_browser_surface_adapter.rs` — implements `BrowserSurfacePort` (webview lifecycle)
 - `src-tauri/src/commands/` — thin Tauri IPC command handlers that delegate to application services.
 - `src-tauri/src/mapping/` — DTO-to-domain and domain-to-DTO mappers at the transport boundary.
-- `src-tauri/src/shell/` — infrastructure: `AppShell` facade, PTY spawning (`pty.rs`), browser webview lifecycle (`browser_surface.rs`).
+- `src-tauri/src/shell/` — `AppShell` facade coordinating all services; `PtyManager` (implements `TerminalProcessPort`).
 - `src-tauri/src/cli.rs` — CLI argument parsing and launch request types.
 - `src-tauri/src/menu.rs` — macOS menu bar setup and event handling.
 
 ### Domain Crates (Rust)
 
-- `src-tauri/crates/tabby-workspace/` — Workspace context: `WorkspaceSession`, `Tab`, `PaneSlot`, `SplitNode`, layout presets, domain events.
-- `src-tauri/crates/tabby-runtime/` — Runtime context: `RuntimeRegistry`, `PaneRuntime`, `RuntimeStatus`, `RuntimeSessionId`.
-- `src-tauri/crates/tabby-settings/` — Settings context: `UserPreferences`, `TerminalProfile`, `ProfileCatalog`, value objects (`FontSize`, `ProfileId`, `WorkingDirectory`).
-- `src-tauri/crates/tabby-contracts/` — shared DTOs, view models, command enums, and event structs consumed by both Rust and TypeScript via specta.
+- `src-tauri/crates/tabby-workspace/` — Workspace context: `WorkspaceSession`, `Tab`, `PaneSlot`, `SplitNode`, `PaneSpec` (Terminal | Browser), `PaneContentDefinition`, layout presets, domain events.
+- `src-tauri/crates/tabby-runtime/` — Runtime context: `RuntimeRegistry`, `PaneRuntime`, `RuntimeStatus`, `RuntimeKind`, `RuntimeSessionId`.
+- `src-tauri/crates/tabby-settings/` — Settings context: `UserPreferences`, `TerminalProfile`, `ProfileCatalog`, value objects (`FontSize`, `ProfileId`, `WorkingDirectory`), persistence helpers.
+- `src-tauri/crates/tabby-contracts/` — shared DTOs, view models, command enums, event structs, and value objects consumed by both Rust and TypeScript via specta.
 
 ### Frontend (TypeScript/React)
 
-- `src/app-shell/` — transport infrastructure: `tauriTransport` for production, `mockTransport` for browser-only dev; `AppShellContext` provider.
-- `src/features/workspace/` — workspace UI: tab bar, split-tree renderer, setup wizard, pane layout. Contains `domain/`, `application/` (store, mappers), and `components/`.
-- `src/features/terminal/` — terminal pane rendering via xterm.js, PTY output dispatcher.
+- `src/app-shell/` — transport infrastructure: `createTauriShellClients` factory producing `WorkspaceClient`, `SettingsClient`, `RuntimeClient`; `AppShellContext` provider; `AppBootstrapCoordinator` for initial load orchestration.
+- `src/features/workspace/` — workspace UI: tab bar, split-tree renderer, setup wizard, pane layout. Contains `domain/`, `application/` (store, snapshot-mappers), `components/`, `hooks/`, `model/`, and utility modules (`selectors`, `layoutReadModel`, `theme`).
+- `src/features/terminal/` — terminal pane rendering via xterm.js, PTY output dispatcher (`ptyOutputDispatcher.ts`).
 - `src/features/browser/` — browser pane webview container and toolbar.
-- `src/features/settings/` — settings modal, shortcuts reference. Contains `domain/`, `application/` (store, mappers), and `components/`.
-- `src/features/runtime/` — runtime status tracking store and domain models.
+- `src/features/settings/` — settings modal, shortcuts reference. Contains `domain/`, `application/` (store, snapshot-mappers), and `components/`.
+- `src/features/runtime/` — runtime status tracking store and domain models. Contains `domain/` and `application/` (store, snapshot-mappers).
 - `src/contexts/` — app-level Zustand store factories (`useWorkspaceStore`, `useSettingsStore`, `useRuntimeStore`).
-- `src/contracts/tauri-bindings.ts` — auto-generated TypeScript bindings from specta.
-- `src/components/` — shared UI components (`Button`, `Input`, `Select`, `ErrorBoundary`).
+- `src/contracts/tauri-bindings.ts` — auto-generated TypeScript bindings from specta (do not edit).
+- `src/components/` — shared UI components (`Button`, `Input`, `Select`, `ErrorBoundary`, `RecoveryScreen`).
 
 ### Bounded Contexts & Dependency Rules
 
@@ -87,13 +105,26 @@ Each bounded context owns its domain model and exposes it only through applicati
 | Settings | `tabby-settings` | `SettingsApplicationService` | `features/settings/` |
 | Shell/Transport | — (infrastructure) | `AppShell`, `BootstrapService` | `app-shell/` |
 
+**Port traits and implementations:**
+
+| Port | Defined in | Implemented by |
+|------|-----------|---------------|
+| `PreferencesRepository` | `application/ports.rs` | `TauriStorePreferencesRepository` |
+| `ProjectionPublisherPort` | `application/ports.rs` | `TauriProjectionPublisher` |
+| `TerminalProcessPort` | `application/ports.rs` | `PtyManager` (in `shell/`) |
+| `BrowserSurfacePort` | `application/ports.rs` | `TauriBrowserSurfaceAdapter` |
+| `RuntimeObservationReceiver` | `application/runtime_observation_receiver.rs` | `RuntimeApplicationService` |
+
 **Allowed dependency directions:**
 - Presentation → Application → Domain (never the reverse)
 - `commands/` → `application/` → domain crates (thin handlers only)
 - `mapping/` sits at the transport boundary; maps between `tabby-contracts` DTOs and domain types
-- `shell/` provides infrastructure consumed by `application/` services
+- Application services depend on port traits, not on concrete infrastructure
+- `infrastructure/` implements port traits; depends on Tauri plugins and external crates
+- `shell/` provides `AppShell` facade and `PtyManager`; wires ports to services
 - Domain crates must not depend on each other (except through `tabby-contracts` for shared DTOs)
 - Frontend features import domain models from their own `domain/` directory, not from other features
+- Generated DTOs (`tauri-bindings.ts`) appear only in transport clients and snapshot-mappers, never in stores or domain models
 
 ## Invariants
 
@@ -101,7 +132,13 @@ Each bounded context owns its domain model and exposes it only through applicati
 - Each pane owns one independent runtime and one working directory.
 - Single-instance routing must apply launch overrides to the existing app window instead of creating duplicate instances.
 - Keep terminal and browser runtime behavior explicit rather than collapsing them into loosely typed state.
-- Keep Tauri commands thin and move behavior into shell/domain code.
+- Keep Tauri commands thin and move behavior into application services or domain code.
+- Application services depend on port traits (`ports.rs`), never on concrete Tauri or plugin imports.
+- Infrastructure adapters (`infrastructure/`) implement port traits; all Tauri-specific code lives here or in `shell/`.
+- Runtime lifecycle has a single owner: `RuntimeApplicationService`. All start/stop/replace/restart/exit flows go through it.
+- Workspace aggregate owns only structural concerns (tabs, panes, layout). Runtime-observed state (cwd, status) belongs to the runtime context.
+- Frontend stores use internal read models; generated DTOs (`tauri-bindings.ts`) exist only at the transport boundary (clients and snapshot-mappers).
+- Frontend cross-context orchestration is handled by `AppBootstrapCoordinator`, not by stores reaching into each other.
 - Never cite or mention private reference material under `workbench/` in user-facing docs, specs, PR text, or release notes.
 
 ## Commands

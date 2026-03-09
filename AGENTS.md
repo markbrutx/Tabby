@@ -11,28 +11,31 @@ Tabby is a macOS-first terminal workspace app built with Tauri v2, Rust, React 1
 ### Backend (Rust — `src-tauri/`)
 
 - `src-tauri/src/lib.rs` — Tauri bootstrap, tracing, specta exports, single-instance plugin
-- `src-tauri/src/application/` — application services (workspace, settings, runtime, coordinator, bootstrap, projection publisher)
+- `src-tauri/src/application/` — application services, port trait definitions, internal command enums
+  - Services: `WorkspaceApplicationService`, `SettingsApplicationService`, `RuntimeApplicationService`, `RuntimeCoordinator`, `BootstrapService`
+  - Ports: `PreferencesRepository`, `ProjectionPublisherPort`, `TerminalProcessPort`, `BrowserSurfacePort`, `RuntimeObservationReceiver`
+- `src-tauri/src/infrastructure/` — concrete port implementations (Tauri projection publisher, plugin-store preferences, browser surface adapter)
 - `src-tauri/src/commands/` — thin Tauri IPC command handlers
 - `src-tauri/src/mapping/` — DTO ↔ domain mappers at the transport boundary
-- `src-tauri/src/shell/` — infrastructure: AppShell facade, PTY spawning, browser webview surface
+- `src-tauri/src/shell/` — AppShell facade, PtyManager (implements TerminalProcessPort)
 - `src-tauri/src/cli.rs` — CLI argument parsing
 - `src-tauri/src/menu.rs` — macOS menu bar
-- `src-tauri/crates/tabby-workspace/` — Workspace domain: tabs, panes, split-layout, domain events
-- `src-tauri/crates/tabby-runtime/` — Runtime domain: pane runtime registry and status tracking
-- `src-tauri/crates/tabby-settings/` — Settings domain: preferences, profiles, value objects
-- `src-tauri/crates/tabby-contracts/` — shared DTOs, view models, and event contracts
+- `src-tauri/crates/tabby-workspace/` — Workspace domain: tabs, panes, split-layout, pane specs, domain events
+- `src-tauri/crates/tabby-runtime/` — Runtime domain: pane runtime registry, status tracking, runtime kind
+- `src-tauri/crates/tabby-settings/` — Settings domain: preferences, profiles, value objects, persistence helpers
+- `src-tauri/crates/tabby-contracts/` — shared DTOs, view models, command/event structs, value objects
 
 ### Frontend (TypeScript/React — `src/`)
 
-- `src/app-shell/` — transport layer (Tauri IPC or mock), AppShellContext provider
-- `src/features/workspace/` — tab bar, split-tree renderer, setup wizard, pane layout (domain/, application/, components/)
+- `src/app-shell/` — Tauri IPC clients (`createTauriShellClients`), `AppShellContext` provider, `AppBootstrapCoordinator`
+- `src/features/workspace/` — tab bar, split-tree renderer, setup wizard, pane layout (domain/, application/, components/, hooks/, model/)
 - `src/features/terminal/` — xterm.js terminal pane, PTY output dispatcher
 - `src/features/browser/` — browser pane webview and toolbar
 - `src/features/settings/` — settings modal, shortcuts reference (domain/, application/, components/)
-- `src/features/runtime/` — runtime status store and domain models
+- `src/features/runtime/` — runtime status store and domain models (domain/, application/)
 - `src/contexts/` — app-level Zustand store factories
-- `src/contracts/tauri-bindings.ts` — auto-generated TypeScript bindings (specta)
-- `src/components/` — shared UI components (Button, Input, Select, ErrorBoundary)
+- `src/contracts/tauri-bindings.ts` — auto-generated TypeScript bindings (specta, do not edit)
+- `src/components/` — shared UI components (Button, Input, Select, ErrorBoundary, RecoveryScreen)
 
 ### Other
 

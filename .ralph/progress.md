@@ -1,5 +1,45 @@
 # Progress Log
 
+## 2026-03-09 01:52 - US-032: Remove all transitional and compatibility layers
+Thread:
+Run: 20260308-215923-84117 (iteration 33)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-33.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-33.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 4f3ef74 refactor: remove all transitional and compatibility layers (US-032)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests, 19 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (300 tests)
+  - Command: npx knip --reporter compact -> PASS (exit 0, zero unused exports/files)
+- Files changed:
+  - knip.json (updated ignored path for tauri-bindings.ts)
+  - package.json / bun.lock (added knip devDependency)
+  - src/app-shell/clients/shared.ts (removed unused exports: event constants, unwrapResult)
+  - src/app-shell/context/AppShellContext.tsx (removed unused hooks)
+  - src/app-shell/clients/index.ts (removed unused AppShellClients re-export)
+  - src/app-shell/AppBootstrapCoordinator.ts (made AppBootstrapCoordinator interface non-exported)
+  - src/features/workspace/domain/models.ts (removed duplicate LayoutPreset type)
+- What was implemented:
+  - AC#1: No transitional adapter types remain — audit confirmed clean codebase
+  - AC#2: No compatibility re-exports or facade modules — removed AppShellClients from index.ts
+  - AC#3: No TODO/FIXME comments referencing the refactor — audit confirmed none exist
+  - AC#4: No deprecated functions or types — audit confirmed none exist
+  - AC#5: Rust dead code check via cargo clippy exits clean
+  - AC#6: Installed knip as devDependency, fixed config, npx knip exits clean
+  - AC#7: Both dead code commands exit with code 0
+  - AC#8: All quality gates pass
+- **Learnings for future iterations:**
+  - knip.json had stale ignore path (src/lib/tauri-bindings.ts vs src/contracts/tauri-bindings.ts) — keep config in sync with file moves
+  - Event constants and helper functions used only within their own file should not be exported
+  - Auto-generated files (tauri-bindings.ts) should be excluded from dead code analysis
+---
+
 ## 2026-03-09 01:50 - US-031: Add Rust integration test for full command-to-side-effect dispatch
 Thread:
 Run: 20260308-215923-84117 (iteration 32)
