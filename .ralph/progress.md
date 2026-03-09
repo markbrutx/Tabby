@@ -231,3 +231,38 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-it
   - Removing test helpers that were specific to old behavior may cascade to removing mock struct fields — check clippy for dead_code warnings
   - All 4 acceptance criteria met: param removed, AppShell handles persistence, Runtime only updates its own state, all quality gates pass
 ---
+
+## [2026-03-10 00:19] - DDD-009: ProjectionPublisherPort accepts domain type instead of DTO
+Thread:
+Run: 20260310-000917-71928 (iteration 3)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-3.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-3.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: c073159 refactor: ProjectionPublisherPort accepts &WorkspaceSession instead of &WorkspaceView (DDD-009)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (172 lib + 7 integration + 29 kernel + 11 runtime + 35 settings + 53 workspace = 307 tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/src/application/ports.rs
+  - src-tauri/src/infrastructure/tauri_projection_publisher.rs
+  - src-tauri/src/shell/mod.rs
+  - src-tauri/src/application/runtime_service.rs
+  - src-tauri/src/application/runtime_integration_tests.rs
+  - src-tauri/src/application/command_dispatch_integration_tests.rs
+  - src-tauri/tests/browser_commands_through_runtime_service.rs
+- Changed `publish_workspace_projection` in `ProjectionPublisherPort` to accept `&WorkspaceSession` (domain type) instead of `&WorkspaceView` (DTO)
+- `TauriProjectionPublisher` now maps domain→DTO internally via `dto_mappers::workspace_view_from_session`
+- `AppShell::dispatch_workspace_command` passes session directly to publisher, then maps to view for return value
+- All mock implementations in 4 test files updated to use `&WorkspaceSession`
+- Removed unused `WorkspaceView` import from browser integration test
+- **Learnings for future iterations:**
+  - Port traits should accept domain types; infrastructure adapters own the domain→DTO mapping
+  - When changing a trait signature, grep for all mock implementations across test files (unit tests, integration tests, and external test crates)
+  - `cargo fmt` catches formatting issues from multi-line → single-line struct construction after refactoring
+---

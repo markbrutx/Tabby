@@ -255,9 +255,9 @@ impl RuntimeApplicationService {
 
 impl RuntimeObservationReceiver for RuntimeApplicationService {
     fn on_terminal_output_received(&self, pane_id: &PaneId, data: &[u8]) {
-        // Terminal output is currently emitted directly by the PTY read thread
-        // via Tauri events. Once infrastructure is wired to this trait (future story),
-        // this method will become the single entry point for terminal output dispatch.
+        // Terminal output bypasses this trait — emitted directly by the PTY read
+        // thread to the frontend for performance. This method is reserved for future
+        // OSC sequence detection. See docs/adr/001-terminal-output-hot-path.md.
         tracing::trace!(
             pane_id = pane_id.as_ref(),
             bytes = data.len(),

@@ -97,6 +97,9 @@ impl PtyManager {
                         if chunk.is_empty() {
                             continue;
                         }
+                        // Hot-path: terminal output is emitted directly to the frontend,
+                        // bypassing RuntimeObservationReceiver. This is intentional —
+                        // see docs/adr/001-terminal-output-hot-path.md for rationale.
                         if let Err(error) = app.emit(
                             TERMINAL_OUTPUT_RECEIVED_EVENT,
                             TerminalOutputEvent {

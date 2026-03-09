@@ -14,6 +14,11 @@ use tabby_workspace::PaneId;
 #[allow(dead_code)]
 pub trait RuntimeObservationReceiver: Send + Sync {
     /// Called by the PTY read thread when terminal output data is available.
+    ///
+    /// **Note:** This method is currently a no-op. Terminal output bypasses this
+    /// trait and is emitted directly to the frontend for performance reasons.
+    /// Reserved for future OSC sequence detection.
+    /// See `docs/adr/001-terminal-output-hot-path.md`.
     fn on_terminal_output_received(&self, pane_id: &PaneId, data: &[u8]);
 
     /// Called by the PTY read thread when the terminal process has exited.
