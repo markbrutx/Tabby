@@ -14,6 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [workspace]
 members = [
     "crates/tabby-contracts",
+    "crates/tabby-kernel",
     "crates/tabby-runtime",
     "crates/tabby-settings",
     "crates/tabby-workspace",

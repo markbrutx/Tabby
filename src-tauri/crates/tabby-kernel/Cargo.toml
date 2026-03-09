@@ -1,0 +1,7 @@
+[package]
+name = "tabby-kernel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Zero transport dependencies — no serde, no specta, no tauri.

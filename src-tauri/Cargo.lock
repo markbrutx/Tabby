@@ -3632,7 +3632,12 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "specta",
+ "tabby-kernel",
 ]
+
+[[package]]
+name = "tabby-kernel"
+version = "0.1.0"
 
 [[package]]
 name = "tabby-runtime"
