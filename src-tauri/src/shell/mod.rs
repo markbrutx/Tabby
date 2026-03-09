@@ -133,11 +133,15 @@ impl AppShell {
                 pane_id,
                 working_directory,
             } => {
-                self.runtime_service.observe_terminal_cwd(
-                    &pane_id,
-                    &working_directory,
-                    &self.settings_service,
-                )?;
+                self.runtime_service
+                    .observe_terminal_cwd(&pane_id, &working_directory)?;
+
+                // Cross-context side effect: persist last_working_directory in settings.
+                // Handled here in AppShell coordinator so Runtime context does not
+                // depend on Settings context.
+                let mut preferences = self.settings_service.preferences()?;
+                preferences.last_working_directory = Some(working_directory);
+                self.settings_service.persist_preferences(&preferences)?;
             }
             RuntimeCommand::ObserveBrowserLocation { pane_id, url } => {
                 self.runtime_service

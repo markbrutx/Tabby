@@ -9,7 +9,7 @@
 //! - AC#2: PaneAdded(browser) → browser runtime registered, projection emitted
 //! - AC#3: on_terminal_exited → registry updated → ProjectionPublisherPort.publish_runtime_status
 //! - AC#4: PaneContentChanged → old runtime stopped via port → new runtime started via port
-//! - AC#5: observe_terminal_cwd → preferences saved via mock PreferencesRepository
+//! - AC#5: observe_terminal_cwd → updates runtime registry only (settings persistence handled by AppShell)
 
 #[cfg(test)]
 mod tests {
@@ -153,7 +153,6 @@ mod tests {
     struct MockPreferencesRepo {
         stored: Mutex<Option<serde_json::Value>>,
         save_count: Mutex<u32>,
-        last_saved: Mutex<Option<UserPreferences>>,
     }
 
     impl PreferencesRepository for MockPreferencesRepo {
@@ -175,9 +174,6 @@ mod tests {
             *guard = Some(value);
             if let Ok(mut count) = self.save_count.lock() {
                 *count += 1;
-            }
-            if let Ok(mut last) = self.last_saved.lock() {
-                *last = Some(preferences.clone());
             }
             Ok(())
         }
@@ -348,13 +344,6 @@ mod tests {
             *self.preferences_repo.save_count.lock().expect("lock")
         }
 
-        fn last_saved_preferences(&self) -> Option<UserPreferences> {
-            self.preferences_repo
-                .last_saved
-                .lock()
-                .expect("lock")
-                .clone()
-        }
     }
 
     // -----------------------------------------------------------------------
@@ -792,7 +781,7 @@ mod tests {
     // =======================================================================
 
     #[test]
-    fn observe_terminal_cwd_persists_preferences_via_repository() {
+    fn observe_terminal_cwd_does_not_touch_settings() {
         let h = TestHarness::new();
 
         // Start a terminal runtime
@@ -802,30 +791,19 @@ mod tests {
         }])
         .expect("start");
 
-        // Record save count before observation (settings service may have
-        // saved defaults during initialization)
+        // Record save count before observation
         let saves_before = h.save_count();
 
-        // Observe a cwd change
+        // Observe a cwd change — should NOT persist settings (DDD-008)
         h.runtime_service
-            .observe_terminal_cwd(&pid("pane-cwd"), "/new/path", &h.settings_service)
+            .observe_terminal_cwd(&pid("pane-cwd"), "/new/path")
             .expect("observe cwd should succeed");
 
-        // Preferences were saved via PreferencesRepository
+        // Settings were NOT touched by RuntimeApplicationService
         let saves_after = h.save_count();
-        assert!(
-            saves_after > saves_before,
-            "preferences should be persisted after cwd observation"
-        );
-
-        // last_working_directory updated in persisted preferences
-        let last_saved = h
-            .last_saved_preferences()
-            .expect("should have saved preferences");
         assert_eq!(
-            last_saved.last_working_directory.as_deref(),
-            Some("/new/path"),
-            "last_working_directory should reflect the observed cwd"
+            saves_after, saves_before,
+            "runtime_service.observe_terminal_cwd must not persist settings (cross-context side effect belongs in AppShell)"
         );
     }
 
@@ -840,7 +818,7 @@ mod tests {
         .expect("start");
 
         h.runtime_service
-            .observe_terminal_cwd(&pid("pane-cwd2"), "/updated/cwd", &h.settings_service)
+            .observe_terminal_cwd(&pid("pane-cwd2"), "/updated/cwd")
             .expect("observe");
 
         let snapshot = h.runtime_service.snapshot().expect("snapshot");
@@ -868,7 +846,7 @@ mod tests {
         h.emitter.runtime_statuses.lock().expect("lock").clear();
 
         h.runtime_service
-            .observe_terminal_cwd(&pid("pane-proj"), "/observed", &h.settings_service)
+            .observe_terminal_cwd(&pid("pane-proj"), "/observed")
             .expect("observe");
 
         let projections = h.runtime_projections();

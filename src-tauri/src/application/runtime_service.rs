@@ -11,7 +11,6 @@ use tabby_runtime::{PaneRuntime, RuntimeRegistry, RuntimeSessionId, RuntimeStatu
 use tabby_settings::{resolve_terminal_profile, SettingsError, UserPreferences};
 use tabby_workspace::{PaneId, PaneSpec};
 
-use crate::application::SettingsApplicationService;
 use crate::shell::error::ShellError;
 
 pub struct RuntimeApplicationService {
@@ -223,17 +222,12 @@ impl RuntimeApplicationService {
         &self,
         pane_id: &PaneId,
         working_directory: &str,
-        settings_service: &SettingsApplicationService,
     ) -> Result<(), ShellError> {
         let runtime = self
             .lock_runtimes()?
             .update_terminal_cwd(pane_id, String::from(working_directory))
             .map_err(|error| ShellError::NotFound(error.to_string()))?;
         self.emitter.publish_runtime_status(&runtime);
-
-        let mut preferences = settings_service.preferences()?;
-        preferences.last_working_directory = Some(String::from(working_directory));
-        settings_service.persist_preferences(&preferences)?;
         Ok(())
     }
 
