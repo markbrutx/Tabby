@@ -88,5 +88,30 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-it
   - Pure dependency swap with import updates — minimal risk, straightforward refactor
 ---
 
+## [2026-03-09 07:49] - DDD-004: Arch test: domain crates must not depend on tabby-contracts
+Thread:
+Run: 20260309-073631-33953 (iteration 4)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-iter-4.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-iter-4.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: a2fde78 test: add arch test asserting domain crates do not depend on tabby-contracts (DDD-004)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (19 files, 203 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (303 tests: 172 app-lib + 2 arch + 0 contracts + 29 kernel + 11 runtime + 35 settings + 53 workspace)
+- Files changed:
+  - src-tauri/tests/arch_domain_crate_dependencies.rs (created)
+- Created Rust integration test that parses Cargo.toml files for all 3 domain crates and asserts none list tabby-contracts in [dependencies]. Includes helper unit test for the TOML parser. Test lives in src-tauri/tests/ as an integration test.
+- **Learnings for future iterations:**
+  - Integration tests in src-tauri/tests/ are automatically discovered by cargo test
+  - The tests/ directory did not exist before — had to create it
+  - rustfmt reformatted multi-line unwrap_or_else closures — always run fmt before committing
+---
+
 ## Codebase Patterns
 - (add reusable patterns here)
