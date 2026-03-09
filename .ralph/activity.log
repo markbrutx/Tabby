@@ -1,0 +1,272 @@
+# Activity Log
+
+## Run Summary
+- 2026-03-10 00:42:37 | run=20260310-000917-71928 | iter=8 | mode=build | story=DDD-014 | duration=438s | status=success
+- 2026-03-10 00:35:17 | run=20260310-000917-71928 | iter=7 | mode=build | story=DDD-013 | duration=250s | status=success
+- 2026-03-10 00:31:05 | run=20260310-000917-71928 | iter=6 | mode=build | story=DDD-012 | duration=258s | status=success
+- 2026-03-10 00:26:45 | run=20260310-000917-71928 | iter=5 | mode=build | story=DDD-011 | duration=258s | status=success
+- 2026-03-10 00:22:25 | run=20260310-000917-71928 | iter=4 | mode=build | story=DDD-010 | duration=140s | status=success
+- 2026-03-10 00:20:03 | run=20260310-000917-71928 | iter=3 | mode=build | story=DDD-009 | duration=277s | status=success
+- 2026-03-10 00:15:24 | run=20260310-000917-71928 | iter=2 | mode=build | story=DDD-008 | duration=188s | status=success
+- 2026-03-10 00:12:14 | run=20260310-000917-71928 | iter=1 | mode=build | story=DDD-007 | duration=177s | status=success
+- 2026-03-09 07:54:31 | run=20260309-073631-33953 | iter=6 | mode=build | story=DDD-006 | duration=161s | status=success
+- 2026-03-09 07:51:46 | run=20260309-073631-33953 | iter=5 | mode=build | story=DDD-005 | duration=178s | status=success
+- 2026-03-09 07:48:46 | run=20260309-073631-33953 | iter=4 | mode=build | story=DDD-004 | duration=106s | status=success
+- 2026-03-09 07:46:58 | run=20260309-073631-33953 | iter=3 | mode=build | story=DDD-003 | duration=137s | status=success
+- 2026-03-09 07:44:39 | run=20260309-073631-33953 | iter=2 | mode=build | story=DDD-002 | duration=226s | status=success
+- 2026-03-09 07:40:51 | run=20260309-073631-33953 | iter=1 | mode=build | story=DDD-001 | duration=260s | status=success
+- 2026-03-09 01:58:11 | run=20260308-215923-84117 | iter=34 | mode=build | story=US-033 | duration=550s | status=success
+- 2026-03-09 01:48:59 | run=20260308-215923-84117 | iter=33 | mode=build | story=US-032 | duration=331s | status=success
+- 2026-03-09 01:43:26 | run=20260308-215923-84117 | iter=32 | mode=build | story=US-031 | duration=449s | status=success
+- 2026-03-09 01:35:55 | run=20260308-215923-84117 | iter=31 | mode=build | story=US-030 | duration=311s | status=success
+- 2026-03-09 01:30:41 | run=20260308-215923-84117 | iter=30 | mode=build | story=US-029 | duration=466s | status=success
+- 2026-03-09 01:22:53 | run=20260308-215923-84117 | iter=29 | mode=build | story=US-028 | duration=339s | status=success
+- 2026-03-09 01:17:11 | run=20260308-215923-84117 | iter=28 | mode=build | story=US-027 | duration=1528s | status=success
+- 2026-03-09 00:51:41 | run=20260308-215923-84117 | iter=27 | mode=build | story=US-026 | duration=286s | status=success
+- 2026-03-09 00:46:53 | run=20260308-215923-84117 | iter=26 | mode=build | story=US-025 | duration=412s | status=success
+- 2026-03-09 00:39:59 | run=20260308-215923-84117 | iter=25 | mode=build | story=US-024 | duration=343s | status=success
+- 2026-03-09 00:34:14 | run=20260308-215923-84117 | iter=24 | mode=build | story=US-023 | duration=349s | status=success
+- 2026-03-09 00:28:23 | run=20260308-215923-84117 | iter=23 | mode=build | story=US-022 | duration=584s | status=success
+- 2026-03-09 00:18:37 | run=20260308-215923-84117 | iter=22 | mode=build | story=US-021 | duration=297s | status=success
+- 2026-03-09 00:13:38 | run=20260308-215923-84117 | iter=21 | mode=build | story=US-020 | duration=418s | status=success
+- 2026-03-09 00:06:37 | run=20260308-215923-84117 | iter=20 | mode=build | story=US-019 | duration=144s | status=success
+- 2026-03-09 00:04:11 | run=20260308-215923-84117 | iter=19 | mode=build | story=US-018 | duration=336s | status=success
+- 2026-03-08 23:58:33 | run=20260308-215923-84117 | iter=18 | mode=build | story=US-017 | duration=303s | status=success
+- 2026-03-08 23:53:28 | run=20260308-215923-84117 | iter=17 | mode=build | story=US-016 | duration=1081s | status=success
+- 2026-03-08 23:35:25 | run=20260308-215923-84117 | iter=16 | mode=build | story=US-015 | duration=356s | status=success
+- 2026-03-08 23:29:26 | run=20260308-215923-84117 | iter=15 | mode=build | story=US-014 | duration=267s | status=success
+- 2026-03-08 23:24:57 | run=20260308-215923-84117 | iter=14 | mode=build | story=US-013 | duration=278s | status=success
+- 2026-03-08 23:20:17 | run=20260308-215923-84117 | iter=13 | mode=build | story=US-012 | duration=742s | status=success
+- 2026-03-08 23:07:53 | run=20260308-215923-84117 | iter=12 | mode=build | story=US-011 | duration=592s | status=success
+- 2026-03-08 22:57:59 | run=20260308-215923-84117 | iter=11 | mode=build | story=US-010 | duration=728s | status=success
+- 2026-03-08 22:45:48 | run=20260308-215923-84117 | iter=10 | mode=build | story=US-009 | duration=244s | status=success
+- 2026-03-08 22:41:42 | run=20260308-215923-84117 | iter=9 | mode=build | story=US-008 | duration=312s | status=success
+- 2026-03-08 22:36:28 | run=20260308-215923-84117 | iter=8 | mode=build | story=US-007 | duration=225s | status=success
+- 2026-03-08 22:32:41 | run=20260308-215923-84117 | iter=7 | mode=build | story=US-006 | duration=235s | status=success
+- 2026-03-08 22:28:44 | run=20260308-215923-84117 | iter=6 | mode=build | story=US-005 | duration=576s | status=success
+- 2026-03-08 22:19:06 | run=20260308-215923-84117 | iter=5 | mode=build | story=US-004 | duration=333s | status=success
+- 2026-03-08 22:13:31 | run=20260308-215923-84117 | iter=4 | mode=build | story=US-003 | duration=294s | status=success
+- 2026-03-08 22:08:35 | run=20260308-215923-84117 | iter=3 | mode=build | story=US-002 | duration=151s | status=success
+- 2026-03-08 22:06:02 | run=20260308-215923-84117 | iter=2 | mode=build | story=US-001b | duration=77s | status=success
+- 2026-03-08 22:04:42 | run=20260308-215923-84117 | iter=1 | mode=build | story=US-001 | duration=319s | status=success
+
+## Events
+
+[2026-03-08 21:59:23] ITERATION 1 start (mode=build story=US-001)
+[2026-03-08 21:59:45] US-001: Starting work — document verification baseline and current architecture state
+[2026-03-08 22:03:45] US-001: Created .ralph/baseline.md with quality gate results, test counts, module structure, violations, and scorecard
+[2026-03-08 22:04:23] US-001: Complete — baseline.md created, progress log updated, all quality gates pass, zero source code modifications
+[2026-03-08 22:04:42] ITERATION 1 end (duration=319s)
+[2026-03-08 22:04:45] ITERATION 2 start (mode=build story=US-001b)
+[2026-03-08 22:05:00] US-001b: Starting work — fixing pre-existing quality gate failures
+[2026-03-08 22:05:27] US-001b: All quality gates green — zero pre-existing failures. Closing as no-op per AC.
+[2026-03-08 22:05:54] US-001b: Complete — no-op commit 7742736, progress log updated
+[2026-03-08 22:06:02] ITERATION 2 end (duration=77s)
+[2026-03-08 22:06:04] ITERATION 3 start (mode=build story=US-002)
+[2026-03-08 22:06:19] US-002: Starting work on architecture laws documentation
+[2026-03-08 22:08:25] US-002: Completed — created .ralph/architecture-laws.md, all quality gates pass, commit a0aa6e7
+[2026-03-08 22:08:35] ITERATION 3 end (duration=151s)
+[2026-03-08 22:08:37] ITERATION 4 start (mode=build story=US-003)
+[2026-03-08 22:08:54] US-003: Starting work on risk map for refactor phases
+[2026-03-08 22:12:29] US-003: Risk map created at .ralph/risk-map.md, all quality gates pass, .ralph/ is gitignored so no commit needed
+[2026-03-08 22:13:23] US-003: Complete — committed 7839b7b, progress log updated
+[2026-03-08 22:13:31] ITERATION 4 end (duration=294s)
+[2026-03-08 22:13:33] ITERATION 5 start (mode=build story=US-004)
+[2026-03-08 22:13:43] US-004: Starting work on RuntimeObservationReceiver trait
+[2026-03-08 22:18:06] US-004: All quality gates pass - lint, typecheck, vitest, cargo fmt, clippy, cargo test
+[2026-03-08 22:18:56] US-004: COMPLETE — committed fc0cff5, all quality gates pass, progress logged
+[2026-03-08 22:19:06] ITERATION 5 end (duration=333s)
+[2026-03-08 22:19:09] ITERATION 6 start (mode=build story=US-005)
+[2026-03-08 22:19:22] US-005: Starting work - Stop PTY infrastructure from directly emitting runtime status events
+[2026-03-08 22:27:20] US-005: All quality gates pass - lint, typecheck, vitest, cargo fmt, clippy, cargo test
+[2026-03-08 22:28:33] US-005: COMPLETE - PTY exit wired to RuntimeObservationReceiver, all quality gates pass, committed as 117b4cd
+[2026-03-08 22:28:44] ITERATION 6 end (duration=576s)
+[2026-03-08 22:28:46] ITERATION 7 start (mode=build story=US-006)
+[2026-03-08 22:28:56] US-006: Starting work — reading guardrails and context
+[2026-03-08 22:31:27] US-006: All quality gates pass — lint, typecheck, 162 TS tests, cargo fmt, clippy, 171 Rust tests
+[2026-03-08 22:32:18] US-006: Complete — committed c989674, progress log updated
+[2026-03-08 22:32:41] ITERATION 7 end (duration=235s)
+[2026-03-08 22:32:43] ITERATION 8 start (mode=build story=US-007)
+[2026-03-08 22:32:53] US-007: Starting work on routing replace/restart/stop flows through runtime lifecycle
+[2026-03-08 22:36:15] US-007: Complete — all ACs verified, integration test added, committed as 6fe528b
+[2026-03-08 22:36:28] ITERATION 8 end (duration=225s)
+[2026-03-08 22:36:31] ITERATION 9 start (mode=build story=US-008)
+[2026-03-08 22:36:41] US-008: Starting work on regression tests for runtime lifecycle flows
+[2026-03-08 22:41:16] US-008: Completed - 18 regression tests for runtime lifecycle flows, all quality gates pass, committed 706d89c
+[2026-03-08 22:41:42] ITERATION 9 end (duration=312s)
+[2026-03-08 22:41:44] ITERATION 10 start (mode=build story=US-009)
+[2026-03-08 22:41:54] US-009: Starting work on PaneContentDefinition type
+[2026-03-08 22:45:39] US-009: Complete — PaneContentDefinition type with 10 tests, all quality gates pass
+[2026-03-08 22:45:48] ITERATION 10 end (duration=244s)
+[2026-03-08 22:45:50] ITERATION 11 start (mode=build story=US-010)
+[2026-03-08 22:45:59] US-010: Starting work on migrating workspace Pane to use PaneSlot with content reference
+[2026-03-08 22:56:32] US-010: All quality gates pass — lint, typecheck, 162 vitest tests, cargo fmt, clippy, 209 cargo tests
+[2026-03-08 22:57:46] US-010: Complete — committed 09bd416, progress log updated, all gates green
+[2026-03-08 22:57:58] ITERATION 11 end (duration=728s)
+[2026-03-08 22:58:01] ITERATION 12 start (mode=build story=US-011)
+[2026-03-08 22:58:11] US-011: Starting work on WorkspaceDomainEvent payloads and mapper layer for PaneSlot split
+[2026-03-08 23:06:42] US-011: All quality gates pass. Committing changes.
+[2026-03-08 23:07:41] US-011: Complete. Committed f49d5a2. All quality gates pass. Progress log updated.
+[2026-03-08 23:07:53] ITERATION 12 end (duration=592s)
+[2026-03-08 23:07:55] ITERATION 13 start (mode=build story=US-012)
+[2026-03-08 23:08:05] US-012: Starting work on removing runtime-observed cwd mutation from workspace domain
+[2026-03-08 23:17:45] US-012: All code changes complete, running quality gates
+[2026-03-08 23:18:33] US-012: All quality gates pass — lint, typecheck, vitest (162), cargo fmt, clippy, cargo test (129+43+27+10)
+[2026-03-08 23:19:57] US-012: COMPLETE — committed 94b59ab, all quality gates pass, progress log updated
+[2026-03-08 23:20:17] ITERATION 13 end (duration=742s)
+[2026-03-08 23:20:19] ITERATION 14 start (mode=build story=US-013)
+[2026-03-08 23:20:28] US-013: Starting work - Separate structural domain events from content and runtime events
+[2026-03-08 23:24:47] US-013: COMPLETE - All quality gates pass, committed as 4779342
+[2026-03-08 23:24:57] ITERATION 14 end (duration=278s)
+[2026-03-08 23:24:59] ITERATION 15 start (mode=build story=US-014)
+[2026-03-08 23:25:15] US-014: Starting work on workspace structural invariant tests
+[2026-03-08 23:29:18] US-014: COMPLETE - 5 new structural invariant tests added, all quality gates pass, commit 4a7e8b8
+[2026-03-08 23:29:26] ITERATION 15 end (duration=267s)
+[2026-03-08 23:29:29] ITERATION 16 start (mode=build story=US-015)
+[2026-03-08 23:29:44] US-015: Starting work on PreferencesRepository port and infra adapter
+[2026-03-08 23:34:25] US-015: All quality gates pass — 133 Rust tests, 162 frontend tests, lint/typecheck/clippy/fmt clean
+[2026-03-08 23:35:11] US-015: Committed and progress log updated. Story complete.
+[2026-03-08 23:35:24] ITERATION 16 end (duration=356s)
+[2026-03-08 23:35:27] ITERATION 17 start (mode=build story=US-016)
+[2026-03-08 23:35:36] US-016: Starting work on TerminalProcessPort and BrowserSurfacePort traits
+[2026-03-08 23:51:04] US-016: All quality gates pass - lint, typecheck, vitest (162), cargo fmt, clippy, cargo test (141)
+[2026-03-08 23:53:28] ITERATION 17 end (duration=1081s)
+[2026-03-08 23:53:30] ITERATION 18 start (mode=build story=US-017)
+[2026-03-08 23:53:40] US-017: Starting work on ProjectionPublisherPort
+[2026-03-08 23:57:42] US-017: All quality gates pass — 142 app + 10 runtime + 27 settings + 51 workspace Rust tests, 162 frontend tests
+[2026-03-08 23:58:25] US-017: Complete — committed and progress log updated
+[2026-03-08 23:58:33] ITERATION 18 end (duration=303s)
+[2026-03-08 23:58:35] ITERATION 19 start (mode=build story=US-018)
+[2026-03-08 23:58:47] US-018: Starting work on separating persistence schema from IPC schema for settings
+[2026-03-09 00:03:06] US-018: All quality gates pass. Committing changes.
+[2026-03-09 00:04:01] US-018: COMPLETE. Persistence schema separated from IPC schema. All quality gates pass.
+[2026-03-09 00:04:11] ITERATION 19 end (duration=336s)
+[2026-03-09 00:04:14] ITERATION 20 start (mode=build story=US-019)
+[2026-03-09 00:04:36] US-019: Starting work on RuntimeReadModel and RuntimeSnapshotMapper
+[2026-03-09 00:06:30] US-019: Complete — RuntimeSnapshotMapper + 8 tests, all quality gates pass, committed 5f2231d + 6b2deac
+[2026-03-09 00:06:37] ITERATION 20 end (duration=144s)
+[2026-03-09 00:06:39] ITERATION 21 start (mode=build story=US-020)
+[2026-03-09 00:06:49] US-020: Starting work - Remove PaneRuntimeView from runtime store and workspace composed snapshot
+[2026-03-09 00:13:22] US-020: COMPLETE - removed PaneRuntimeView from runtime store and workspace snapshot, all quality gates pass, commit bd652a6
+[2026-03-09 00:13:38] ITERATION 21 end (duration=418s)
+[2026-03-09 00:13:40] ITERATION 22 start (mode=build story=US-021)
+[2026-03-09 00:13:49] US-021: Starting work on DTO field naming boundary enforcement
+[2026-03-09 00:18:15] US-021: Complete — DTO boundary enforcement script created and integrated into lint. All quality gates pass. Commit 88e7a87
+[2026-03-09 00:18:37] ITERATION 22 end (duration=297s)
+[2026-03-09 00:18:40] ITERATION 23 start (mode=build story=US-022)
+[2026-03-09 00:18:48] US-022: Starting work on extracting bootstrap orchestration from workspace store to AppBootstrapCoordinator
+[2026-03-09 00:26:57] US-022: All quality gates pass - lint, typecheck, 178 TS tests, cargo fmt/clippy/test all green
+[2026-03-09 00:28:04] US-022: Complete — committed 92f1ead, all quality gates pass, progress log updated
+[2026-03-09 00:28:23] ITERATION 23 end (duration=584s)
+[2026-03-09 00:28:26] ITERATION 24 start (mode=build story=US-023)
+[2026-03-09 00:28:35] US-023: Starting work - Move onboarding cross-context updates to app-level coordinator
+[2026-03-09 00:33:15] US-023: All quality gates pass. Committing changes.
+[2026-03-09 00:34:04] US-023: COMPLETE - committed 85490dd, all quality gates pass
+[2026-03-09 00:34:14] ITERATION 24 end (duration=349s)
+[2026-03-09 00:34:16] ITERATION 25 start (mode=build story=US-024)
+[2026-03-09 00:34:26] US-024: Starting work - Decouple feature stores from knowing neighboring store internal shapes
+[2026-03-09 00:39:47] US-024: COMPLETE - All quality gates pass, commit cba06a9
+[2026-03-09 00:39:59] ITERATION 25 end (duration=343s)
+[2026-03-09 00:40:01] ITERATION 26 start (mode=build story=US-025)
+[2026-03-09 00:40:10] US-025: Starting work - Unify browser location observation into runtime projection
+[2026-03-09 00:45:53] US-025: All quality gates passed. Committing changes.
+[2026-03-09 00:46:43] US-025: COMPLETE — all acceptance criteria met, commit f99997d
+[2026-03-09 00:46:53] ITERATION 26 end (duration=412s)
+[2026-03-09 00:46:56] ITERATION 27 start (mode=build story=US-026)
+[2026-03-09 00:47:07] US-026: Starting work - Audit and remove declared-but-not-real contract abstractions
+[2026-03-09 00:51:32] US-026: Complete — all 24 contract types verified, zero phantom abstractions. Committed c953053
+[2026-03-09 00:51:41] ITERATION 27 end (duration=286s)
+[2026-03-09 00:51:44] ITERATION 28 start (mode=build story=US-027)
+[2026-03-09 00:51:52] US-027: Starting work on value objects for runtime and workspace raw strings
+[2026-03-09 01:17:11] ITERATION 28 end (duration=1528s)
+[2026-03-09 01:17:14] ITERATION 29 start (mode=build story=US-028)
+[2026-03-09 01:17:29] US-028: Starting work — audit naming against ubiquitous language
+[2026-03-09 01:22:42] US-028: Complete — renamed swapPanes→swapPaneSlots, OutputHandler→PtyOutputCallback. All 458 tests pass.
+[2026-03-09 01:22:53] ITERATION 29 end (duration=339s)
+[2026-03-09 01:22:55] ITERATION 30 start (mode=build story=US-029)
+[2026-03-09 01:23:06] US-029: Starting work on backend runtime lifecycle integration tests
+[2026-03-09 01:30:25] US-029: Completed — 19 integration tests added, all 290 cargo tests pass, all quality gates green, committed d38286c
+[2026-03-09 01:30:41] ITERATION 30 end (duration=466s)
+[2026-03-09 01:30:44] ITERATION 31 start (mode=build story=US-030)
+[2026-03-09 01:30:53] US-030: Starting work on frontend mapper boundary and app coordinator tests
+[2026-03-09 01:35:47] US-030: COMPLETE — 16 new tests, all quality gates pass, commit dc76641
+[2026-03-09 01:35:55] ITERATION 31 end (duration=311s)
+[2026-03-09 01:35:57] ITERATION 32 start (mode=build story=US-031)
+[2026-03-09 01:36:12] US-031: Starting work on Rust integration test for full command-to-side-effect dispatch
+[2026-03-09 01:43:14] US-031: Completed — 9 integration tests for full command-to-side-effect dispatch, all quality gates pass, committed a72215e
+[2026-03-09 01:43:26] ITERATION 32 end (duration=449s)
+[2026-03-09 01:43:28] ITERATION 33 start (mode=build story=US-032)
+[2026-03-09 01:43:40] US-032: Starting work on removing transitional and compatibility layers
+[2026-03-09 01:48:03] US-032: All dead code removed, all quality gates pass (lint, typecheck, 203 tests, clippy, cargo test 300, knip clean)
+[2026-03-09 01:48:49] US-032: Complete. Commit 4f3ef74. All acceptance criteria met, all quality gates pass.
+[2026-03-09 01:48:59] ITERATION 33 end (duration=331s)
+[2026-03-09 01:49:02] ITERATION 34 start (mode=build story=US-033)
+[2026-03-09 01:49:16] US-033: Starting work on syncing CLAUDE.md, AGENTS.md, and architecture map
+[2026-03-09 01:57:06] US-033: All docs updated, all quality gates pass. Committing.
+[2026-03-09 01:57:54] US-033: Complete. Commit d1d4571. All docs synced, all quality gates pass.
+[2026-03-09 01:58:11] ITERATION 34 end (duration=550s)
+[2026-03-09 07:36:31] ITERATION 1 start (mode=build story=DDD-001)
+[2026-03-09 07:36:45] DDD-001: Starting work — document 7 DDD violations baseline
+[2026-03-09 07:40:44] DDD-001: Complete — baseline doc created, all quality gates pass, committed as 0fa14f1
+[2026-03-09 07:40:51] ITERATION 1 end (duration=260s)
+[2026-03-09 07:40:53] ITERATION 2 start (mode=build story=DDD-002)
+[2026-03-09 07:41:08] DDD-002: Starting work on tabby-kernel crate creation
+[2026-03-09 07:43:35] DDD-002: All quality gates pass — lint, typecheck, vitest (203), cargo fmt, clippy, cargo test (301 including 29 new in tabby-kernel)
+[2026-03-09 07:44:31] DDD-002: COMPLETE — committed 15993cc, progress logged, clean tree
+[2026-03-09 07:44:39] ITERATION 2 end (duration=226s)
+[2026-03-09 07:44:41] ITERATION 3 start (mode=build story=DDD-003)
+[2026-03-09 07:44:56] DDD-003: Starting work - switching domain crates from tabby-contracts to tabby-kernel
+[2026-03-09 07:46:52] DDD-003: Complete - all 3 domain crates switched from tabby-contracts to tabby-kernel, all quality gates pass
+[2026-03-09 07:46:58] ITERATION 3 end (duration=137s)
+[2026-03-09 07:47:00] ITERATION 4 start (mode=build story=DDD-004)
+[2026-03-09 07:47:14] DDD-004: Starting work on arch test for domain crate dependency check
+[2026-03-09 07:48:38] DDD-004: COMPLETE — arch test created and all quality gates pass
+[2026-03-09 07:48:46] ITERATION 4 end (duration=106s)
+[2026-03-09 07:48:48] ITERATION 5 start (mode=build story=DDD-005)
+[2026-03-09 07:48:58] DDD-005: Starting work on routing browser surface commands through RuntimeApplicationService
+[2026-03-09 07:51:00] DDD-005: All quality gates pass. Committing changes.
+[2026-03-09 07:51:38] DDD-005: COMPLETE. Commit 5bfcd24. All quality gates pass.
+[2026-03-09 07:51:46] ITERATION 5 end (duration=178s)
+[2026-03-09 07:51:49] ITERATION 6 start (mode=build story=DDD-006)
+[2026-03-09 07:51:59] DDD-006: Starting work on Wire TauriBrowserSurfaceAdapter to BrowserSurfacePort fully
+[2026-03-09 07:53:40] DDD-006: All acceptance criteria already met from DDD-005. All quality gates pass.
+[2026-03-09 07:54:22] DDD-006: Complete. All acceptance criteria verified, progress logged, commit bd54e13.
+[2026-03-09 07:54:31] ITERATION 6 end (duration=161s)
+[2026-03-09 07:54:33] ITERATION 7 start (mode=build story=DDD-007)
+[2026-03-09 07:54:41] DDD-007: Starting work on browser commands dispatch test
+[2026-03-10 00:09:17] ITERATION 1 start (mode=build story=DDD-007)
+[2026-03-10 00:09:29] DDD-007: Starting work on browser commands dispatch test
+[2026-03-10 00:12:07] DDD-007: Complete — 5 integration tests pass, all quality gates green, committed as 3fe8f71
+[2026-03-10 00:12:14] ITERATION 1 end (duration=177s)
+[2026-03-10 00:12:16] ITERATION 2 start (mode=build story=DDD-008)
+[2026-03-10 00:12:25] DDD-008: Starting work - Remove SettingsApplicationService from runtime_service observe_terminal_cwd
+[2026-03-10 00:14:43] DDD-008: All quality gates pass. Committing changes.
+[2026-03-10 00:15:15] DDD-008: COMPLETE. Commit 1eea5c1. All quality gates pass.
+[2026-03-10 00:15:24] ITERATION 2 end (duration=188s)
+[2026-03-10 00:15:26] ITERATION 3 start (mode=build story=DDD-009)
+[2026-03-10 00:15:37] DDD-009: Starting work on ProjectionPublisherPort domain type refactor
+[2026-03-10 00:19:57] DDD-009: Complete. Commit c073159. All quality gates pass (307 Rust tests, 203 frontend tests).
+[2026-03-10 00:20:03] ITERATION 3 end (duration=277s)
+[2026-03-10 00:20:05] ITERATION 4 start (mode=build story=DDD-010)
+[2026-03-10 00:20:19] DDD-010: Starting work on ADR terminal output hot-path exemption
+[2026-03-10 00:22:19] DDD-010: Completed. ADR-001 created, doc comments added, all quality gates pass. Commit cf09663.
+[2026-03-10 00:22:25] ITERATION 4 end (duration=140s)
+[2026-03-10 00:22:27] ITERATION 5 start (mode=build story=DDD-011)
+[2026-03-10 00:22:38] DDD-011: Starting work on WorkspaceStore.loadBootstrap accepts WorkspaceReadModel not DTO
+[2026-03-10 00:26:36] DDD-011: Complete. Commit 3f24e02. All quality gates pass (203 vitest, all cargo tests).
+[2026-03-10 00:26:45] ITERATION 5 end (duration=258s)
+[2026-03-10 00:26:47] ITERATION 6 start (mode=build story=DDD-012)
+[2026-03-10 00:27:04] DDD-012: Starting work — SettingsStore.loadBootstrap accepts SettingsReadModel not DTO
+[2026-03-10 00:31:00] DDD-012: Complete — all quality gates pass, committed 100c5f9
+[2026-03-10 00:31:05] ITERATION 6 end (duration=258s)
+[2026-03-10 00:31:07] ITERATION 7 start (mode=build story=DDD-013)
+[2026-03-10 00:31:17] DDD-013: Starting work on RuntimeStore.loadBootstrap accepts RuntimeReadModel[] not DTO
+[2026-03-10 00:35:08] DDD-013: Complete — all quality gates pass, commit fa4511e
+[2026-03-10 00:35:17] ITERATION 7 end (duration=250s)
+[2026-03-10 00:35:19] ITERATION 8 start (mode=build story=DDD-014)
+[2026-03-10 00:35:36] DDD-014: Starting work on LayoutPreset enum in tabby-kernel
+[2026-03-10 00:42:27] DDD-014: COMPLETE — LayoutPreset enum in tabby-kernel, all 314 tests pass, commit af4b004
+[2026-03-10 00:42:37] ITERATION 8 end (duration=438s)
+[2026-03-10 00:42:40] ITERATION 9 start (mode=build story=DDD-015)
+[2026-03-10 00:42:49] DDD-015: Starting work on CommandTemplate VO and typed browser_location/terminal_cwd
+[2026-03-10 00:55:52] DDD-015: All quality gates pass — lint, typecheck, vitest (203), cargo fmt, clippy, cargo test (319)

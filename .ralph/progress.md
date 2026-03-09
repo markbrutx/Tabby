@@ -1,5 +1,44 @@
 # Progress Log
 
+## [2026-03-10 00:55] - DDD-015: CommandTemplate VO and typed browser_location/terminal_cwd
+Thread:
+Run: 20260310-000917-71928 (iteration 9)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-9.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-9.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 6a3d88c refactor: CommandTemplate VO and typed browser_location/terminal_cwd (DDD-015)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (319 tests)
+- Files changed:
+  - src-tauri/Cargo.toml (added tabby-kernel dependency)
+  - src-tauri/Cargo.lock
+  - src-tauri/crates/tabby-kernel/src/lib.rs (export CommandTemplate)
+  - src-tauri/crates/tabby-kernel/src/value_objects.rs (add CommandTemplate VO + tests)
+  - src-tauri/crates/tabby-runtime/src/lib.rs (PaneRuntime fields → BrowserUrl/WorkingDirectory)
+  - src-tauri/crates/tabby-settings/src/lib.rs (startup_command_template/command → CommandTemplate)
+  - src-tauri/crates/tabby-workspace/src/lib.rs (TerminalPaneSpec.command_override → CommandTemplate)
+  - src-tauri/crates/tabby-workspace/src/content.rs (PaneContentDefinition.command_override → CommandTemplate)
+  - src-tauri/src/application/bootstrap_service.rs (CLI command → CommandTemplate at boundary)
+  - src-tauri/src/application/runtime_service.rs (VO construction at service boundaries)
+  - src-tauri/src/application/runtime_coordinator.rs (updated test register_browser calls)
+  - src-tauri/src/mapping/dto_mappers.rs (VO↔String conversion at transport boundary)
+  - src-tauri/src/application/command_dispatch_integration_tests.rs (test VO updates)
+  - src-tauri/src/application/runtime_integration_tests.rs (test VO updates)
+  - src-tauri/src/application/runtime_lifecycle_tests.rs (test VO updates)
+- Implemented CommandTemplate VO in tabby-kernel, changed PaneRuntime.browser_location to Option<BrowserUrl>, PaneRuntime.terminal_cwd to Option<WorkingDirectory>, and all command-related string fields (startup_command_template, command_override, resolved command) to use CommandTemplate.
+- **Learnings for future iterations:**
+  - BrowserUrl/WorkingDirectory/CommandTemplate don't implement Deref, so `.as_deref()` must become `.as_ref().map(|v| v.as_str())`
+  - Integration test files are separate from unit test modules — need to check all `*_tests.rs` files in application/
+  - Adding tabby-kernel as a direct dependency of the main crate is needed when application services construct VOs from raw input
+---
+
 ## [2026-03-10 00:45] - DDD-014: LayoutPreset enum in tabby-kernel replaces stringly-typed default_layout
 Thread:
 Run: 20260310-000917-71928 (iteration 8)
