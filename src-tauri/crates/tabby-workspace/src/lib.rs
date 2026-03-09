@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use thiserror::Error;
 use uuid::Uuid;
 
-pub use content::{BrowserUrl, PaneContentDefinition};
-pub use ids::{PaneContentId, PaneId, TabId};
+pub use content::PaneContentDefinition;
+pub use ids::{BrowserUrl, PaneContentId, PaneId, TabId};
 
 use crate::layout::{
     close_pane as close_pane_layout, split_pane as split_pane_layout, swap_panes, tree_from_count,
@@ -24,7 +24,7 @@ pub struct TerminalPaneSpec {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrowserPaneSpec {
-    pub initial_url: String,
+    pub initial_url: BrowserUrl,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -628,7 +628,7 @@ fn content_from_spec(spec: &PaneSpec) -> PaneContentDefinition {
             &t.working_directory,
             t.command_override.clone(),
         ),
-        PaneSpec::Browser(b) => PaneContentDefinition::browser(id, BrowserUrl::new(&b.initial_url)),
+        PaneSpec::Browser(b) => PaneContentDefinition::browser(id, b.initial_url.clone()),
     }
 }
 
@@ -645,7 +645,7 @@ pub fn spec_from_content(content: &PaneContentDefinition) -> PaneSpec {
             command_override: command_override.clone(),
         }),
         PaneContentDefinition::Browser { initial_url, .. } => PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: initial_url.as_str().to_string(),
+            initial_url: initial_url.clone(),
         }),
     }
 }
@@ -654,8 +654,8 @@ pub fn spec_from_content(content: &PaneContentDefinition) -> PaneSpec {
 mod tests {
     use super::{
         layout::{LayoutPreset, SplitDirection},
-        BrowserPaneSpec, PaneContentDefinition, PaneId, PaneSpec, TabId, TabLayoutStrategy,
-        WorkspaceDomainEvent, WorkspaceSession,
+        BrowserPaneSpec, BrowserUrl, PaneContentDefinition, PaneId, PaneSpec, TabId,
+        TabLayoutStrategy, WorkspaceDomainEvent, WorkspaceSession,
     };
 
     fn terminal(cwd: &str) -> PaneSpec {
@@ -668,7 +668,7 @@ mod tests {
 
     fn browser(url: &str) -> PaneSpec {
         PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: String::from(url),
+            initial_url: BrowserUrl::new(url),
         })
     }
 

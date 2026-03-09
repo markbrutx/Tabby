@@ -1,50 +1,36 @@
 use std::fmt;
 
-macro_rules! id_newtype {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-        pub struct $name(String);
+// Re-export shared value objects from tabby-contracts (shared kernel).
+pub use tabby_contracts::{BrowserUrl, PaneId, TabId};
 
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str(&self.0)
-            }
-        }
+/// Type-safe identifier for a pane's content definition.
+/// Each PaneContentId belongs to exactly one PaneSlot — never shared, never reused after destruction.
+///
+/// This is workspace-specific and does not belong in the shared kernel.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PaneContentId(String);
 
-        impl From<String> for $name {
-            fn from(value: String) -> Self {
-                Self(value)
-            }
-        }
-
-        impl AsRef<str> for $name {
-            fn as_ref(&self) -> &str {
-                &self.0
-            }
-        }
-    };
+impl fmt::Display for PaneContentId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
-id_newtype!(
-    /// Type-safe identifier for a workspace tab.
-    TabId
-);
+impl From<String> for PaneContentId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
 
-id_newtype!(
-    /// Type-safe identifier for a pane within a tab.
-    PaneId
-);
-
-id_newtype!(
-    /// Type-safe identifier for a pane's content definition.
-    /// Each PaneContentId belongs to exactly one PaneSlot — never shared, never reused after destruction.
-    PaneContentId
-);
+impl AsRef<str> for PaneContentId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use super::{PaneId, TabId};
+    use super::{PaneContentId, PaneId, TabId};
 
     #[test]
     fn tab_id_display_shows_inner_value() {
@@ -114,5 +100,18 @@ mod tests {
         let a = PaneId::from(String::from("a"));
         let b = PaneId::from(String::from("b"));
         assert!(a < b);
+    }
+
+    #[test]
+    fn pane_content_id_display() {
+        let id = PaneContentId::from(String::from("content-1"));
+        assert_eq!(id.to_string(), "content-1");
+    }
+
+    #[test]
+    fn pane_content_id_equality() {
+        let a = PaneContentId::from(String::from("c1"));
+        let b = PaneContentId::from(String::from("c1"));
+        assert_eq!(a, b);
     }
 }

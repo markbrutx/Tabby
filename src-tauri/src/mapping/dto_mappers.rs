@@ -134,14 +134,14 @@ fn pane_spec_to_dto(value: &PaneSpec) -> PaneSpecDto {
             command_override: spec.command_override.clone(),
         },
         PaneSpec::Browser(spec) => PaneSpecDto::Browser {
-            initial_url: spec.initial_url.clone(),
+            initial_url: spec.initial_url.as_str().to_string(),
         },
     }
 }
 
 pub fn pane_runtime_to_view(runtime: &PaneRuntime) -> PaneRuntimeView {
     PaneRuntimeView {
-        pane_id: runtime.pane_id.clone(),
+        pane_id: runtime.pane_id.to_string(),
         runtime_session_id: runtime.runtime_session_id.as_ref().map(|id| id.to_string()),
         kind: runtime_kind_to_dto(runtime.kind),
         status: runtime_status_to_dto(runtime.status),
@@ -181,7 +181,9 @@ pub fn pane_spec_from_dto(value: PaneSpecDto) -> PaneSpec {
             command_override,
         }),
         PaneSpecDto::Browser { initial_url } => {
-            PaneSpec::Browser(tabby_workspace::BrowserPaneSpec { initial_url })
+            PaneSpec::Browser(tabby_workspace::BrowserPaneSpec {
+                initial_url: tabby_workspace::BrowserUrl::new(initial_url),
+            })
         }
     }
 }
@@ -398,9 +400,10 @@ fn runtime_status_to_dto(value: RuntimeStatus) -> RuntimeStatusDto {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tabby_contracts::PaneId;
     use tabby_runtime::{PaneRuntime, RuntimeKind, RuntimeSessionId, RuntimeStatus};
     use tabby_settings::{default_preferences, ProfileCatalog, TerminalProfile, UserPreferences};
-    use tabby_workspace::{BrowserPaneSpec, PaneSpec, TerminalPaneSpec};
+    use tabby_workspace::{BrowserPaneSpec, BrowserUrl, PaneSpec, TerminalPaneSpec};
 
     // -- PaneSpec round-trip ------------------------------------------------
 
@@ -428,7 +431,7 @@ mod tests {
     #[test]
     fn browser_pane_spec_round_trips_through_dto() {
         let spec = PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: String::from("https://example.com"),
+            initial_url: BrowserUrl::new("https://example.com"),
         });
 
         let dto = pane_spec_to_dto(&spec);
@@ -436,7 +439,7 @@ mod tests {
 
         match restored {
             PaneSpec::Browser(b) => {
-                assert_eq!(b.initial_url, "https://example.com");
+                assert_eq!(b.initial_url.as_str(), "https://example.com");
             }
             PaneSpec::Terminal(_) => panic!("Expected Browser spec"),
         }
@@ -554,7 +557,7 @@ mod tests {
     #[test]
     fn pane_runtime_to_view_maps_terminal() {
         let runtime = PaneRuntime {
-            pane_id: String::from("pane-1"),
+            pane_id: PaneId::from(String::from("pane-1")),
             runtime_session_id: Some(RuntimeSessionId::from(String::from("pty-abc"))),
             kind: RuntimeKind::Terminal,
             status: RuntimeStatus::Running,
@@ -575,7 +578,7 @@ mod tests {
     #[test]
     fn pane_runtime_to_view_maps_browser() {
         let runtime = PaneRuntime {
-            pane_id: String::from("pane-2"),
+            pane_id: PaneId::from(String::from("pane-2")),
             runtime_session_id: Some(RuntimeSessionId::from(String::from("browser-xyz"))),
             kind: RuntimeKind::Browser,
             status: RuntimeStatus::Running,
@@ -596,7 +599,7 @@ mod tests {
     #[test]
     fn pane_runtime_to_view_maps_failed_status_with_error() {
         let runtime = PaneRuntime {
-            pane_id: String::from("pane-3"),
+            pane_id: PaneId::from(String::from("pane-3")),
             runtime_session_id: None,
             kind: RuntimeKind::Terminal,
             status: RuntimeStatus::Failed,
@@ -981,7 +984,7 @@ mod tests {
     fn pane_runtime_session_id_round_trips_through_string() {
         let wire_session = String::from("pty-session-round-trip");
         let runtime = PaneRuntime {
-            pane_id: String::from("pane-1"),
+            pane_id: PaneId::from(String::from("pane-1")),
             runtime_session_id: Some(RuntimeSessionId::from(wire_session.clone())),
             kind: RuntimeKind::Terminal,
             status: RuntimeStatus::Running,

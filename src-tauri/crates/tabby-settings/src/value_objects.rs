@@ -1,5 +1,8 @@
 use crate::SettingsError;
 
+// Re-export WorkingDirectory from the shared kernel (tabby-contracts).
+pub use tabby_contracts::WorkingDirectory;
+
 /// Font size in points, validated to be within 8–72.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FontSize(u16);
@@ -34,46 +37,6 @@ impl Default for FontSize {
 impl std::fmt::Display for FontSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-/// A working directory path. Empty means "not configured".
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkingDirectory(String);
-
-impl WorkingDirectory {
-    pub fn new(value: impl Into<String>) -> Result<Self, SettingsError> {
-        let value = value.into();
-        if value.contains('\0') {
-            return Err(SettingsError::Validation(String::from(
-                "Working directory must not contain null bytes",
-            )));
-        }
-        Ok(Self(value))
-    }
-
-    pub fn empty() -> Self {
-        Self(String::new())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl Default for WorkingDirectory {
-    fn default() -> Self {
-        Self::empty()
-    }
-}
-
-impl std::fmt::Display for WorkingDirectory {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
     }
 }
 
@@ -167,7 +130,7 @@ mod tests {
         assert_eq!(FontSize::new(16).unwrap().to_string(), "16");
     }
 
-    // -- WorkingDirectory -------------------------------------------------
+    // -- WorkingDirectory (imported from tabby-contracts) ------------------
 
     #[test]
     fn working_directory_accepts_valid_path() {

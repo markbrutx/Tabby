@@ -141,7 +141,7 @@ impl AppShell {
             }
             RuntimeCommand::ObserveBrowserLocation { pane_id, url } => {
                 self.runtime_service
-                    .observe_browser_location(pane_id.as_ref(), &url)?;
+                    .observe_browser_location(&pane_id, &url)?;
             }
             other => {
                 self.runtime_service.dispatch_runtime_command(other)?;
@@ -155,7 +155,8 @@ impl AppShell {
         pane_id: &str,
         url: &str,
     ) -> Result<(), ShellError> {
-        self.runtime_service.observe_browser_location(pane_id, url)
+        let pane_id = tabby_workspace::PaneId::from(String::from(pane_id));
+        self.runtime_service.observe_browser_location(&pane_id, url)
     }
 
     fn execute_workspace_command(&self, command: WorkspaceCommand) -> Result<(), ShellError> {
@@ -208,7 +209,7 @@ impl AppShell {
                     .ok_or_else(|| ShellError::NotFound(format!("pane {pane_id}")))?;
                 let preferences = self.settings_service.preferences()?;
                 self.runtime_service.restart_runtime(
-                    pane_id.as_ref(),
+                    &pane_id,
                     &spec,
                     &preferences,
                     self.observation_receiver(),

@@ -57,6 +57,12 @@ pub enum SettingsError {
     Validation(String),
 }
 
+impl From<tabby_contracts::ValueObjectError> for SettingsError {
+    fn from(err: tabby_contracts::ValueObjectError) -> Self {
+        Self::Validation(err.to_string())
+    }
+}
+
 pub fn default_preferences() -> UserPreferences {
     UserPreferences {
         default_layout: String::from(DEFAULT_LAYOUT_PRESET),

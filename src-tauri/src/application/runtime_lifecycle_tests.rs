@@ -14,8 +14,8 @@ mod tests {
 
     use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
     use tabby_workspace::{
-        spec_from_content, BrowserPaneSpec, PaneId, PaneSpec, TabLayoutStrategy, TerminalPaneSpec,
-        WorkspaceDomainEvent, WorkspaceSession,
+        spec_from_content, BrowserPaneSpec, BrowserUrl, PaneId, PaneSpec, TabLayoutStrategy,
+        TerminalPaneSpec, WorkspaceDomainEvent, WorkspaceSession,
     };
 
     use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
@@ -38,7 +38,7 @@ mod tests {
 
     fn browser_spec(url: &str) -> PaneSpec {
         PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: String::from(url),
+            initial_url: BrowserUrl::new(url),
         })
     }
 
@@ -68,25 +68,27 @@ mod tests {
 
         /// Simulates `RuntimeApplicationService::start_runtime`
         fn start_runtime(&self, pane_id: &str, spec: &PaneSpec) {
+            let pid = PaneId::from(String::from(pane_id));
             let mut reg = self.registry.lock().expect("registry lock");
             let runtime = match spec {
                 PaneSpec::Terminal(_) => {
                     let session = self.next_session_id("pty");
-                    reg.register_terminal(pane_id, session)
+                    reg.register_terminal(&pid, session)
                 }
                 PaneSpec::Browser(browser) => {
                     let session = self.next_session_id("browser");
-                    reg.register_browser(pane_id, session, browser.initial_url.clone())
+                    reg.register_browser(&pid, session, browser.initial_url.to_string())
                 }
             };
-            self.emit_projection(&runtime.pane_id, runtime.status);
+            self.emit_projection(runtime.pane_id.as_ref(), runtime.status);
         }
 
         /// Simulates `RuntimeApplicationService::stop_runtime`
         fn stop_runtime(&self, pane_id: &str) {
-            let removed = self.registry.lock().expect("registry lock").remove(pane_id);
+            let pid = PaneId::from(String::from(pane_id));
+            let removed = self.registry.lock().expect("registry lock").remove(&pid);
             if let Some(runtime) = removed {
-                self.emit_projection(&runtime.pane_id, RuntimeStatus::Exited);
+                self.emit_projection(runtime.pane_id.as_ref(), RuntimeStatus::Exited);
             }
         }
 
@@ -112,18 +114,20 @@ mod tests {
         }
 
         fn registry_get_status(&self, pane_id: &str) -> Option<RuntimeStatus> {
+            let pid = PaneId::from(String::from(pane_id));
             self.registry
                 .lock()
                 .expect("registry lock")
-                .get(pane_id)
+                .get(&pid)
                 .map(|r| r.status)
         }
 
         fn registry_get_kind(&self, pane_id: &str) -> Option<RuntimeKind> {
+            let pid = PaneId::from(String::from(pane_id));
             self.registry
                 .lock()
                 .expect("registry lock")
-                .get(pane_id)
+                .get(&pid)
                 .map(|r| r.kind)
         }
     }
@@ -141,10 +145,10 @@ mod tests {
                 .registry
                 .lock()
                 .expect("registry lock")
-                .mark_terminal_exit(pane_id.as_ref(), None, failed, message);
+                .mark_terminal_exit(pane_id, None, failed, message);
 
             if let Ok(runtime) = result {
-                self.emit_projection(&runtime.pane_id, runtime.status);
+                self.emit_projection(runtime.pane_id.as_ref(), runtime.status);
             }
         }
 

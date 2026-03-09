@@ -45,7 +45,7 @@ impl RuntimeApplicationService {
 
     pub fn start_runtime(
         &self,
-        pane_id: &str,
+        pane_id: &PaneId,
         spec: &PaneSpec,
         preferences: &UserPreferences,
         observation_receiver: std::sync::Arc<dyn RuntimeObservationReceiver>,
@@ -59,7 +59,7 @@ impl RuntimeApplicationService {
                 )
                 .map_err(settings_error_to_shell)?;
                 let pty_session_id = self.terminal_port.spawn(
-                    pane_id,
+                    pane_id.as_ref(),
                     &spec.working_directory,
                     resolved.command.as_deref(),
                     observation_receiver,
@@ -70,14 +70,14 @@ impl RuntimeApplicationService {
             PaneSpec::Browser(spec) => self.lock_runtimes()?.register_browser(
                 pane_id,
                 RuntimeSessionId::from(format!("browser-{}", uuid::Uuid::new_v4())),
-                spec.initial_url.clone(),
+                spec.initial_url.as_str().to_string(),
             ),
         };
         self.emitter.publish_runtime_status(&runtime);
         Ok(())
     }
 
-    pub fn stop_runtime(&self, pane_id: &str) {
+    pub fn stop_runtime(&self, pane_id: &PaneId) {
         let runtime = match self.lock_runtimes() {
             Ok(mut runtimes) => runtimes.remove(pane_id),
             Err(error) => {
@@ -94,12 +94,20 @@ impl RuntimeApplicationService {
             match runtime.kind {
                 tabby_runtime::RuntimeKind::Terminal => {
                     if let Err(error) = self.terminal_port.kill(runtime_session_id.as_ref()) {
-                        warn!(?error, pane_id, "Failed to kill terminal runtime");
+                        warn!(
+                            ?error,
+                            pane_id = pane_id.as_ref(),
+                            "Failed to kill terminal runtime"
+                        );
                     }
                 }
                 tabby_runtime::RuntimeKind::Browser => {
-                    if let Err(error) = self.browser_port.close_surface(pane_id) {
-                        warn!(?error, pane_id, "Failed to close browser surface");
+                    if let Err(error) = self.browser_port.close_surface(pane_id.as_ref()) {
+                        warn!(
+                            ?error,
+                            pane_id = pane_id.as_ref(),
+                            "Failed to close browser surface"
+                        );
                     }
                 }
             }
@@ -112,7 +120,7 @@ impl RuntimeApplicationService {
 
     pub fn restart_runtime(
         &self,
-        pane_id: &str,
+        pane_id: &PaneId,
         spec: &PaneSpec,
         preferences: &UserPreferences,
         observation_receiver: std::sync::Arc<dyn RuntimeObservationReceiver>,
@@ -126,7 +134,7 @@ impl RuntimeApplicationService {
             RuntimeCommand::WriteTerminalInput { pane_id, input } => {
                 let runtime_session_id = self
                     .lock_runtimes()?
-                    .terminal_session_id(pane_id.as_ref())
+                    .terminal_session_id(&pane_id)
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
                 self.terminal_port
                     .write_input(runtime_session_id.as_ref(), &input)?;
@@ -138,7 +146,7 @@ impl RuntimeApplicationService {
             } => {
                 let runtime_session_id = self
                     .lock_runtimes()?
-                    .terminal_session_id(pane_id.as_ref())
+                    .terminal_session_id(&pane_id)
                     .ok_or_else(|| ShellError::NotFound(format!("runtime for pane {pane_id}")))?;
                 self.terminal_port
                     .resize(runtime_session_id.as_ref(), cols, rows)?;
@@ -147,7 +155,7 @@ impl RuntimeApplicationService {
                 self.browser_port.navigate(pane_id.as_ref(), &url)?;
                 let maybe_runtime = self
                     .lock_runtimes()?
-                    .update_browser_location(pane_id.as_ref(), url)
+                    .update_browser_location(&pane_id, url)
                     .ok();
                 if let Some(runtime) = maybe_runtime {
                     self.emitter.publish_runtime_status(&runtime);
@@ -175,7 +183,7 @@ impl RuntimeApplicationService {
     ) -> Result<(), ShellError> {
         let runtime = self
             .lock_runtimes()?
-            .update_terminal_cwd(pane_id.as_ref(), String::from(working_directory))
+            .update_terminal_cwd(pane_id, String::from(working_directory))
             .map_err(|error| ShellError::NotFound(error.to_string()))?;
         self.emitter.publish_runtime_status(&runtime);
 
@@ -185,7 +193,7 @@ impl RuntimeApplicationService {
         Ok(())
     }
 
-    pub fn observe_browser_location(&self, pane_id: &str, url: &str) -> Result<(), ShellError> {
+    pub fn observe_browser_location(&self, pane_id: &PaneId, url: &str) -> Result<(), ShellError> {
         let maybe_runtime = self
             .lock_runtimes()?
             .update_browser_location(pane_id, String::from(url))
@@ -227,7 +235,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
 
         let result = self.lock_runtimes().and_then(|mut runtimes| {
             runtimes
-                .mark_terminal_exit(pane_id.as_ref(), None, failed, message)
+                .mark_terminal_exit(pane_id, None, failed, message)
                 .map_err(|error| ShellError::NotFound(error.to_string()))
         });
 
@@ -246,7 +254,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
     fn on_browser_location_changed(&self, pane_id: &PaneId, url: &str) {
         let result = self.lock_runtimes().and_then(|mut runtimes| {
             runtimes
-                .update_browser_location(pane_id.as_ref(), String::from(url))
+                .update_browser_location(pane_id, String::from(url))
                 .map_err(|error| ShellError::NotFound(error.to_string()))
         });
 
@@ -269,7 +277,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
         // once infrastructure is fully wired (future story).
         let result = self.lock_runtimes().and_then(|mut runtimes| {
             runtimes
-                .update_terminal_cwd(pane_id.as_ref(), String::from(cwd))
+                .update_terminal_cwd(pane_id, String::from(cwd))
                 .map_err(|error| ShellError::NotFound(error.to_string()))
         });
 
@@ -294,53 +302,58 @@ fn settings_error_to_shell(error: SettingsError) -> ShellError {
 
 #[cfg(test)]
 mod tests {
+    use tabby_contracts::PaneId as PaneIdType;
     use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
 
     fn sid(s: &str) -> RuntimeSessionId {
         RuntimeSessionId::from(String::from(s))
     }
 
+    fn pid(id: &str) -> PaneIdType {
+        PaneIdType::from(String::from(id))
+    }
+
     #[test]
     fn start_runtime_registers_terminal_in_registry() {
         let mut registry = RuntimeRegistry::default();
 
-        let runtime = registry.register_terminal("pane-1", sid("pty-session-abc"));
+        let runtime = registry.register_terminal(&pid("pane-1"), sid("pty-session-abc"));
 
-        assert_eq!(runtime.pane_id, "pane-1");
+        assert_eq!(runtime.pane_id, pid("pane-1"));
         assert_eq!(runtime.runtime_session_id, Some(sid("pty-session-abc")));
         assert!(matches!(runtime.kind, RuntimeKind::Terminal));
         assert!(matches!(runtime.status, RuntimeStatus::Running));
 
         let snapshot = registry.snapshot();
         assert_eq!(snapshot.len(), 1);
-        assert_eq!(snapshot[0].pane_id, "pane-1");
+        assert_eq!(snapshot[0].pane_id, pid("pane-1"));
 
-        let session_id = registry.terminal_session_id("pane-1");
+        let session_id = registry.terminal_session_id(&pid("pane-1"));
         assert_eq!(session_id, Some(sid("pty-session-abc")));
     }
 
     #[test]
     fn stop_runtime_removes_from_registry() {
         let mut registry = RuntimeRegistry::default();
-        registry.register_terminal("pane-1", sid("pty-session-abc"));
+        registry.register_terminal(&pid("pane-1"), sid("pty-session-abc"));
         registry.register_browser(
-            "pane-2",
+            &pid("pane-2"),
             sid("browser-xyz"),
             String::from("https://example.com"),
         );
 
         assert_eq!(registry.snapshot().len(), 2);
 
-        let removed = registry.remove("pane-1");
+        let removed = registry.remove(&pid("pane-1"));
         assert!(removed.is_some());
         let removed = removed.expect("remove returned Some, already asserted");
-        assert_eq!(removed.pane_id, "pane-1");
+        assert_eq!(removed.pane_id, pid("pane-1"));
         assert!(matches!(removed.kind, RuntimeKind::Terminal));
 
         assert_eq!(registry.snapshot().len(), 1);
-        assert_eq!(registry.snapshot()[0].pane_id, "pane-2");
+        assert_eq!(registry.snapshot()[0].pane_id, pid("pane-2"));
 
-        let not_found = registry.remove("pane-1");
+        let not_found = registry.remove(&pid("pane-1"));
         assert!(not_found.is_none(), "removing twice should return None");
     }
 
@@ -349,12 +362,12 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
 
         let runtime = registry.register_browser(
-            "pane-b",
+            &pid("pane-b"),
             sid("browser-session-1"),
             String::from("https://example.com"),
         );
 
-        assert_eq!(runtime.pane_id, "pane-b");
+        assert_eq!(runtime.pane_id, pid("pane-b"));
         assert!(matches!(runtime.kind, RuntimeKind::Browser));
         assert!(matches!(runtime.status, RuntimeStatus::Running));
         assert_eq!(
@@ -366,7 +379,7 @@ mod tests {
     #[test]
     fn stop_runtime_for_nonexistent_pane_returns_none() {
         let mut registry = RuntimeRegistry::default();
-        let removed = registry.remove("nonexistent-pane");
+        let removed = registry.remove(&pid("nonexistent-pane"));
         assert!(
             removed.is_none(),
             "removing nonexistent runtime should return None"
@@ -378,15 +391,15 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
 
         // Initial registration
-        registry.register_terminal("pane-1", sid("pty-session-1"));
+        registry.register_terminal(&pid("pane-1"), sid("pty-session-1"));
         assert_eq!(registry.snapshot().len(), 1);
 
         // Simulate restart: remove + register with new session
-        let removed = registry.remove("pane-1");
+        let removed = registry.remove(&pid("pane-1"));
         assert!(removed.is_some(), "old runtime should be removed");
 
-        let runtime = registry.register_terminal("pane-1", sid("pty-session-2"));
-        assert_eq!(runtime.pane_id, "pane-1");
+        let runtime = registry.register_terminal(&pid("pane-1"), sid("pty-session-2"));
+        assert_eq!(runtime.pane_id, pid("pane-1"));
         assert_eq!(runtime.runtime_session_id, Some(sid("pty-session-2")));
         assert_eq!(
             registry.snapshot().len(),
@@ -399,10 +412,10 @@ mod tests {
     fn mark_terminal_exit_failure_tracks_error() {
         let mut registry = RuntimeRegistry::default();
         let session_id = sid("pty-session-1");
-        registry.register_terminal("pane-1", session_id.clone());
+        registry.register_terminal(&pid("pane-1"), session_id.clone());
 
         let result = registry.mark_terminal_exit(
-            "pane-1",
+            &pid("pane-1"),
             Some(&session_id),
             true,
             Some(String::from("PTY spawn failed")),
@@ -421,11 +434,11 @@ mod tests {
     #[test]
     fn mark_terminal_exit_with_wrong_session_id_is_ignored() {
         let mut registry = RuntimeRegistry::default();
-        registry.register_terminal("pane-1", sid("pty-session-1"));
+        registry.register_terminal(&pid("pane-1"), sid("pty-session-1"));
 
         // When session ID doesn't match, the exit is silently ignored (stale event)
         let result =
-            registry.mark_terminal_exit("pane-1", Some(&sid("wrong-session")), false, None);
+            registry.mark_terminal_exit(&pid("pane-1"), Some(&sid("wrong-session")), false, None);
         assert!(result.is_ok(), "should succeed even with wrong session id");
 
         let runtime = result.expect("already asserted ok");
@@ -439,15 +452,15 @@ mod tests {
     fn mark_terminal_exit_for_nonexistent_pane_returns_error() {
         let mut registry = RuntimeRegistry::default();
         let result =
-            registry.mark_terminal_exit("nonexistent", Some(&sid("session-1")), false, None);
+            registry.mark_terminal_exit(&pid("nonexistent"), Some(&sid("session-1")), false, None);
         assert!(result.is_err(), "should return error for nonexistent pane");
     }
 
     #[test]
     fn update_browser_location_for_nonexistent_pane_returns_error() {
         let mut registry = RuntimeRegistry::default();
-        let result =
-            registry.update_browser_location("nonexistent", String::from("https://example.com"));
+        let result = registry
+            .update_browser_location(&pid("nonexistent"), String::from("https://example.com"));
         assert!(
             result.is_err(),
             "updating location for nonexistent pane should fail"
@@ -457,13 +470,13 @@ mod tests {
     #[test]
     fn snapshot_returns_all_registered_runtimes() {
         let mut registry = RuntimeRegistry::default();
-        registry.register_terminal("pane-1", sid("pty-1"));
+        registry.register_terminal(&pid("pane-1"), sid("pty-1"));
         registry.register_browser(
-            "pane-2",
+            &pid("pane-2"),
             sid("browser-1"),
             String::from("https://example.com"),
         );
-        registry.register_terminal("pane-3", sid("pty-3"));
+        registry.register_terminal(&pid("pane-3"), sid("pty-3"));
 
         let snapshot = registry.snapshot();
         assert_eq!(snapshot.len(), 3, "snapshot should contain all runtimes");
@@ -502,11 +515,11 @@ mod tests {
 
         // 2. Register the pane in the runtime registry
         let mut registry = RuntimeRegistry::default();
-        registry.register_terminal(pane_id.as_ref(), sid("pty-1"));
+        registry.register_terminal(&pane_id, sid("pty-1"));
 
         // 3. Update cwd in the runtime registry (simulating observe_terminal_cwd)
         let runtime = registry
-            .update_terminal_cwd(pane_id.as_ref(), String::from("/projects/tabby"))
+            .update_terminal_cwd(&pane_id, String::from("/projects/tabby"))
             .expect("cwd update should succeed");
         assert_eq!(
             runtime.terminal_cwd.as_deref(),
@@ -671,14 +684,14 @@ mod tests {
         }
         fn publish_runtime_status(&self, runtime: &tabby_runtime::PaneRuntime) {
             if let Ok(mut emitted) = self.emitted.lock() {
-                emitted.push((runtime.pane_id.clone(), runtime.status));
+                emitted.push((runtime.pane_id.to_string(), runtime.status));
             }
         }
     }
 
     use super::RuntimeApplicationService;
     use tabby_settings::UserPreferences;
-    use tabby_workspace::{BrowserPaneSpec, PaneSpec, TerminalPaneSpec};
+    use tabby_workspace::{BrowserPaneSpec, BrowserUrl, PaneSpec, TerminalPaneSpec};
 
     fn default_preferences() -> UserPreferences {
         tabby_settings::default_preferences()
@@ -808,7 +821,7 @@ mod tests {
         let spec = terminal_spec_for_test("/tmp");
 
         service
-            .start_runtime("pane-1", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-1"), &spec, &prefs, mock_receiver())
             .expect("start should succeed");
 
         // Terminal port spawn was called
@@ -820,7 +833,7 @@ mod tests {
         // Runtime registered in registry
         let snapshot = service.snapshot().expect("snapshot");
         assert_eq!(snapshot.len(), 1);
-        assert_eq!(snapshot[0].pane_id, "pane-1");
+        assert_eq!(snapshot[0].pane_id.as_ref(), "pane-1");
         assert!(matches!(snapshot[0].kind, RuntimeKind::Terminal));
         assert!(matches!(snapshot[0].status, RuntimeStatus::Running));
 
@@ -838,7 +851,7 @@ mod tests {
         let spec = terminal_spec_for_test("/tmp");
 
         service
-            .start_runtime("pane-1", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-1"), &spec, &prefs, mock_receiver())
             .expect("start");
 
         // Get the session ID that was assigned
@@ -849,7 +862,7 @@ mod tests {
             .expect("should have session id")
             .clone();
 
-        service.stop_runtime("pane-1");
+        service.stop_runtime(&pid("pane-1"));
 
         // Terminal port kill was called with the correct session ID
         let kill_calls = terminal.kill_calls.lock().expect("lock");
@@ -874,11 +887,11 @@ mod tests {
         let (service, terminal, _browser, emitter) = build_service();
         let prefs = default_preferences();
         let spec = PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: String::from("https://example.com"),
+            initial_url: BrowserUrl::new("https://example.com"),
         });
 
         service
-            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-b"), &spec, &prefs, mock_receiver())
             .expect("start");
 
         // Terminal port was NOT called
@@ -903,14 +916,14 @@ mod tests {
         let (service, _terminal, browser, _emitter) = build_service();
         let prefs = default_preferences();
         let spec = PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: String::from("https://example.com"),
+            initial_url: BrowserUrl::new("https://example.com"),
         });
 
         service
-            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-b"), &spec, &prefs, mock_receiver())
             .expect("start");
 
-        service.stop_runtime("pane-b");
+        service.stop_runtime(&pid("pane-b"));
 
         // Browser port close was called
         let close_calls = browser.close_calls.lock().expect("lock");
@@ -925,11 +938,11 @@ mod tests {
         let spec = terminal_spec_for_test("/projects");
 
         service
-            .start_runtime("pane-1", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-1"), &spec, &prefs, mock_receiver())
             .expect("start");
 
         service
-            .restart_runtime("pane-1", &spec, &prefs, mock_receiver())
+            .restart_runtime(&pid("pane-1"), &spec, &prefs, mock_receiver())
             .expect("restart");
 
         // Terminal port: 2 spawns, 1 kill
@@ -967,11 +980,11 @@ mod tests {
         let (service, _terminal, browser, _emitter) = build_service();
         let prefs = default_preferences();
         let spec = PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: String::from("https://example.com"),
+            initial_url: BrowserUrl::new("https://example.com"),
         });
 
         service
-            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-b"), &spec, &prefs, mock_receiver())
             .expect("start");
 
         service
@@ -996,7 +1009,7 @@ mod tests {
         let spec = terminal_spec_for_test("/tmp");
 
         service
-            .start_runtime("pane-t", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-t"), &spec, &prefs, mock_receiver())
             .expect("start");
 
         let snapshot = service.snapshot().expect("snapshot");
@@ -1023,7 +1036,7 @@ mod tests {
         let spec = terminal_spec_for_test("/tmp");
 
         service
-            .start_runtime("pane-t", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-t"), &spec, &prefs, mock_receiver())
             .expect("start");
 
         service
@@ -1053,11 +1066,11 @@ mod tests {
         let (service, _terminal, _browser, emitter) = build_service();
         let prefs = default_preferences();
         let spec = PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: String::from("https://example.com"),
+            initial_url: BrowserUrl::new("https://example.com"),
         });
 
         service
-            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-b"), &spec, &prefs, mock_receiver())
             .expect("start browser runtime");
 
         // Clear initial emission from start_runtime
@@ -1065,14 +1078,14 @@ mod tests {
 
         // Simulate browser navigation observation (as browser_surface.rs would call)
         service
-            .observe_browser_location("pane-b", "https://docs.rs/tauri")
+            .observe_browser_location(&pid("pane-b"), "https://docs.rs/tauri")
             .expect("observe should succeed");
 
         // Verify: registry updated
         let snapshot = service.snapshot().expect("snapshot");
         let browser_runtime = snapshot
             .iter()
-            .find(|r| r.pane_id == "pane-b")
+            .find(|r| r.pane_id.as_ref() == "pane-b")
             .expect("found");
         assert_eq!(
             browser_runtime.browser_location.as_deref(),
@@ -1093,11 +1106,11 @@ mod tests {
         let (service, _terminal, _browser, emitter) = build_service();
         let prefs = default_preferences();
         let spec = PaneSpec::Browser(BrowserPaneSpec {
-            initial_url: String::from("https://example.com"),
+            initial_url: BrowserUrl::new("https://example.com"),
         });
 
         service
-            .start_runtime("pane-b", &spec, &prefs, mock_receiver())
+            .start_runtime(&pid("pane-b"), &spec, &prefs, mock_receiver())
             .expect("start");
         emitter.emitted.lock().expect("lock").clear();
 
@@ -1112,7 +1125,7 @@ mod tests {
         let snapshot = service.snapshot().expect("snapshot");
         let runtime = snapshot
             .iter()
-            .find(|r| r.pane_id == "pane-b")
+            .find(|r| r.pane_id.as_ref() == "pane-b")
             .expect("found");
         assert_eq!(
             runtime.browser_location.as_deref(),
@@ -1155,7 +1168,7 @@ mod tests {
 
         // 3. publish_runtime_status
         let runtime = tabby_runtime::PaneRuntime {
-            pane_id: String::from("pane-1"),
+            pane_id: PaneId::from(String::from("pane-1")),
             kind: tabby_runtime::RuntimeKind::Terminal,
             status: RuntimeStatus::Running,
             runtime_session_id: Some(RuntimeSessionId::from(String::from("pty-1"))),
@@ -1184,7 +1197,7 @@ mod tests {
         publisher.publish_settings_projection(&tabby_settings::default_preferences());
 
         let runtime = tabby_runtime::PaneRuntime {
-            pane_id: String::from("pane-x"),
+            pane_id: PaneId::from(String::from("pane-x")),
             kind: tabby_runtime::RuntimeKind::Browser,
             status: RuntimeStatus::Running,
             runtime_session_id: None,

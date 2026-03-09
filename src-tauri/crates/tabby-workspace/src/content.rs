@@ -1,32 +1,4 @@
-use std::fmt;
-
-use crate::ids::PaneContentId;
-
-/// A validated URL for browser pane content.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BrowserUrl(String);
-
-impl BrowserUrl {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for BrowserUrl {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl AsRef<str> for BrowserUrl {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
+use crate::ids::{BrowserUrl, PaneContentId};
 
 /// Describes what runs inside a pane slot — separated from the workspace structural Pane type.
 ///
@@ -187,7 +159,6 @@ mod tests {
         let def_a = PaneContentDefinition::terminal(id_a.clone(), "zsh", "/home", None);
         let def_b = PaneContentDefinition::terminal(id_b.clone(), "zsh", "/home", None);
 
-        // Even with identical specs, different IDs mean different content instances
         assert_ne!(def_a.content_id(), def_b.content_id());
         assert_ne!(def_a, def_b);
     }
@@ -236,9 +207,6 @@ mod tests {
 
     #[test]
     fn content_definition_does_not_import_structural_types() {
-        // Compile-time guarantee: this module only imports from ids, not from
-        // Tab, SplitNode, PaneSlot, or any other workspace structural type.
-        // If it compiles, the boundary is clean.
         let id = make_content_id("boundary-test");
         let _def = PaneContentDefinition::terminal(id, "sh", "/", None);
     }

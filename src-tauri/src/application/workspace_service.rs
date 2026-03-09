@@ -262,7 +262,7 @@ mod tests {
             .expect("with_session");
 
         let new_spec = PaneSpec::Browser(tabby_workspace::BrowserPaneSpec {
-            initial_url: String::from("https://example.com"),
+            initial_url: tabby_workspace::BrowserUrl::new("https://example.com"),
         });
         let events = service
             .replace_pane_spec(&pane_id, new_spec.clone())
@@ -300,7 +300,7 @@ mod tests {
     fn replace_pane_spec_on_nonexistent_pane_returns_error() {
         let service = WorkspaceApplicationService::new();
         let new_spec = PaneSpec::Browser(tabby_workspace::BrowserPaneSpec {
-            initial_url: String::from("https://example.com"),
+            initial_url: tabby_workspace::BrowserUrl::new("https://example.com"),
         });
         let result =
             service.replace_pane_spec(&PaneId::from(String::from("nonexistent")), new_spec);

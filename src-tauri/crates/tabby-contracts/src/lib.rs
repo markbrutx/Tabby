@@ -1,3 +1,7 @@
+mod value_objects;
+
+pub use value_objects::{BrowserUrl, PaneId, TabId, ValueObjectError, WorkingDirectory};
+
 use serde::{Deserialize, Serialize};
 use specta::Type;
 

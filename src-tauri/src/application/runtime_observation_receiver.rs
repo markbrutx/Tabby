@@ -218,12 +218,10 @@ mod tests {
                 .map(|code| format!("Process exited with code {code}"));
 
             if let Ok(mut runtimes) = self.registry.lock() {
-                if let Ok(runtime) =
-                    runtimes.mark_terminal_exit(pane_id.as_ref(), None, failed, message)
-                {
+                if let Ok(runtime) = runtimes.mark_terminal_exit(pane_id, None, failed, message) {
                     // Simulate projection emit
                     if let Ok(mut projections) = self.projections_emitted.lock() {
-                        projections.push((runtime.pane_id.clone(), runtime.status));
+                        projections.push((runtime.pane_id.to_string(), runtime.status));
                     }
                 }
             }
@@ -238,7 +236,7 @@ mod tests {
         // Setup: register a terminal runtime in the registry
         let mut registry = RuntimeRegistry::default();
         let session_id = RuntimeSessionId::from(String::from("pty-session-1"));
-        registry.register_terminal("pane-1", session_id);
+        registry.register_terminal(&PaneId::from(String::from("pane-1")), session_id);
 
         // Create receiver backed by registry (simulates RuntimeApplicationService)
         let receiver = RegistryBackedReceiver::new(registry);
@@ -266,7 +264,7 @@ mod tests {
     fn pty_exit_with_nonzero_code_marks_failed_and_emits_projection() {
         let mut registry = RuntimeRegistry::default();
         let session_id = RuntimeSessionId::from(String::from("pty-session-2"));
-        registry.register_terminal("pane-f", session_id);
+        registry.register_terminal(&PaneId::from(String::from("pane-f")), session_id);
 
         let receiver = RegistryBackedReceiver::new(registry);
 
@@ -296,7 +294,7 @@ mod tests {
     fn pty_exit_with_unknown_code_marks_exited() {
         let mut registry = RuntimeRegistry::default();
         let session_id = RuntimeSessionId::from(String::from("pty-session-3"));
-        registry.register_terminal("pane-u", session_id);
+        registry.register_terminal(&PaneId::from(String::from("pane-u")), session_id);
 
         let receiver = RegistryBackedReceiver::new(registry);
 
