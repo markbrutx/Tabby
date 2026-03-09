@@ -3,6 +3,8 @@ pub mod commands;
 pub mod ports;
 mod runtime_coordinator;
 #[cfg(test)]
+mod runtime_integration_tests;
+#[cfg(test)]
 mod runtime_lifecycle_tests;
 pub mod runtime_observation_receiver;
 mod runtime_service;
