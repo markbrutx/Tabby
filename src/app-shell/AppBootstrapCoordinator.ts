@@ -1,10 +1,11 @@
 import { asErrorMessage } from "@/app-shell/clients";
 import type { WorkspaceClient } from "@/app-shell/clients";
-import type { WorkspaceBootstrapView } from "@/contracts/tauri-bindings";
 import type { WorkspaceReadModel } from "@/features/workspace/domain/models";
 import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
+import type { RuntimeReadModel } from "@/features/runtime/domain/models";
 import { mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
 import { mapProfileFromDto, mapSettingsFromDto } from "@/features/settings/application/snapshot-mappers";
+import { mapRuntimeFromDto } from "@/features/runtime/application/snapshot-mappers";
 
 export interface BootstrapableWorkspaceStore {
   getState: () => {
@@ -27,7 +28,7 @@ export interface BootstrapableSettingsStore {
 
 export interface BootstrapableRuntimeStore {
   getState: () => {
-    loadBootstrap: (runtimes: WorkspaceBootstrapView["runtimeProjections"]) => void;
+    loadBootstrap: (runtimes: readonly RuntimeReadModel[]) => void;
   };
 }
 
@@ -57,7 +58,8 @@ export function createAppBootstrapCoordinator(
         const profileReadModels = payload.profileCatalog.terminalProfiles.map(mapProfileFromDto);
         deps.settingsStore.getState().loadBootstrap(settingsReadModel, profileReadModels);
 
-        deps.runtimeStore.getState().loadBootstrap(payload.runtimeProjections);
+        const runtimeReadModels = payload.runtimeProjections.map(mapRuntimeFromDto);
+        deps.runtimeStore.getState().loadBootstrap(runtimeReadModels);
 
         const workspaceReadModel = mapWorkspaceFromDto(payload.workspace);
         await deps.workspaceStore.getState().loadBootstrap(workspaceReadModel);

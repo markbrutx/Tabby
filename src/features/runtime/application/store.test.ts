@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PaneRuntimeView } from "@/contracts/tauri-bindings";
+import type { RuntimeReadModel } from "@/features/runtime/domain/models";
 import type { RuntimeClient } from "@/app-shell/clients";
 import { createRuntimeStore } from "./store";
 import type { RuntimeStoreDeps } from "./store";
@@ -21,6 +22,19 @@ function makeMockDeps(clientOverrides?: Partial<RuntimeClient>): RuntimeStoreDep
   };
 }
 
+function makeRuntimeReadModel(overrides?: Partial<RuntimeReadModel>): RuntimeReadModel {
+  return {
+    paneId: "p1",
+    runtimeSessionId: "sess-1",
+    kind: "terminal",
+    status: "running",
+    lastError: null,
+    browserLocation: null,
+    terminalCwd: "/home/user",
+    ...overrides,
+  };
+}
+
 function makeRuntimeDto(overrides?: Partial<PaneRuntimeView>): PaneRuntimeView {
   return {
     paneId: "p1",
@@ -36,13 +50,13 @@ function makeRuntimeDto(overrides?: Partial<PaneRuntimeView>): PaneRuntimeView {
 
 describe("createRuntimeStore", () => {
   describe("loadBootstrap", () => {
-    it("maps PaneRuntimeView DTOs to RuntimeReadModel before storing", () => {
+    it("stores RuntimeReadModel entries keyed by paneId", () => {
       const deps = makeMockDeps();
       const store = createRuntimeStore(deps);
 
-      const dtos: PaneRuntimeView[] = [
-        makeRuntimeDto({ paneId: "p1", kind: "terminal", status: "running" }),
-        makeRuntimeDto({
+      const readModels: RuntimeReadModel[] = [
+        makeRuntimeReadModel({ paneId: "p1", kind: "terminal", status: "running" }),
+        makeRuntimeReadModel({
           paneId: "p2",
           kind: "browser",
           status: "starting",
@@ -51,7 +65,7 @@ describe("createRuntimeStore", () => {
         }),
       ];
 
-      store.getState().loadBootstrap(dtos);
+      store.getState().loadBootstrap(readModels);
 
       const runtimes = store.getState().runtimes;
       expect(Object.keys(runtimes)).toHaveLength(2);
@@ -88,17 +102,17 @@ describe("createRuntimeStore", () => {
       expect(store.getState().runtimes).toEqual({});
     });
 
-    it("stored models are frozen snapshots independent of the input DTO", () => {
+    it("accepts pre-mapped read models without further transformation", () => {
       const deps = makeMockDeps();
       const store = createRuntimeStore(deps);
-      const dto = makeRuntimeDto();
+      const readModel = makeRuntimeReadModel();
 
-      store.getState().loadBootstrap([dto]);
+      store.getState().loadBootstrap([readModel]);
 
       const stored = store.getState().runtimes["p1"];
       expect(stored).toBeDefined();
-      expect(stored).not.toBe(dto);
-      expect(stored.paneId).toBe(dto.paneId);
+      expect(stored.paneId).toBe(readModel.paneId);
+      expect(stored.kind).toBe(readModel.kind);
     });
   });
 
@@ -114,7 +128,7 @@ describe("createRuntimeStore", () => {
 
       const store = createRuntimeStore(deps);
       store.getState().loadBootstrap([
-        makeRuntimeDto({ paneId: "p1", status: "starting" }),
+        makeRuntimeReadModel({ paneId: "p1", status: "starting" }),
       ]);
 
       void store.getState().initializeListeners();
@@ -166,7 +180,7 @@ describe("createRuntimeStore", () => {
 
       const store = createRuntimeStore(deps);
       store.getState().loadBootstrap([
-        makeRuntimeDto({
+        makeRuntimeReadModel({
           paneId: "pane-b",
           kind: "browser",
           status: "running",
@@ -197,7 +211,7 @@ describe("createRuntimeStore", () => {
       const store = createRuntimeStore(deps);
 
       expect(store.getState().runtimes).toEqual({});
-      store.getState().loadBootstrap([makeRuntimeDto()]);
+      store.getState().loadBootstrap([makeRuntimeReadModel()]);
       expect(Object.keys(store.getState().runtimes)).toHaveLength(1);
     });
   });

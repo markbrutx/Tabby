@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import type { PaneRuntimeView } from "@/contracts/tauri-bindings";
 import type { BrowserBounds, RuntimeReadModel } from "@/features/runtime/domain/models";
 import type { RuntimeClient } from "@/app-shell/clients";
 import { mapRuntimeFromDto } from "@/features/runtime/application/snapshot-mappers";
@@ -7,7 +6,7 @@ import { mapRuntimeFromDto } from "@/features/runtime/application/snapshot-mappe
 export interface RuntimeState {
   runtimes: Record<string, RuntimeReadModel>;
   initializeListeners: () => Promise<void>;
-  loadBootstrap: (runtimes: PaneRuntimeView[]) => void;
+  loadBootstrap: (runtimes: readonly RuntimeReadModel[]) => void;
 
   // Terminal actions
   writeTerminalInput: (paneId: string, input: string) => Promise<void>;
@@ -23,8 +22,8 @@ export interface RuntimeState {
   navigateBrowser: (paneId: string, url: string) => Promise<void>;
 }
 
-function toRuntimeMap(dtos: PaneRuntimeView[]): Record<string, RuntimeReadModel> {
-  return Object.fromEntries(dtos.map((dto) => [dto.paneId, mapRuntimeFromDto(dto)]));
+function toRuntimeMap(runtimes: readonly RuntimeReadModel[]): Record<string, RuntimeReadModel> {
+  return Object.fromEntries(runtimes.map((r) => [r.paneId, r]));
 }
 
 export interface RuntimeStoreDeps {

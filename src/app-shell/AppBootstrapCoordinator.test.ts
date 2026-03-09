@@ -4,6 +4,7 @@ import type { WorkspaceClient, SettingsClient } from "@/app-shell/clients";
 import { createSettingsStore } from "@/features/settings/application/store";
 import { mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
 import { mapSettingsFromDto, mapProfileFromDto } from "@/features/settings/application/snapshot-mappers";
+import { mapRuntimeFromDto } from "@/features/runtime/application/snapshot-mappers";
 import {
   createAppBootstrapCoordinator,
   type AppBootstrapCoordinatorDeps,
@@ -169,7 +170,7 @@ describe("AppBootstrapCoordinator", () => {
       mapSettingsFromDto(payload.settings),
       payload.profileCatalog.terminalProfiles.map(mapProfileFromDto),
     );
-    expect(loadRuntime).toHaveBeenCalledWith(payload.runtimeProjections);
+    expect(loadRuntime).toHaveBeenCalledWith(payload.runtimeProjections.map(mapRuntimeFromDto));
     expect(loadWorkspace).toHaveBeenCalledWith(mapWorkspaceFromDto(payload.workspace));
   });
 
