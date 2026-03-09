@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use tabby_kernel::LayoutPreset;
+
 use crate::{FontSize, ProfileId, SettingsError, ThemeMode, UserPreferences, WorkingDirectory};
 
 // ---------------------------------------------------------------------------
@@ -47,7 +49,7 @@ pub enum PersistedThemeMode {
 impl PersistedPreferences {
     pub fn from_domain(preferences: &UserPreferences) -> Self {
         Self {
-            default_layout: preferences.default_layout.clone(),
+            default_layout: String::from(preferences.default_layout.as_str()),
             default_terminal_profile_id: preferences
                 .default_terminal_profile_id
                 .as_str()
@@ -63,8 +65,9 @@ impl PersistedPreferences {
     }
 
     pub fn to_domain(&self) -> Result<UserPreferences, SettingsError> {
+        let default_layout = LayoutPreset::parse(&self.default_layout).unwrap_or_default();
         Ok(UserPreferences {
-            default_layout: self.default_layout.clone(),
+            default_layout,
             default_terminal_profile_id: ProfileId::new(self.default_terminal_profile_id.clone()),
             default_working_directory: WorkingDirectory::new(
                 self.default_working_directory.clone(),
@@ -129,7 +132,7 @@ mod tests {
     #[test]
     fn round_trip_preserves_all_fields() {
         let preferences = UserPreferences {
-            default_layout: String::from("2x2"),
+            default_layout: LayoutPreset::TwoByTwo,
             default_terminal_profile_id: ProfileId::new("claude"),
             default_working_directory: WorkingDirectory::new("/tmp").expect("valid path"),
             default_custom_command: String::from("fish"),
@@ -143,7 +146,7 @@ mod tests {
         let value = serialize_preferences(&preferences).expect("should serialize");
         let restored = deserialize_preferences(value).expect("should deserialize");
 
-        assert_eq!(restored.default_layout, "2x2");
+        assert_eq!(restored.default_layout, LayoutPreset::TwoByTwo);
         assert_eq!(restored.default_terminal_profile_id, "claude");
         assert_eq!(restored.default_working_directory.as_str(), "/tmp");
         assert_eq!(restored.default_custom_command, "fish");
@@ -203,7 +206,7 @@ mod tests {
 
         let restored = deserialize_preferences(legacy_json).expect("should load legacy format");
 
-        assert_eq!(restored.default_layout, "1x2");
+        assert_eq!(restored.default_layout, LayoutPreset::OneByTwo);
         assert_eq!(restored.default_terminal_profile_id, "claude");
         assert_eq!(restored.font_size.value(), 18);
         assert!(matches!(restored.theme, ThemeMode::Midnight));
@@ -228,6 +231,25 @@ mod tests {
             deserialize_preferences(legacy_json).expect("should load without lastWorkingDirectory");
 
         assert!(restored.last_working_directory.is_none());
+    }
+
+    #[test]
+    fn backward_compatible_unknown_layout_falls_back_to_default() {
+        let json_with_unknown_layout = json!({
+            "defaultLayout": "4x4",
+            "defaultTerminalProfileId": "terminal",
+            "defaultWorkingDirectory": "~",
+            "defaultCustomCommand": "",
+            "fontSize": 13,
+            "theme": "system",
+            "launchFullscreen": true,
+            "hasCompletedOnboarding": false
+        });
+
+        let restored = deserialize_preferences(json_with_unknown_layout)
+            .expect("unknown layout should fall back to default");
+
+        assert_eq!(restored.default_layout, LayoutPreset::default());
     }
 
     #[test]

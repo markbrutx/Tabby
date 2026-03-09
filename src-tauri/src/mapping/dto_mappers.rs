@@ -23,9 +23,7 @@ use crate::application::commands::{
 
 pub fn settings_view_from_preferences(preferences: &UserPreferences) -> SettingsView {
     SettingsView {
-        default_layout: layout_preset_to_dto(
-            LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne),
-        ),
+        default_layout: layout_preset_to_dto(preferences.default_layout),
         default_terminal_profile_id: preferences.default_terminal_profile_id.as_str().to_string(),
         default_working_directory: preferences.default_working_directory.as_str().to_string(),
         default_custom_command: preferences.default_custom_command.clone(),
@@ -41,7 +39,7 @@ pub fn preferences_from_settings_view(
     view: &SettingsView,
 ) -> Result<UserPreferences, SettingsError> {
     Ok(UserPreferences {
-        default_layout: layout_preset_to_string(view.default_layout),
+        default_layout: layout_preset_from_dto(view.default_layout),
         default_terminal_profile_id: ProfileId::new(view.default_terminal_profile_id.clone()),
         default_working_directory: WorkingDirectory::new(view.default_working_directory.clone())?,
         default_custom_command: view.default_custom_command.clone(),
@@ -329,16 +327,6 @@ fn layout_preset_to_dto(value: LayoutPreset) -> LayoutPresetDto {
     }
 }
 
-fn layout_preset_to_string(value: LayoutPresetDto) -> String {
-    match value {
-        LayoutPresetDto::OneByOne => String::from("1x1"),
-        LayoutPresetDto::OneByTwo => String::from("1x2"),
-        LayoutPresetDto::TwoByTwo => String::from("2x2"),
-        LayoutPresetDto::TwoByThree => String::from("2x3"),
-        LayoutPresetDto::ThreeByThree => String::from("3x3"),
-    }
-}
-
 fn theme_mode_to_dto(value: ThemeMode) -> ThemeModeDto {
     match value {
         ThemeMode::System => ThemeModeDto::System,
@@ -450,7 +438,7 @@ mod tests {
     #[test]
     fn settings_round_trip_preserves_all_fields() {
         let preferences = UserPreferences {
-            default_layout: String::from("2x2"),
+            default_layout: LayoutPreset::TwoByTwo,
             default_terminal_profile_id: ProfileId::new("claude"),
             default_working_directory: WorkingDirectory::new("/tmp").expect("valid path"),
             default_custom_command: String::from("fish"),
@@ -464,7 +452,7 @@ mod tests {
         let view = settings_view_from_preferences(&preferences);
         let restored = preferences_from_settings_view(&view).expect("should round-trip");
 
-        assert_eq!(restored.default_layout, "2x2");
+        assert_eq!(restored.default_layout, LayoutPreset::TwoByTwo);
         assert_eq!(restored.default_terminal_profile_id, "claude");
         assert_eq!(restored.default_working_directory.as_str(), "/tmp");
         assert_eq!(restored.default_custom_command, "fish");

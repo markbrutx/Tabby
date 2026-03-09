@@ -92,9 +92,7 @@ impl BootstrapService {
             .map(LayoutPreset::parse)
             .transpose()
             .map_err(|error| ShellError::Validation(error.to_string()))?
-            .unwrap_or_else(|| {
-                LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne)
-            });
+            .unwrap_or(preferences.default_layout);
         let profile_id = cli_args
             .profile
             .unwrap_or_else(|| preferences.default_terminal_profile_id.as_str().to_string());
@@ -123,8 +121,7 @@ impl BootstrapService {
         observation_receiver: Arc<dyn RuntimeObservationReceiver>,
     ) -> Result<(), ShellError> {
         let preferences = settings_service.preferences()?;
-        let layout =
-            LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne);
+        let layout = preferences.default_layout;
         let pane_spec = PaneSpec::Terminal(tabby_workspace::TerminalPaneSpec {
             launch_profile_id: preferences.default_terminal_profile_id.as_str().to_string(),
             working_directory: resolve_default_working_directory(None, &preferences),

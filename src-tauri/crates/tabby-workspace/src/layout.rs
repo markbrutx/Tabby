@@ -4,47 +4,8 @@ use thiserror::Error;
 
 use crate::ids::PaneId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LayoutPreset {
-    OneByOne,
-    OneByTwo,
-    TwoByTwo,
-    TwoByThree,
-    ThreeByThree,
-}
-
-impl LayoutPreset {
-    pub fn pane_count(self) -> usize {
-        match self {
-            Self::OneByOne => 1,
-            Self::OneByTwo => 2,
-            Self::TwoByTwo => 4,
-            Self::TwoByThree => 6,
-            Self::ThreeByThree => 9,
-        }
-    }
-
-    pub fn parse(value: &str) -> Result<Self, LayoutError> {
-        match value {
-            "1x1" => Ok(Self::OneByOne),
-            "1x2" => Ok(Self::OneByTwo),
-            "2x2" => Ok(Self::TwoByTwo),
-            "2x3" => Ok(Self::TwoByThree),
-            "3x3" => Ok(Self::ThreeByThree),
-            other => Err(LayoutError::UnsupportedPreset(String::from(other))),
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::OneByOne => "1x1",
-            Self::OneByTwo => "1x2",
-            Self::TwoByTwo => "2x2",
-            Self::TwoByThree => "2x3",
-            Self::ThreeByThree => "3x3",
-        }
-    }
-}
+// Re-export LayoutPreset from shared kernel — canonical definition lives in tabby-kernel.
+pub use tabby_kernel::LayoutPreset;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SplitDirection {

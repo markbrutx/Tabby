@@ -159,6 +159,62 @@ impl fmt::Display for WorkingDirectory {
 }
 
 // ---------------------------------------------------------------------------
+// LayoutPreset
+// ---------------------------------------------------------------------------
+
+/// Compile-time validated layout presets for workspace tabs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LayoutPreset {
+    #[default]
+    OneByOne,
+    OneByTwo,
+    TwoByTwo,
+    TwoByThree,
+    ThreeByThree,
+}
+
+impl LayoutPreset {
+    pub fn pane_count(self) -> usize {
+        match self {
+            Self::OneByOne => 1,
+            Self::OneByTwo => 2,
+            Self::TwoByTwo => 4,
+            Self::TwoByThree => 6,
+            Self::ThreeByThree => 9,
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, ValueObjectError> {
+        match value {
+            "1x1" => Ok(Self::OneByOne),
+            "1x2" => Ok(Self::OneByTwo),
+            "2x2" => Ok(Self::TwoByTwo),
+            "2x3" => Ok(Self::TwoByThree),
+            "3x3" => Ok(Self::ThreeByThree),
+            other => Err(ValueObjectError::new(format!(
+                "unsupported layout preset: {other}"
+            ))),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::OneByOne => "1x1",
+            Self::OneByTwo => "1x2",
+            Self::TwoByTwo => "2x2",
+            Self::TwoByThree => "2x3",
+            Self::ThreeByThree => "3x3",
+        }
+    }
+}
+
+impl fmt::Display for LayoutPreset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -363,5 +419,63 @@ mod tests {
     fn value_object_error_display() {
         let err = ValueObjectError::new("test error");
         assert_eq!(err.to_string(), "test error");
+    }
+
+    // -- LayoutPreset ------------------------------------------------------
+
+    #[test]
+    fn layout_preset_parse_all_variants() {
+        assert_eq!(LayoutPreset::parse("1x1").unwrap(), LayoutPreset::OneByOne);
+        assert_eq!(LayoutPreset::parse("1x2").unwrap(), LayoutPreset::OneByTwo);
+        assert_eq!(LayoutPreset::parse("2x2").unwrap(), LayoutPreset::TwoByTwo);
+        assert_eq!(
+            LayoutPreset::parse("2x3").unwrap(),
+            LayoutPreset::TwoByThree
+        );
+        assert_eq!(
+            LayoutPreset::parse("3x3").unwrap(),
+            LayoutPreset::ThreeByThree
+        );
+    }
+
+    #[test]
+    fn layout_preset_parse_rejects_unknown() {
+        let err = LayoutPreset::parse("4x4").expect_err("should reject unknown preset");
+        assert!(err.to_string().contains("unsupported layout preset"));
+    }
+
+    #[test]
+    fn layout_preset_as_str_round_trips() {
+        let presets = [
+            LayoutPreset::OneByOne,
+            LayoutPreset::OneByTwo,
+            LayoutPreset::TwoByTwo,
+            LayoutPreset::TwoByThree,
+            LayoutPreset::ThreeByThree,
+        ];
+        for preset in presets {
+            let parsed = LayoutPreset::parse(preset.as_str()).unwrap();
+            assert_eq!(parsed, preset);
+        }
+    }
+
+    #[test]
+    fn layout_preset_pane_count() {
+        assert_eq!(LayoutPreset::OneByOne.pane_count(), 1);
+        assert_eq!(LayoutPreset::OneByTwo.pane_count(), 2);
+        assert_eq!(LayoutPreset::TwoByTwo.pane_count(), 4);
+        assert_eq!(LayoutPreset::TwoByThree.pane_count(), 6);
+        assert_eq!(LayoutPreset::ThreeByThree.pane_count(), 9);
+    }
+
+    #[test]
+    fn layout_preset_display() {
+        assert_eq!(LayoutPreset::OneByOne.to_string(), "1x1");
+        assert_eq!(LayoutPreset::TwoByTwo.to_string(), "2x2");
+    }
+
+    #[test]
+    fn layout_preset_default_is_one_by_one() {
+        assert_eq!(LayoutPreset::default(), LayoutPreset::OneByOne);
     }
 }

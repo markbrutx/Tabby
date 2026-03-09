@@ -1,5 +1,37 @@
 # Progress Log
 
+## [2026-03-10 00:35] - DDD-013: RuntimeStore.loadBootstrap accepts RuntimeReadModel[] not DTO
+Thread:
+Run: 20260310-000917-71928 (iteration 7)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-7.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-7.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: fa4511e refactor: RuntimeStore.loadBootstrap accepts RuntimeReadModel[] not DTO (DDD-013)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (172 + 2 + 5 + 29 + 11 + 35 + 53 tests)
+- Files changed:
+  - src/features/runtime/application/store.ts
+  - src/features/runtime/application/store.test.ts
+  - src/app-shell/AppBootstrapCoordinator.ts
+  - src/app-shell/AppBootstrapCoordinator.test.ts
+- Changed RuntimeStore.loadBootstrap to accept RuntimeReadModel[] instead of PaneRuntimeView[] (DTO)
+- Moved DTO→ReadModel mapping (mapRuntimeFromDto) to AppBootstrapCoordinator.initialize()
+- Removed PaneRuntimeView import from runtime store; removed WorkspaceBootstrapView import from coordinator
+- Updated BootstrapableRuntimeStore interface to use RuntimeReadModel[]
+- Updated tests to use RuntimeReadModel for loadBootstrap calls; kept PaneRuntimeView for listener tests (correct: listeners receive live DTOs)
+- **Learnings for future iterations:**
+  - All three stores (Workspace, Settings, Runtime) now follow the same ACL pattern: coordinator maps DTOs, stores receive read models
+  - The listener callback (listenStatusChanged) still correctly uses mapRuntimeFromDto since it receives live DTOs from the transport layer — this is the right boundary
+  - Test that asserted `stored !== dto` needed updating since store now receives read models directly (no intermediate mapping creates a new object)
+---
+
 ## [2026-03-10 00:25] - DDD-011: WorkspaceStore.loadBootstrap accepts WorkspaceReadModel not DTO
 Thread:
 Run: 20260310-000917-71928 (iteration 5)

@@ -236,7 +236,7 @@ impl AppShell {
             .settings_service
             .preferences()
             .unwrap_or_else(|_| default_preferences());
-        LayoutPreset::parse(&preferences.default_layout).unwrap_or(LayoutPreset::OneByOne)
+        preferences.default_layout
     }
 
     fn observation_receiver(&self) -> Arc<dyn RuntimeObservationReceiver> {

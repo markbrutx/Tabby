@@ -3,13 +3,13 @@ mod value_objects;
 
 pub use value_objects::{FontSize, ProfileId, WorkingDirectory};
 
+use tabby_kernel::LayoutPreset;
 use thiserror::Error;
 
 pub const CUSTOM_PROFILE_ID: &str = "custom";
 pub const TERMINAL_PROFILE_ID: &str = "terminal";
 pub const CLAUDE_PROFILE_ID: &str = "claude";
 pub const CODEX_PROFILE_ID: &str = "codex";
-pub const DEFAULT_LAYOUT_PRESET: &str = "1x1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeMode {
@@ -33,7 +33,7 @@ pub struct ProfileCatalog {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserPreferences {
-    pub default_layout: String,
+    pub default_layout: LayoutPreset,
     pub default_terminal_profile_id: ProfileId,
     pub default_working_directory: WorkingDirectory,
     pub default_custom_command: String,
@@ -65,7 +65,7 @@ impl From<tabby_kernel::ValueObjectError> for SettingsError {
 
 pub fn default_preferences() -> UserPreferences {
     UserPreferences {
-        default_layout: String::from(DEFAULT_LAYOUT_PRESET),
+        default_layout: LayoutPreset::default(),
         default_terminal_profile_id: ProfileId::new(TERMINAL_PROFILE_ID),
         default_working_directory: WorkingDirectory::empty(),
         default_custom_command: String::new(),
@@ -124,22 +124,12 @@ pub fn normalize_preferences(mut preferences: UserPreferences) -> UserPreference
         preferences.default_terminal_profile_id = ProfileId::new(profile_id);
     }
 
-    if !is_known_layout_preset(&preferences.default_layout) {
-        preferences.default_layout = String::from(DEFAULT_LAYOUT_PRESET);
-    }
-
     preferences
 }
 
 pub fn validate_preferences(preferences: &UserPreferences) -> Result<(), SettingsError> {
     // FontSize is validated at construction time via FontSize::new().
-
-    if !is_known_layout_preset(&preferences.default_layout) {
-        return Err(SettingsError::Validation(format!(
-            "Unknown layout preset: {}",
-            preferences.default_layout
-        )));
-    }
+    // LayoutPreset is validated at construction time via the enum type.
 
     resolve_terminal_profile(
         preferences.default_terminal_profile_id.as_str(),
@@ -210,15 +200,11 @@ pub fn resolve_default_working_directory(
         .unwrap_or_else(|| String::from("~"))
 }
 
-pub fn is_known_layout_preset(value: &str) -> bool {
-    matches!(value, "1x1" | "1x2" | "2x2" | "2x3" | "3x3")
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         default_preferences, normalize_preferences, resolve_default_working_directory,
-        resolve_terminal_profile, validate_preferences, FontSize, ProfileId, WorkingDirectory,
+        resolve_terminal_profile, FontSize, LayoutPreset, ProfileId, WorkingDirectory,
         CUSTOM_PROFILE_ID, TERMINAL_PROFILE_ID,
     };
 
@@ -264,13 +250,8 @@ mod tests {
     }
 
     #[test]
-    fn validate_preferences_rejects_unknown_layout() {
-        let error = validate_preferences(&super::UserPreferences {
-            default_layout: String::from("4x4"),
-            ..default_preferences()
-        })
-        .expect_err("unknown layout should fail");
-        assert!(error.to_string().contains("Unknown layout"));
+    fn default_preferences_use_one_by_one_layout() {
+        assert_eq!(default_preferences().default_layout, LayoutPreset::OneByOne);
     }
 
     #[test]
