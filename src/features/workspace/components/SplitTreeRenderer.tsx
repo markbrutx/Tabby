@@ -32,7 +32,7 @@ interface SplitTreeCtx {
   onFocus: (tabId: string, paneId: string) => Promise<void>;
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
-  onSwapPanes: (paneIdA: string, paneIdB: string) => void;
+  onSwapPaneSlots: (paneIdA: string, paneIdB: string) => void;
   dragSourceRef: React.MutableRefObject<string | null>;
   dragOverPaneId: string | null;
   onDragOverChange: (paneId: string | null) => void;
@@ -59,7 +59,7 @@ interface SplitTreeRendererProps {
   onFocus: (tabId: string, paneId: string) => Promise<void>;
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
-  onSwapPanes: (paneIdA: string, paneIdB: string) => void;
+  onSwapPaneSlots: (paneIdA: string, paneIdB: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ function PaneLeaf({ paneId }: { paneId: string }) {
   const ctx = useTreeContext();
   const {
     tab, fontSize, theme, visible, modalOpen,
-    onFocus, onRestart, onClosePane, onSwapPanes,
+    onFocus, onRestart, onClosePane, onSwapPaneSlots,
     dragSourceRef, dragOverPaneId, onDragOverChange,
   } = ctx;
 
@@ -119,7 +119,7 @@ function PaneLeaf({ paneId }: { paneId: string }) {
       e.preventDefault();
       const sourceId = dragSourceRef.current;
       if (sourceId && sourceId !== pane.id) {
-        onSwapPanes(sourceId, pane.id);
+        onSwapPaneSlots(sourceId, pane.id);
       }
       dragSourceRef.current = null;
       onDragOverChange(null);
@@ -246,7 +246,7 @@ export function SplitTreeRenderer({
   onFocus,
   onRestart,
   onClosePane,
-  onSwapPanes,
+  onSwapPaneSlots,
 }: SplitTreeRendererProps) {
   const dragSourceRef = useRef<string | null>(null);
   const [dragOverPaneId, setDragOverPaneId] = useState<string | null>(null);
@@ -264,13 +264,13 @@ export function SplitTreeRenderer({
     onFocus,
     onRestart,
     onClosePane,
-    onSwapPanes,
+    onSwapPaneSlots,
     dragSourceRef,
     dragOverPaneId,
     onDragOverChange: handleDragOverChange,
   }), [
     tab, fontSize, theme, visible, modalOpen,
-    onFocus, onRestart, onClosePane, onSwapPanes,
+    onFocus, onRestart, onClosePane, onSwapPaneSlots,
     dragSourceRef, dragOverPaneId, handleDragOverChange,
   ]);
 

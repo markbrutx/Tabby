@@ -41,7 +41,7 @@ export interface WorkspaceStore {
     paneSpec: PaneSpec,
   ) => Promise<void>;
   closePane: (paneId: string) => Promise<void>;
-  swapPanes: (paneIdA: string, paneIdB: string) => Promise<void>;
+  swapPaneSlots: (paneIdA: string, paneIdB: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -246,7 +246,7 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
       );
     },
 
-    async swapPanes(paneIdA, paneIdB) {
+    async swapPaneSlots(paneIdA, paneIdB) {
       await runWorkspaceMutation(set, () =>
         deps.workspaceClient.dispatch({
           kind: "swapPaneSlots",

@@ -1,12 +1,12 @@
 import type { RuntimeClient, UnlistenFn } from "@/app-shell/clients";
 import type { TerminalOutputEvent } from "@/contracts/tauri-bindings";
 
-type OutputHandler = (chunk: string) => void;
+type PtyOutputCallback = (chunk: string) => void;
 
 interface Registration {
   paneId: string;
   sessionId: string;
-  handler: OutputHandler;
+  handler: PtyOutputCallback;
 }
 
 let registrations: Registration[] = [];
@@ -28,7 +28,7 @@ function dispatch(event: TerminalOutputEvent) {
 export function registerPtyOutput(
   paneId: string,
   sessionId: string,
-  handler: OutputHandler,
+  handler: PtyOutputCallback,
 ): UnlistenFn {
   const registration: Registration = { paneId, sessionId, handler };
   registrations = [...registrations, registration];

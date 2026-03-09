@@ -1,5 +1,54 @@
 # Progress Log
 
+## 2026-03-09 01:20 - US-027: Introduce value objects for runtime and workspace raw strings
+Thread:
+Run: 20260308-215923-84117 (iteration 28)
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 3887021 feat: introduce shared value objects for runtime and workspace raw strings (US-027)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (187 tests, 18 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (271 tests: 143 app + 29 contracts + 11 runtime + 35 settings + 53 workspace)
+- Files changed:
+  - src-tauri/crates/tabby-contracts/src/value_objects.rs (new — PaneId, TabId, BrowserUrl, WorkingDirectory, id_newtype! macro, 29 tests)
+  - src-tauri/crates/tabby-contracts/src/lib.rs (added value_objects module and re-exports)
+  - src-tauri/crates/tabby-runtime/Cargo.toml (added tabby-contracts dependency)
+  - src-tauri/crates/tabby-runtime/src/lib.rs (PaneId instead of raw String in RuntimeRegistry)
+  - src-tauri/crates/tabby-settings/Cargo.toml (added tabby-contracts dependency)
+  - src-tauri/crates/tabby-settings/src/lib.rs (From<ValueObjectError> for SettingsError)
+  - src-tauri/crates/tabby-settings/src/value_objects.rs (re-exports WorkingDirectory from tabby-contracts)
+  - src-tauri/crates/tabby-workspace/Cargo.toml (added tabby-contracts dependency)
+  - src-tauri/crates/tabby-workspace/src/ids.rs (re-exports PaneId, TabId, BrowserUrl from tabby-contracts)
+  - src-tauri/crates/tabby-workspace/src/content.rs (uses BrowserUrl from shared kernel)
+  - src-tauri/crates/tabby-workspace/src/lib.rs (BrowserPaneSpec uses BrowserUrl type)
+  - src-tauri/src/application/runtime_service.rs (PaneId in all method signatures)
+  - src-tauri/src/application/runtime_coordinator.rs (PaneId usage)
+  - src-tauri/src/application/runtime_observation_receiver.rs (PaneId usage)
+  - src-tauri/src/application/runtime_lifecycle_tests.rs (PaneId and BrowserUrl in tests)
+  - src-tauri/src/application/workspace_service.rs (BrowserUrl in tests)
+  - src-tauri/src/mapping/dto_mappers.rs (BrowserUrl conversion at transport boundary)
+  - src-tauri/src/shell/mod.rs (PaneId conversion from raw string)
+  - src-tauri/Cargo.lock (updated)
+- What was implemented:
+  - Created shared kernel value objects in tabby-contracts: PaneId, TabId, BrowserUrl, WorkingDirectory
+  - id_newtype! macro generates newtypes with try_new() validation, From<String>, Display, AsRef<str>, Hash, Eq, Ord
+  - BrowserUrl: new() unchecked + try_new() rejects empty/whitespace
+  - WorkingDirectory: new() rejects null bytes, empty() factory, Default impl
+  - Domain crates re-export from shared kernel (no local definitions)
+  - RuntimeRegistry uses PaneId as HashMap key instead of raw String
+  - All runtime service methods accept &PaneId instead of &str
+  - Transport boundary (dto_mappers) converts between raw strings and value objects
+  - 29 new validation tests in tabby-contracts
+- **Learnings for future iterations:**
+  - The id_newtype! macro pattern scales well for adding more shared identifiers
+  - Keep domain-specific value objects (RuntimeSessionId, PaneContentId, FontSize, ProfileId) in their owning crate
+  - browser_location and terminal_cwd in PaneRuntime remain Option<String> — can be upgraded to value objects in a future story
+
 ## 2026-03-09 00:52 - US-026: Audit and remove all declared-but-not-real contract abstractions
 Thread:
 Run: 20260308-215923-84117 (iteration 27)
@@ -7,7 +56,7 @@ Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-2
 Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-27.md
 - Guardrails reviewed: yes
 - No-commit run: false
-- Commit: see below
+- Commit: c953053 docs: audit tabby-contracts — all types verified, zero phantom abstractions (US-026)
 - Post-commit status: clean
 - Verification:
   - Command: bun run lint -> PASS

@@ -375,7 +375,7 @@ describe("createWorkspaceStore", () => {
     });
   });
 
-  it("dispatches swapPanes command through injected client", async () => {
+  it("dispatches swapPaneSlots command through injected client", async () => {
     const updatedView = makeWorkspaceView();
     const deps = makeMockDeps({
       dispatch: vi.fn().mockResolvedValue(updatedView),
@@ -383,7 +383,7 @@ describe("createWorkspaceStore", () => {
     const store = createWorkspaceStore(deps);
 
     await store.getState().loadBootstrap(makeBootstrapPayload());
-    await store.getState().swapPanes("p1", "p2");
+    await store.getState().swapPaneSlots("p1", "p2");
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
       kind: "swapPaneSlots",

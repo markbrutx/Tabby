@@ -130,7 +130,7 @@ describe("layoutReadModel", () => {
     it("module exports only read-only helpers", async () => {
       const mod = await import("@/features/workspace/layoutReadModel");
       const exportedKeys = Object.keys(mod);
-      const mutationNames = ["splitPane", "closePane", "swapPanes"];
+      const mutationNames = ["splitPane", "closePane", "swapPaneSlots"];
       for (const name of mutationNames) {
         expect(exportedKeys).not.toContain(name);
       }

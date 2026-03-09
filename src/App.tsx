@@ -32,7 +32,7 @@ function App() {
     restartPaneRuntime,
     splitPane,
     closePane,
-    swapPanes,
+    swapPaneSlots,
     clearError,
   } = useWorkspaceStore(
     useShallow((state) => ({
@@ -49,7 +49,7 @@ function App() {
       restartPaneRuntime: state.restartPaneRuntime,
       splitPane: state.splitPane,
       closePane: state.closePane,
-      swapPanes: state.swapPanes,
+      swapPaneSlots: state.swapPaneSlots,
       clearError: state.clearError,
     })),
   );
@@ -114,11 +114,11 @@ function App() {
     [],
   );
 
-  const handleSwapPanes = useCallback(
+  const handleSwapPaneSlots = useCallback(
     (paneIdA: string, paneIdB: string) => {
-      void swapPanes(paneIdA, paneIdB);
+      void swapPaneSlots(paneIdA, paneIdB);
     },
-    [swapPanes],
+    [swapPaneSlots],
   );
 
   useWorkspaceShortcuts({
@@ -234,7 +234,7 @@ function App() {
                 onFocus={focusPane}
                 onRestart={restartPaneRuntime}
                 onClosePane={confirmDialog.requestClosePane}
-                onSwapPanes={handleSwapPanes}
+                onSwapPaneSlots={handleSwapPaneSlots}
               />
             </div>
           );
