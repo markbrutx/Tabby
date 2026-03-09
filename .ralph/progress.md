@@ -1,5 +1,39 @@
 # Progress Log
 
+## 2026-03-09 01:35 - US-029: Add backend runtime lifecycle integration tests
+Thread:
+Run: 20260308-215923-84117 (iteration 30)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-30.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-30.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: d38286c test: add backend runtime lifecycle integration tests (US-029)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (187 tests, 18 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (290 tests: 162 app + 29 contracts + 11 runtime + 35 settings + 53 workspace)
+- Files changed:
+  - src-tauri/src/application/runtime_integration_tests.rs (new — 19 integration tests)
+  - src-tauri/src/application/mod.rs (registered test module)
+- What was implemented:
+  - 19 integration tests exercising the full coordinator → service → mock port flow
+  - AC#1: PaneAdded(terminal) → TerminalProcessPort.spawn called (3 tests)
+  - AC#2: PaneAdded(browser) → browser runtime registered, projection emitted (2 tests)
+  - AC#3: on_terminal_exited → registry updated → publish_runtime_status called (3 tests)
+  - AC#4: PaneContentChanged → old runtime stopped via port → new runtime started (4 tests)
+  - AC#5: observe_terminal_cwd → preferences saved via mock PreferencesRepository (3 tests)
+  - Edge cases: PaneRemoved via correct port, focus events no-op, full lifecycle scenario (4 tests)
+  - TestHarness pattern wires real RuntimeCoordinator + RuntimeApplicationService + SettingsApplicationService with mock ports
+- **Learnings for future iterations:**
+  - Existing tests in runtime_service.rs already had mock port infrastructure; the integration gap was the full coordinator → service → port flow
+  - BrowserSurfacePort.ensure_surface is not called during start_runtime (layout coordinates managed separately); browser start just registers in registry
+  - Arc wrappers needed to share mock ports between service (takes Box<dyn Trait>) and test assertions
+---
+
 ## 2026-03-09 01:25 - US-028: Audit and fix naming to match ubiquitous language
 Thread:
 Run: 20260308-215923-84117 (iteration 29)

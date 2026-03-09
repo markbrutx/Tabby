@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WorkspaceBootstrapView } from "@/contracts/tauri-bindings";
-import type { WorkspaceClient } from "@/app-shell/clients";
+import type { SettingsView, WorkspaceBootstrapView } from "@/contracts/tauri-bindings";
+import type { WorkspaceClient, SettingsClient } from "@/app-shell/clients";
+import { createSettingsStore } from "@/features/settings/application/store";
 import {
   createAppBootstrapCoordinator,
   type AppBootstrapCoordinatorDeps,
@@ -315,5 +316,166 @@ describe("AppBootstrapCoordinator", () => {
     await coordinator.initialize();
 
     expect(callOrder).toEqual(["settings", "runtime", "workspace"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC5: Onboarding flow through coordinator with real settings store
+// ---------------------------------------------------------------------------
+
+describe("AppBootstrapCoordinator + real SettingsStore integration", () => {
+  function makeSettingsView(
+    overrides?: Partial<SettingsView>,
+  ): SettingsView {
+    return {
+      defaultLayout: "1x1",
+      defaultTerminalProfileId: "terminal",
+      defaultWorkingDirectory: "~",
+      defaultCustomCommand: "",
+      fontSize: 14,
+      theme: "midnight",
+      launchFullscreen: false,
+      hasCompletedOnboarding: false,
+      lastWorkingDirectory: null,
+      ...overrides,
+    };
+  }
+
+  function makeSettingsClient(
+    overrides?: Partial<SettingsClient>,
+  ): SettingsClient {
+    return {
+      dispatch: vi.fn().mockResolvedValue(
+        makeSettingsView({ hasCompletedOnboarding: true }),
+      ),
+      listenProjectionUpdated: vi.fn().mockResolvedValue(() => {}),
+      ...overrides,
+    };
+  }
+
+  it("completeOnboarding through coordinator updates real settings store state", async () => {
+    const settingsClient = makeSettingsClient();
+    const settingsStore = createSettingsStore(settingsClient);
+
+    // Bootstrap the real settings store with onboarding incomplete
+    settingsStore
+      .getState()
+      .loadBootstrap(makeSettingsView({ hasCompletedOnboarding: false }), []);
+
+    expect(settingsStore.getState().settings?.hasCompletedOnboarding).toBe(false);
+
+    // Wire up coordinator with real settings store
+    const coordinator = createAppBootstrapCoordinator({
+      workspaceClient: {
+        bootstrap: vi.fn().mockResolvedValue(makeBootstrapPayload()),
+        dispatch: vi.fn(),
+        listenProjectionUpdated: vi.fn(),
+      },
+      workspaceStore: {
+        getState: () => ({
+          beginBootstrap: vi.fn(),
+          loadBootstrap: vi.fn().mockResolvedValue(undefined),
+          setBootstrapError: vi.fn(),
+        }),
+      },
+      settingsStore,
+      runtimeStore: {
+        getState: () => ({
+          loadBootstrap: vi.fn(),
+        }),
+      },
+    });
+
+    await coordinator.completeOnboarding();
+
+    // Verify the real settings store was updated
+    expect(settingsStore.getState().settings?.hasCompletedOnboarding).toBe(true);
+    expect(settingsClient.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "update",
+        settings: expect.objectContaining({ hasCompletedOnboarding: true }),
+      }),
+    );
+  });
+
+  it("completeOnboarding is idempotent — second call does not dispatch", async () => {
+    const settingsClient = makeSettingsClient();
+    const settingsStore = createSettingsStore(settingsClient);
+
+    settingsStore
+      .getState()
+      .loadBootstrap(makeSettingsView({ hasCompletedOnboarding: false }), []);
+
+    const coordinator = createAppBootstrapCoordinator({
+      workspaceClient: {
+        bootstrap: vi.fn().mockResolvedValue(makeBootstrapPayload()),
+        dispatch: vi.fn(),
+        listenProjectionUpdated: vi.fn(),
+      },
+      workspaceStore: {
+        getState: () => ({
+          beginBootstrap: vi.fn(),
+          loadBootstrap: vi.fn().mockResolvedValue(undefined),
+          setBootstrapError: vi.fn(),
+        }),
+      },
+      settingsStore,
+      runtimeStore: {
+        getState: () => ({
+          loadBootstrap: vi.fn(),
+        }),
+      },
+    });
+
+    await coordinator.completeOnboarding();
+    expect(settingsClient.dispatch).toHaveBeenCalledOnce();
+
+    // Second call should be a no-op since onboarding is now complete
+    await coordinator.completeOnboarding();
+    expect(settingsClient.dispatch).toHaveBeenCalledOnce();
+  });
+
+  it("full bootstrap → onboarding flow updates settings store end-to-end", async () => {
+    const settingsClient = makeSettingsClient();
+    const settingsStore = createSettingsStore(settingsClient);
+
+    const bootstrapPayload: WorkspaceBootstrapView = {
+      ...makeBootstrapPayload(),
+      settings: makeSettingsView({ hasCompletedOnboarding: false }),
+    };
+
+    const coordinator = createAppBootstrapCoordinator({
+      workspaceClient: {
+        bootstrap: vi.fn().mockResolvedValue(bootstrapPayload),
+        dispatch: vi.fn(),
+        listenProjectionUpdated: vi.fn(),
+      },
+      workspaceStore: {
+        getState: () => ({
+          beginBootstrap: vi.fn(),
+          loadBootstrap: vi.fn().mockResolvedValue(undefined),
+          setBootstrapError: vi.fn(),
+        }),
+      },
+      settingsStore,
+      runtimeStore: {
+        getState: () => ({
+          loadBootstrap: vi.fn(),
+        }),
+      },
+    });
+
+    // Step 1: Bootstrap distributes settings to real store
+    await coordinator.initialize();
+
+    expect(settingsStore.getState().settings).not.toBeNull();
+    expect(settingsStore.getState().settings?.hasCompletedOnboarding).toBe(false);
+    expect(settingsStore.getState().settings?.fontSize).toBe(14);
+    expect(settingsStore.getState().settings?.theme).toBe("midnight");
+
+    // Step 2: Complete onboarding through coordinator
+    await coordinator.completeOnboarding();
+
+    expect(settingsStore.getState().settings?.hasCompletedOnboarding).toBe(true);
   });
 });
