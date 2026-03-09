@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WorkspaceBootstrapView, WorkspaceView } from "@/contracts/tauri-bindings";
+import type { WorkspaceView } from "@/contracts/tauri-bindings";
 import type { WorkspaceClient } from "@/app-shell/clients";
+import type { WorkspaceReadModel } from "@/features/workspace/domain/models";
 import { createWorkspaceStore } from "./store";
 import type { WorkspaceStoreDeps } from "./store";
 
@@ -31,33 +32,32 @@ function makeWorkspaceView(overrides?: Partial<WorkspaceView>): WorkspaceView {
   };
 }
 
-function makeBootstrapPayload(
-  workspaceOverrides?: Partial<WorkspaceView>,
-): WorkspaceBootstrapView {
+function makeWorkspaceReadModel(
+  overrides?: Partial<WorkspaceReadModel>,
+): WorkspaceReadModel {
   return {
-    workspace: makeWorkspaceView(workspaceOverrides),
-    settings: {
-      defaultLayout: "1x1",
-      defaultTerminalProfileId: "terminal",
-      defaultWorkingDirectory: "~",
-      defaultCustomCommand: "",
-      fontSize: 14,
-      theme: "midnight",
-      launchFullscreen: false,
-      hasCompletedOnboarding: true,
-      lastWorkingDirectory: null,
-    },
-    profileCatalog: {
-      terminalProfiles: [
-        {
-          id: "terminal",
-          label: "Terminal",
-          description: "Default terminal",
-          startupCommandTemplate: null,
-        },
-      ],
-    },
-    runtimeProjections: [],
+    activeTabId: "t1",
+    tabs: [
+      {
+        tabId: "t1",
+        title: "Tab 1",
+        layout: { type: "pane", paneId: "p1" },
+        panes: [
+          {
+            paneId: "p1",
+            title: "Terminal",
+            spec: {
+              kind: "terminal",
+              launchProfileId: "default",
+              workingDirectory: "/home",
+              commandOverride: null,
+            },
+          },
+        ],
+        activePaneId: "p1",
+      },
+    ],
+    ...overrides,
   };
 }
 
@@ -65,7 +65,7 @@ function makeMockWorkspaceClient(
   overrides?: Partial<WorkspaceClient>,
 ): WorkspaceClient {
   return {
-    bootstrap: vi.fn().mockResolvedValue(makeBootstrapPayload()),
+    bootstrap: vi.fn().mockResolvedValue(makeWorkspaceReadModel()),
     dispatch: vi.fn().mockResolvedValue(makeWorkspaceView()),
     listenProjectionUpdated: vi.fn().mockResolvedValue(() => {}),
     ...overrides,
@@ -91,7 +91,7 @@ describe("createWorkspaceStore", () => {
     expect(store.getState().isHydrating).toBe(true);
     expect(store.getState().workspace).toBeNull();
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
 
     expect(store.getState().isHydrating).toBe(false);
     expect(store.getState().workspace).not.toBeNull();
@@ -131,7 +131,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
     await store.getState().closeTab("t1");
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
@@ -147,7 +147,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
     await store.getState().closeTab("t1");
 
     expect(store.getState().error).toBe("dispatch error");
@@ -159,7 +159,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
     await store.getState().closeTab("t1");
 
     expect(store.getState().error).toBe("fail");
@@ -174,7 +174,7 @@ describe("createWorkspaceStore", () => {
     const store = createWorkspaceStore(deps);
 
     await store.getState().loadBootstrap(
-      makeBootstrapPayload({ tabs: [], activeTabId: "" }),
+      makeWorkspaceReadModel({ tabs: [], activeTabId: "" }),
     );
 
     expect(store.getState().wizardTab).not.toBeNull();
@@ -188,7 +188,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
     await store.getState().setActiveTab("t2");
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
@@ -242,7 +242,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
     const paneSpec = {
       kind: "terminal" as const,
       launchProfileId: "default",
@@ -275,7 +275,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
 
     expect(store.getState().isWorking).toBe(false);
 
@@ -293,7 +293,7 @@ describe("createWorkspaceStore", () => {
     const deps = makeMockDeps();
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
 
     expect(store.getState().wizardTab).toBeNull();
 
@@ -307,7 +307,7 @@ describe("createWorkspaceStore", () => {
     const deps = makeMockDeps();
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
 
     store.getState().openSetupWizard();
     expect(store.getState().wizardTab).not.toBeNull();
@@ -321,7 +321,7 @@ describe("createWorkspaceStore", () => {
     const store = createWorkspaceStore(deps);
 
     await store.getState().loadBootstrap(
-      makeBootstrapPayload({ tabs: [], activeTabId: "" }),
+      makeWorkspaceReadModel({ tabs: [], activeTabId: "" }),
     );
     expect(store.getState().wizardTab).not.toBeNull();
 
@@ -338,7 +338,7 @@ describe("createWorkspaceStore", () => {
     );
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
     await store.getState().createTabFromWizard({
       groups: [
         {
@@ -366,7 +366,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
     await store.getState().closePane("p1");
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
@@ -382,7 +382,7 @@ describe("createWorkspaceStore", () => {
     });
     const store = createWorkspaceStore(deps);
 
-    await store.getState().loadBootstrap(makeBootstrapPayload());
+    await store.getState().loadBootstrap(makeWorkspaceReadModel());
     await store.getState().swapPaneSlots("p1", "p2");
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith({
@@ -400,7 +400,7 @@ describe("createWorkspaceStore", () => {
       expect(store.getState().workspace).toBeNull();
       expect(store.getState().isHydrating).toBe(true);
 
-      await store.getState().loadBootstrap(makeBootstrapPayload());
+      await store.getState().loadBootstrap(makeWorkspaceReadModel());
 
       expect(store.getState().workspace).not.toBeNull();
       expect(store.getState().isHydrating).toBe(false);

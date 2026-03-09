@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SettingsView, WorkspaceBootstrapView } from "@/contracts/tauri-bindings";
 import type { WorkspaceClient, SettingsClient } from "@/app-shell/clients";
 import { createSettingsStore } from "@/features/settings/application/store";
+import { mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
 import {
   createAppBootstrapCoordinator,
   type AppBootstrapCoordinatorDeps,
@@ -168,7 +169,7 @@ describe("AppBootstrapCoordinator", () => {
       payload.profileCatalog.terminalProfiles,
     );
     expect(loadRuntime).toHaveBeenCalledWith(payload.runtimeProjections);
-    expect(loadWorkspace).toHaveBeenCalledWith(payload);
+    expect(loadWorkspace).toHaveBeenCalledWith(mapWorkspaceFromDto(payload.workspace));
   });
 
   it("calls setBootstrapError when bootstrap fails", async () => {

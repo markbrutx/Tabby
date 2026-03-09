@@ -1,11 +1,13 @@
 import { asErrorMessage } from "@/app-shell/clients";
 import type { WorkspaceClient } from "@/app-shell/clients";
 import type { WorkspaceBootstrapView } from "@/contracts/tauri-bindings";
+import type { WorkspaceReadModel } from "@/features/workspace/domain/models";
+import { mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
 
 export interface BootstrapableWorkspaceStore {
   getState: () => {
     beginBootstrap: () => void;
-    loadBootstrap: (payload: WorkspaceBootstrapView) => Promise<void>;
+    loadBootstrap: (workspace: WorkspaceReadModel) => Promise<void>;
     setBootstrapError: (message: string) => void;
   };
 }
@@ -56,7 +58,8 @@ export function createAppBootstrapCoordinator(
 
         deps.runtimeStore.getState().loadBootstrap(payload.runtimeProjections);
 
-        await deps.workspaceStore.getState().loadBootstrap(payload);
+        const workspaceReadModel = mapWorkspaceFromDto(payload.workspace);
+        await deps.workspaceStore.getState().loadBootstrap(workspaceReadModel);
       } catch (error) {
         deps.workspaceStore.getState().setBootstrapError(asErrorMessage(error));
       }

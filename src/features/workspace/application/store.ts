@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { asErrorMessage } from "@/app-shell/clients";
 import type {
   PaneSpecDto,
-  WorkspaceBootstrapView,
   WorkspaceCommandDto,
   WorkspaceView,
 } from "@/contracts/tauri-bindings";
@@ -25,7 +24,7 @@ export interface WorkspaceStore {
   isWorking: boolean;
   wizardTab: WizardTab | null;
   beginBootstrap: () => void;
-  loadBootstrap: (payload: WorkspaceBootstrapView) => Promise<void>;
+  loadBootstrap: (workspace: WorkspaceReadModel) => Promise<void>;
   setBootstrapError: (message: string) => void;
   createTabFromWizard: (config: SetupWizardConfig) => Promise<void>;
   openSetupWizard: () => void;
@@ -117,22 +116,21 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
       set({ isHydrating: true, error: null });
     },
 
-    async loadBootstrap(payload) {
+    async loadBootstrap(workspace) {
       if (!workspaceListenersReady) {
         workspaceListenersReady = deps.workspaceClient
           .listenProjectionUpdated((dto) => {
-            const workspace = mapWorkspaceFromDto(dto);
+            const mapped = mapWorkspaceFromDto(dto);
             set({
-              workspace,
+              workspace: mapped,
               error: null,
-              wizardTab: workspace.tabs.length === 0 ? makeWizardTab(workspace) : null,
+              wizardTab: mapped.tabs.length === 0 ? makeWizardTab(mapped) : null,
             });
           })
           .then(() => undefined);
       }
       await workspaceListenersReady;
 
-      const workspace = mapWorkspaceFromDto(payload.workspace);
       const shouldShowWizard = workspace.tabs.length === 0;
       set({
         workspace,
