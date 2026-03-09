@@ -1,11 +1,11 @@
 pub mod cli;
 
-mod application;
+pub mod application;
 mod commands;
 mod infrastructure;
 mod mapping;
 mod menu;
-mod shell;
+pub mod shell;
 
 pub use cli::CliArgs;
 

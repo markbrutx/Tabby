@@ -13,6 +13,12 @@ pub struct WorkspaceApplicationService {
     workspace: Mutex<WorkspaceSession>,
 }
 
+impl Default for WorkspaceApplicationService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorkspaceApplicationService {
     pub fn new() -> Self {
         Self {
