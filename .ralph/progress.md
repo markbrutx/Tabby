@@ -170,5 +170,32 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-it
   - When a story's work is already done by a dependency, still run all quality gates to confirm before marking complete
 ---
 
+## [2026-03-10 00:12] - DDD-007: Test: browser commands dispatch through RuntimeApplicationService
+Thread:
+Run: 20260310-000917-71928 (iteration 1)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-1.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-1.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 3fe8f71 test: add integration tests for browser commands through RuntimeApplicationService (DDD-007)
+- Post-commit status: clean
+- Verification:
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (307 tests: 172 app-lib + 2 arch + 5 browser-cmd + 0 contracts + 29 kernel + 11 runtime + 35 settings + 53 workspace)
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (19 files, 203 tests)
+- Files changed:
+  - src-tauri/tests/browser_commands_through_runtime_service.rs (created — 5 integration tests)
+  - src-tauri/src/lib.rs (made application and shell modules pub for integration test access)
+  - src-tauri/src/application/workspace_service.rs (added Default impl to fix pre-existing clippy warning)
+- Created 5 integration tests with mock BrowserSurfacePort verifying the single-owner invariant: all 4 BrowserSurfaceCommandDto variants (Ensure, SetBounds, SetVisible, Close) dispatch through RuntimeApplicationService to BrowserSurfacePort. Sequential multi-command test verifies ordering. Full path confirmed: commands/shell.rs → AppShell → RuntimeApplicationService → BrowserSurfacePort.
+- **Learnings for future iterations:**
+  - Integration tests in src-tauri/tests/ need pub visibility on application and shell modules in lib.rs
+  - Pre-existing clippy warnings may surface when recompiling — fix them as part of the story
+  - The lib crate is named `tabby_app_lib` (not `tabby`) in Cargo.toml [lib] section
+---
+
 ## Codebase Patterns
 - (add reusable patterns here)
