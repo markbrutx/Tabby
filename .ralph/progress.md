@@ -326,3 +326,36 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-it
   - When changing a trait signature, grep for all mock implementations across test files (unit tests, integration tests, and external test crates)
   - `cargo fmt` catches formatting issues from multi-line → single-line struct construction after refactoring
 ---
+
+## [2026-03-10 00:30] - DDD-012: SettingsStore.loadBootstrap accepts SettingsReadModel not DTO
+Thread:
+Run: 20260310-000917-71928 (iteration 6)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-6.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-6.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 100c5f9 refactor: SettingsStore.loadBootstrap accepts SettingsReadModel not DTO (DDD-012)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (172+ tests)
+- Files changed:
+  - src/features/settings/application/store.ts
+  - src/features/settings/application/store.test.ts
+  - src/app-shell/AppBootstrapCoordinator.ts
+  - src/app-shell/AppBootstrapCoordinator.test.ts
+- What was implemented:
+  - Changed SettingsStore.loadBootstrap signature from (SettingsView, ProfileDTO[]) to (SettingsReadModel, ProfileReadModel[])
+  - loadBootstrap now sets read models directly instead of mapping from DTOs
+  - Moved DTO→ReadModel mapping (mapSettingsFromDto, mapProfileFromDto) into AppBootstrapCoordinator.initialize()
+  - Updated BootstrapableSettingsStore interface to use domain read model types
+  - Updated all tests to pass read models instead of DTOs to loadBootstrap
+- **Learnings for future iterations:**
+  - SettingsView and SettingsReadModel are structurally identical (same field names/types), so TypeScript structural typing allows them interchangeably. The change is about enforcing the correct semantic boundary.
+  - The store still needs DTO imports for runtime event listeners and dispatch responses — this is correct transport-boundary usage, not a violation.
+  - Pattern from DDD-011 (WorkspaceStore) was directly applicable here.
+---
