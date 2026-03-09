@@ -77,7 +77,7 @@ mod tests {
                 }
                 PaneSpec::Browser(browser) => {
                     let session = self.next_session_id("browser");
-                    reg.register_browser(&pid, session, browser.initial_url.to_string())
+                    reg.register_browser(&pid, session, browser.initial_url.clone())
                 }
             };
             self.emit_projection(runtime.pane_id.as_ref(), runtime.status);

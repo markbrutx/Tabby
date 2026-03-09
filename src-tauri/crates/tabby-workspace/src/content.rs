@@ -1,3 +1,5 @@
+use tabby_kernel::CommandTemplate;
+
 use crate::ids::{BrowserUrl, PaneContentId};
 
 /// Describes what runs inside a pane slot — separated from the workspace structural Pane type.
@@ -12,7 +14,7 @@ pub enum PaneContentDefinition {
         id: PaneContentId,
         profile_id: String,
         working_directory: String,
-        command_override: Option<String>,
+        command_override: Option<CommandTemplate>,
     },
     Browser {
         id: PaneContentId,
@@ -26,7 +28,7 @@ impl PaneContentDefinition {
         id: PaneContentId,
         profile_id: impl Into<String>,
         working_directory: impl Into<String>,
-        command_override: Option<String>,
+        command_override: Option<CommandTemplate>,
     ) -> Self {
         Self::Terminal {
             id,
@@ -91,7 +93,7 @@ mod tests {
             id.clone(),
             "zsh-profile",
             "/home/user",
-            Some(String::from("vim")),
+            Some(CommandTemplate::new("vim")),
         );
 
         assert_eq!(*def.content_id(), id);
@@ -103,7 +105,7 @@ mod tests {
             PaneContentDefinition::Terminal {
                 command_override, ..
             } => {
-                assert_eq!(command_override.as_deref(), Some("vim"));
+                assert_eq!(command_override.as_ref().map(|c| c.as_str()), Some("vim"));
             }
             _ => panic!("expected Terminal variant"),
         }
@@ -188,8 +190,12 @@ mod tests {
     #[test]
     fn clone_preserves_all_fields() {
         let id = make_content_id("content-clone");
-        let def =
-            PaneContentDefinition::terminal(id, "fish", "/var/log", Some(String::from("tail -f")));
+        let def = PaneContentDefinition::terminal(
+            id,
+            "fish",
+            "/var/log",
+            Some(CommandTemplate::new("tail -f")),
+        );
         let cloned = def.clone();
 
         assert_eq!(def, cloned);

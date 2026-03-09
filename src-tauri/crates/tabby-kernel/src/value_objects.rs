@@ -159,6 +159,51 @@ impl fmt::Display for WorkingDirectory {
 }
 
 // ---------------------------------------------------------------------------
+// CommandTemplate
+// ---------------------------------------------------------------------------
+
+/// A validated command template for terminal startup commands or overrides.
+///
+/// Wraps a non-empty command string. Use `Option<CommandTemplate>` when the
+/// command may be absent (e.g. no startup command configured).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandTemplate(String);
+
+impl CommandTemplate {
+    /// Creates a new CommandTemplate without validation.
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    /// Validated constructor — rejects empty or whitespace-only commands.
+    pub fn try_new(value: impl Into<String>) -> Result<Self, ValueObjectError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(ValueObjectError::new(
+                "CommandTemplate must not be empty or whitespace-only",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for CommandTemplate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for CommandTemplate {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+// ---------------------------------------------------------------------------
 // LayoutPreset
 // ---------------------------------------------------------------------------
 
@@ -419,6 +464,42 @@ mod tests {
     fn value_object_error_display() {
         let err = ValueObjectError::new("test error");
         assert_eq!(err.to_string(), "test error");
+    }
+
+    // -- LayoutPreset ------------------------------------------------------
+
+    // -- CommandTemplate --------------------------------------------------
+
+    #[test]
+    fn command_template_new_accepts_any_value() {
+        let cmd = CommandTemplate::new("claude");
+        assert_eq!(cmd.as_str(), "claude");
+    }
+
+    #[test]
+    fn command_template_try_new_accepts_valid() {
+        let cmd = CommandTemplate::try_new("codex").expect("should accept non-empty");
+        assert_eq!(cmd.as_str(), "codex");
+    }
+
+    #[test]
+    fn command_template_try_new_rejects_empty() {
+        let err = CommandTemplate::try_new("").expect_err("should reject empty");
+        assert!(err.to_string().contains("must not be empty"));
+    }
+
+    #[test]
+    fn command_template_try_new_rejects_whitespace_only() {
+        let err = CommandTemplate::try_new("   ").expect_err("should reject whitespace-only");
+        assert!(err.to_string().contains("must not be empty"));
+    }
+
+    #[test]
+    fn command_template_display_and_as_ref() {
+        let cmd = CommandTemplate::new("vim --noplugin");
+        assert_eq!(cmd.to_string(), "vim --noplugin");
+        assert_eq!(cmd.as_ref(), "vim --noplugin");
+        assert_eq!(cmd.as_str(), "vim --noplugin");
     }
 
     // -- LayoutPreset ------------------------------------------------------

@@ -101,7 +101,10 @@ impl BootstrapService {
         let pane_spec = PaneSpec::Terminal(tabby_workspace::TerminalPaneSpec {
             launch_profile_id: profile_id,
             working_directory,
-            command_override: cli_args.command,
+            command_override: cli_args
+                .command
+                .filter(|s| !s.trim().is_empty())
+                .map(tabby_kernel::CommandTemplate::new),
         });
         let events = workspace_service.open_tab(layout, false, vec![pane_spec])?;
         RuntimeCoordinator::handle_workspace_events(

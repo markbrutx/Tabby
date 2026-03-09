@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 pub use content::PaneContentDefinition;
 pub use ids::{BrowserUrl, PaneContentId, PaneId, TabId};
+pub use tabby_kernel::CommandTemplate;
 
 use crate::layout::{
     close_pane as close_pane_layout, split_pane as split_pane_layout, swap_panes, tree_from_count,
@@ -19,7 +20,7 @@ use crate::layout::{
 pub struct TerminalPaneSpec {
     pub launch_profile_id: String,
     pub working_directory: String,
-    pub command_override: Option<String>,
+    pub command_override: Option<CommandTemplate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

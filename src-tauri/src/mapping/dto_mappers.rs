@@ -60,7 +60,10 @@ pub fn profile_catalog_view_from_catalog(catalog: &ProfileCatalog) -> ProfileCat
                 id: profile.id.as_str().to_string(),
                 label: profile.label.clone(),
                 description: profile.description.clone(),
-                startup_command_template: profile.startup_command_template.clone(),
+                startup_command_template: profile
+                    .startup_command_template
+                    .as_ref()
+                    .map(|c| c.as_str().to_string()),
             })
             .collect(),
     }
@@ -115,7 +118,7 @@ fn pane_content_to_spec_dto(content: &PaneContentDefinition) -> PaneSpecDto {
         } => PaneSpecDto::Terminal {
             launch_profile_id: profile_id.clone(),
             working_directory: working_directory.clone(),
-            command_override: command_override.clone(),
+            command_override: command_override.as_ref().map(|c| c.as_str().to_string()),
         },
         PaneContentDefinition::Browser { initial_url, .. } => PaneSpecDto::Browser {
             initial_url: initial_url.as_str().to_string(),
@@ -129,7 +132,10 @@ fn pane_spec_to_dto(value: &PaneSpec) -> PaneSpecDto {
         PaneSpec::Terminal(spec) => PaneSpecDto::Terminal {
             launch_profile_id: spec.launch_profile_id.clone(),
             working_directory: spec.working_directory.clone(),
-            command_override: spec.command_override.clone(),
+            command_override: spec
+                .command_override
+                .as_ref()
+                .map(|c| c.as_str().to_string()),
         },
         PaneSpec::Browser(spec) => PaneSpecDto::Browser {
             initial_url: spec.initial_url.as_str().to_string(),
@@ -144,8 +150,14 @@ pub fn pane_runtime_to_view(runtime: &PaneRuntime) -> PaneRuntimeView {
         kind: runtime_kind_to_dto(runtime.kind),
         status: runtime_status_to_dto(runtime.status),
         last_error: runtime.last_error.clone(),
-        browser_location: runtime.browser_location.clone(),
-        terminal_cwd: runtime.terminal_cwd.clone(),
+        browser_location: runtime
+            .browser_location
+            .as_ref()
+            .map(|u| u.as_str().to_string()),
+        terminal_cwd: runtime
+            .terminal_cwd
+            .as_ref()
+            .map(|w| w.as_str().to_string()),
     }
 }
 
@@ -176,7 +188,9 @@ pub fn pane_spec_from_dto(value: PaneSpecDto) -> PaneSpec {
         } => PaneSpec::Terminal(tabby_workspace::TerminalPaneSpec {
             launch_profile_id,
             working_directory,
-            command_override,
+            command_override: command_override
+                .filter(|s| !s.trim().is_empty())
+                .map(tabby_workspace::CommandTemplate::new),
         }),
         PaneSpecDto::Browser { initial_url } => {
             PaneSpec::Browser(tabby_workspace::BrowserPaneSpec {
@@ -389,9 +403,12 @@ fn runtime_status_to_dto(value: RuntimeStatus) -> RuntimeStatusDto {
 mod tests {
     use super::*;
     use tabby_contracts::PaneId;
+    use tabby_kernel::WorkingDirectory;
     use tabby_runtime::{PaneRuntime, RuntimeKind, RuntimeSessionId, RuntimeStatus};
     use tabby_settings::{default_preferences, ProfileCatalog, TerminalProfile, UserPreferences};
-    use tabby_workspace::{BrowserPaneSpec, BrowserUrl, PaneSpec, TerminalPaneSpec};
+    use tabby_workspace::{
+        BrowserPaneSpec, BrowserUrl, CommandTemplate, PaneSpec, TerminalPaneSpec,
+    };
 
     // -- PaneSpec round-trip ------------------------------------------------
 
@@ -400,7 +417,7 @@ mod tests {
         let spec = PaneSpec::Terminal(TerminalPaneSpec {
             launch_profile_id: String::from("claude"),
             working_directory: String::from("/home/user"),
-            command_override: Some(String::from("bash")),
+            command_override: Some(CommandTemplate::new("bash")),
         });
 
         let dto = pane_spec_to_dto(&spec);
@@ -410,7 +427,10 @@ mod tests {
             PaneSpec::Terminal(t) => {
                 assert_eq!(t.launch_profile_id, "claude");
                 assert_eq!(t.working_directory, "/home/user");
-                assert_eq!(t.command_override.as_deref(), Some("bash"));
+                assert_eq!(
+                    t.command_override.as_ref().map(|c| c.as_str()),
+                    Some("bash")
+                );
             }
             PaneSpec::Browser(_) => panic!("Expected Terminal spec"),
         }
@@ -571,7 +591,7 @@ mod tests {
             kind: RuntimeKind::Browser,
             status: RuntimeStatus::Running,
             last_error: None,
-            browser_location: Some(String::from("https://example.com")),
+            browser_location: Some(BrowserUrl::new("https://example.com")),
             terminal_cwd: None,
         };
 
@@ -618,7 +638,7 @@ mod tests {
                     id: ProfileId::new("claude"),
                     label: String::from("Claude Code"),
                     description: String::from("AI assistant"),
-                    startup_command_template: Some(String::from("claude")),
+                    startup_command_template: Some(CommandTemplate::new("claude")),
                 },
             ],
         };
@@ -734,7 +754,10 @@ mod tests {
                 match replace.spec {
                     PaneSpec::Terminal(t) => {
                         assert_eq!(t.launch_profile_id, "codex");
-                        assert_eq!(t.command_override.as_deref(), Some("codex"));
+                        assert_eq!(
+                            t.command_override.as_ref().map(|c| c.as_str()),
+                            Some("codex")
+                        );
                     }
                     PaneSpec::Browser(_) => panic!("Expected Terminal"),
                 }

@@ -3,7 +3,7 @@ mod value_objects;
 
 pub use value_objects::{FontSize, ProfileId, WorkingDirectory};
 
-use tabby_kernel::LayoutPreset;
+use tabby_kernel::{CommandTemplate, LayoutPreset};
 use thiserror::Error;
 
 pub const CUSTOM_PROFILE_ID: &str = "custom";
@@ -23,7 +23,7 @@ pub struct TerminalProfile {
     pub id: ProfileId,
     pub label: String,
     pub description: String,
-    pub startup_command_template: Option<String>,
+    pub startup_command_template: Option<CommandTemplate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,7 +48,7 @@ pub struct UserPreferences {
 pub struct ResolvedTerminalProfile {
     pub id: ProfileId,
     pub label: String,
-    pub command: Option<String>,
+    pub command: Option<CommandTemplate>,
 }
 
 #[derive(Debug, Error)]
@@ -90,13 +90,13 @@ pub fn built_in_profile_catalog() -> ProfileCatalog {
                 id: ProfileId::new(CLAUDE_PROFILE_ID),
                 label: String::from("Claude Code"),
                 description: String::from("Anthropic coding assistant"),
-                startup_command_template: Some(String::from("claude")),
+                startup_command_template: Some(CommandTemplate::new("claude")),
             },
             TerminalProfile {
                 id: ProfileId::new(CODEX_PROFILE_ID),
                 label: String::from("Codex"),
                 description: String::from("OpenAI coding agent"),
-                startup_command_template: Some(String::from("codex")),
+                startup_command_template: Some(CommandTemplate::new("codex")),
             },
             TerminalProfile {
                 id: ProfileId::new(CUSTOM_PROFILE_ID),
@@ -142,7 +142,7 @@ pub fn validate_preferences(preferences: &UserPreferences) -> Result<(), Setting
 
 pub fn resolve_terminal_profile(
     profile_id: &str,
-    command_override: Option<String>,
+    command_override: Option<CommandTemplate>,
     default_custom_command: &str,
 ) -> Result<ResolvedTerminalProfile, SettingsError> {
     let catalog = built_in_profile_catalog();
@@ -154,10 +154,10 @@ pub fn resolve_terminal_profile(
 
     if profile.id == CUSTOM_PROFILE_ID {
         let command = command_override
-            .filter(|value| !value.trim().is_empty())
+            .filter(|value| !value.as_str().trim().is_empty())
             .or_else(|| {
-                (!default_custom_command.trim().is_empty())
-                    .then(|| String::from(default_custom_command.trim()))
+                let trimmed = default_custom_command.trim();
+                (!trimmed.is_empty()).then(|| CommandTemplate::new(trimmed))
             })
             .ok_or_else(|| {
                 SettingsError::Validation(String::from("Custom profile requires a startup command"))

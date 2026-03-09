@@ -478,7 +478,7 @@ mod tests {
         assert!(matches!(snapshot[0].kind, RuntimeKind::Browser));
         assert!(matches!(snapshot[0].status, RuntimeStatus::Running));
         assert_eq!(
-            snapshot[0].browser_location.as_deref(),
+            snapshot[0].browser_location.as_ref().map(|u| u.as_str()),
             Some("https://example.com"),
         );
 
@@ -826,7 +826,7 @@ mod tests {
             .find(|r| r.pane_id == pid("pane-cwd2"))
             .expect("found");
         assert_eq!(
-            runtime.terminal_cwd.as_deref(),
+            runtime.terminal_cwd.as_ref().map(|w| w.as_str()),
             Some("/updated/cwd"),
             "runtime registry should reflect observed cwd"
         );

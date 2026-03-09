@@ -477,7 +477,7 @@ mod tests {
         assert!(matches!(snapshot[0].kind, RuntimeKind::Browser));
         assert!(matches!(snapshot[0].status, RuntimeStatus::Running));
         assert_eq!(
-            snapshot[0].browser_location.as_deref(),
+            snapshot[0].browser_location.as_ref().map(|u| u.as_str()),
             Some("https://example.com"),
         );
     }

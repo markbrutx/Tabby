@@ -2,7 +2,7 @@ pub mod ids;
 
 use std::collections::HashMap;
 
-use tabby_kernel::PaneId;
+use tabby_kernel::{BrowserUrl, PaneId, WorkingDirectory};
 use thiserror::Error;
 
 pub use ids::RuntimeSessionId;
@@ -28,8 +28,8 @@ pub struct PaneRuntime {
     pub kind: RuntimeKind,
     pub status: RuntimeStatus,
     pub last_error: Option<String>,
-    pub browser_location: Option<String>,
-    pub terminal_cwd: Option<String>,
+    pub browser_location: Option<BrowserUrl>,
+    pub terminal_cwd: Option<WorkingDirectory>,
 }
 
 #[derive(Debug, Default)]
@@ -66,7 +66,7 @@ impl RuntimeRegistry {
         &mut self,
         pane_id: &PaneId,
         runtime_session_id: RuntimeSessionId,
-        initial_url: String,
+        initial_url: BrowserUrl,
     ) -> PaneRuntime {
         let runtime = PaneRuntime {
             pane_id: pane_id.clone(),
@@ -112,7 +112,7 @@ impl RuntimeRegistry {
     pub fn update_browser_location(
         &mut self,
         pane_id: &PaneId,
-        url: String,
+        url: BrowserUrl,
     ) -> Result<PaneRuntime, RuntimeError> {
         let runtime = self
             .runtimes
@@ -125,7 +125,7 @@ impl RuntimeRegistry {
     pub fn update_terminal_cwd(
         &mut self,
         pane_id: &PaneId,
-        cwd: String,
+        cwd: WorkingDirectory,
     ) -> Result<PaneRuntime, RuntimeError> {
         let runtime = self
             .runtimes
@@ -157,7 +157,7 @@ impl RuntimeRegistry {
 #[cfg(test)]
 mod tests {
     use super::{RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
-    use tabby_kernel::PaneId;
+    use tabby_kernel::{BrowserUrl, PaneId, WorkingDirectory};
 
     fn pid(id: &str) -> PaneId {
         PaneId::from(String::from(id))
@@ -182,16 +182,21 @@ mod tests {
         let pane_id = pid("pane-1");
         registry.register_terminal(&pane_id, RuntimeSessionId::from(String::from("session-1")));
 
+        let cwd = WorkingDirectory::new("/projects/tabby").expect("valid path");
         let runtime = registry
-            .update_terminal_cwd(&pane_id, String::from("/projects/tabby"))
+            .update_terminal_cwd(&pane_id, cwd)
             .expect("runtime should exist");
-        assert_eq!(runtime.terminal_cwd.as_deref(), Some("/projects/tabby"));
+        assert_eq!(
+            runtime.terminal_cwd.as_ref().map(|w| w.as_str()),
+            Some("/projects/tabby")
+        );
     }
 
     #[test]
     fn terminal_cwd_update_for_nonexistent_pane_returns_error() {
         let mut registry = RuntimeRegistry::default();
-        let result = registry.update_terminal_cwd(&pid("nonexistent"), String::from("/tmp"));
+        let cwd = WorkingDirectory::new("/tmp").expect("valid path");
+        let result = registry.update_terminal_cwd(&pid("nonexistent"), cwd);
         assert!(
             result.is_err(),
             "updating cwd for nonexistent pane should fail"
@@ -205,14 +210,14 @@ mod tests {
         registry.register_browser(
             &pane_id,
             RuntimeSessionId::from(String::from("browser-1")),
-            String::from("https://example.com"),
+            BrowserUrl::new("https://example.com"),
         );
 
         let runtime = registry
-            .update_browser_location(&pane_id, String::from("https://openai.com"))
+            .update_browser_location(&pane_id, BrowserUrl::new("https://openai.com"))
             .expect("browser runtime should exist");
         assert_eq!(
-            runtime.browser_location.as_deref(),
+            runtime.browser_location.as_ref().map(|u| u.as_str()),
             Some("https://openai.com")
         );
     }

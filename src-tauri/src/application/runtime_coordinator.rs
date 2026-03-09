@@ -187,15 +187,15 @@ mod tests {
         let runtime = registry.register_browser(
             &pane_id,
             RuntimeSessionId::from(String::from("browser-session-1")),
-            String::from("https://example.com"),
+            BrowserUrl::new("https://example.com"),
         );
 
         assert_eq!(runtime.pane_id, pane_id);
         assert!(matches!(runtime.kind, RuntimeKind::Browser));
         assert!(matches!(runtime.status, RuntimeStatus::Running));
         assert_eq!(
-            runtime.browser_location,
-            Some(String::from("https://example.com"))
+            runtime.browser_location.as_ref().map(|u| u.as_str()),
+            Some("https://example.com")
         );
     }
 
@@ -252,7 +252,7 @@ mod tests {
         let runtime = registry.register_browser(
             &pid("pane-1"),
             sid("browser-session-1"),
-            String::from("https://example.com"),
+            BrowserUrl::new("https://example.com"),
         );
 
         assert_eq!(runtime.pane_id, pid("pane-1"));
@@ -268,7 +268,7 @@ mod tests {
         registry.register_browser(
             &pid("pane-1"),
             sid("browser-1"),
-            String::from("https://example.com"),
+            BrowserUrl::new("https://example.com"),
         );
         assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Browser));
 
@@ -373,7 +373,7 @@ mod tests {
                     let runtime = registry.register_browser(
                         pane_id,
                         sid("browser-new"),
-                        browser.initial_url.to_string(),
+                        browser.initial_url.clone(),
                     );
                     assert!(matches!(runtime.kind, RuntimeKind::Browser));
                 }
@@ -439,12 +439,12 @@ mod tests {
                     let new_runtime = registry.register_browser(
                         pane_id,
                         sid("browser-new"),
-                        browser.initial_url.to_string(),
+                        browser.initial_url.clone(),
                     );
                     assert!(matches!(new_runtime.kind, RuntimeKind::Browser));
                     assert!(matches!(new_runtime.status, RuntimeStatus::Running));
                     assert_eq!(
-                        new_runtime.browser_location.as_deref(),
+                        new_runtime.browser_location.as_ref().map(|u| u.as_str()),
                         Some("https://example.com"),
                     );
                 }
@@ -562,11 +562,7 @@ mod tests {
             // Coordinator starts new runtime with replaced content
             let spec = spec_from_content(nc);
             if let tabby_workspace::PaneSpec::Browser(browser) = spec {
-                registry.register_browser(
-                    pane_id,
-                    sid("browser-new"),
-                    browser.initial_url.to_string(),
-                );
+                registry.register_browser(pane_id, sid("browser-new"), browser.initial_url.clone());
             }
         }
 
@@ -587,7 +583,7 @@ mod tests {
             "new browser runtime should be Running"
         );
         assert_eq!(
-            final_runtime.browser_location.as_deref(),
+            final_runtime.browser_location.as_ref().map(|u| u.as_str()),
             Some("https://example.com"),
         );
     }
@@ -664,7 +660,7 @@ mod tests {
     fn update_browser_location_for_nonexistent_pane_returns_error() {
         let mut registry = RuntimeRegistry::default();
         let result = registry
-            .update_browser_location(&pid("nonexistent"), String::from("https://example.com"));
+            .update_browser_location(&pid("nonexistent"), BrowserUrl::new("https://example.com"));
         assert!(
             result.is_err(),
             "updating location for nonexistent pane should return error"
@@ -707,7 +703,7 @@ mod tests {
                             registry.register_browser(
                                 pane_id,
                                 RuntimeSessionId::from(format!("browser-{}", pane_id)),
-                                browser.initial_url.to_string(),
+                                browser.initial_url.clone(),
                             );
                         }
                     }

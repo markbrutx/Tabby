@@ -62,7 +62,7 @@ impl RuntimeApplicationService {
                 let pty_session_id = self.terminal_port.spawn(
                     pane_id.as_ref(),
                     &spec.working_directory,
-                    resolved.command.as_deref(),
+                    resolved.command.as_ref().map(|c| c.as_str()),
                     observation_receiver,
                 )?;
                 self.lock_runtimes()?
@@ -71,7 +71,7 @@ impl RuntimeApplicationService {
             PaneSpec::Browser(spec) => self.lock_runtimes()?.register_browser(
                 pane_id,
                 RuntimeSessionId::from(format!("browser-{}", uuid::Uuid::new_v4())),
-                spec.initial_url.as_str().to_string(),
+                spec.initial_url.clone(),
             ),
         };
         self.emitter.publish_runtime_status(&runtime);
@@ -156,7 +156,7 @@ impl RuntimeApplicationService {
                 self.browser_port.navigate(pane_id.as_ref(), &url)?;
                 let maybe_runtime = self
                     .lock_runtimes()?
-                    .update_browser_location(&pane_id, url)
+                    .update_browser_location(&pane_id, tabby_kernel::BrowserUrl::new(url))
                     .ok();
                 if let Some(runtime) = maybe_runtime {
                     self.emitter.publish_runtime_status(&runtime);
@@ -223,9 +223,11 @@ impl RuntimeApplicationService {
         pane_id: &PaneId,
         working_directory: &str,
     ) -> Result<(), ShellError> {
+        let cwd = tabby_kernel::WorkingDirectory::new(working_directory)
+            .map_err(|e| ShellError::Validation(e.to_string()))?;
         let runtime = self
             .lock_runtimes()?
-            .update_terminal_cwd(pane_id, String::from(working_directory))
+            .update_terminal_cwd(pane_id, cwd)
             .map_err(|error| ShellError::NotFound(error.to_string()))?;
         self.emitter.publish_runtime_status(&runtime);
         Ok(())
@@ -234,7 +236,7 @@ impl RuntimeApplicationService {
     pub fn observe_browser_location(&self, pane_id: &PaneId, url: &str) -> Result<(), ShellError> {
         let maybe_runtime = self
             .lock_runtimes()?
-            .update_browser_location(pane_id, String::from(url))
+            .update_browser_location(pane_id, tabby_kernel::BrowserUrl::new(url))
             .ok();
         if let Some(runtime) = maybe_runtime {
             self.emitter.publish_runtime_status(&runtime);
@@ -292,7 +294,7 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
     fn on_browser_location_changed(&self, pane_id: &PaneId, url: &str) {
         let result = self.lock_runtimes().and_then(|mut runtimes| {
             runtimes
-                .update_browser_location(pane_id, String::from(url))
+                .update_browser_location(pane_id, tabby_kernel::BrowserUrl::new(url))
                 .map_err(|error| ShellError::NotFound(error.to_string()))
         });
 
@@ -313,9 +315,16 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
         // requires cross-service access handled by observe_terminal_cwd on the
         // shell layer. This trait method will become the single entry point
         // once infrastructure is fully wired (future story).
+        let wd = match tabby_kernel::WorkingDirectory::new(cwd) {
+            Ok(wd) => wd,
+            Err(error) => {
+                warn!(?error, pane_id = pane_id.as_ref(), "Invalid cwd observed");
+                return;
+            }
+        };
         let result = self.lock_runtimes().and_then(|mut runtimes| {
             runtimes
-                .update_terminal_cwd(pane_id, String::from(cwd))
+                .update_terminal_cwd(pane_id, wd)
                 .map_err(|error| ShellError::NotFound(error.to_string()))
         });
 
@@ -341,6 +350,7 @@ fn settings_error_to_shell(error: SettingsError) -> ShellError {
 #[cfg(test)]
 mod tests {
     use tabby_contracts::PaneId as PaneIdType;
+    use tabby_kernel::BrowserUrl;
     use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
 
     fn sid(s: &str) -> RuntimeSessionId {
@@ -377,7 +387,7 @@ mod tests {
         registry.register_browser(
             &pid("pane-2"),
             sid("browser-xyz"),
-            String::from("https://example.com"),
+            BrowserUrl::new("https://example.com"),
         );
 
         assert_eq!(registry.snapshot().len(), 2);
@@ -402,15 +412,15 @@ mod tests {
         let runtime = registry.register_browser(
             &pid("pane-b"),
             sid("browser-session-1"),
-            String::from("https://example.com"),
+            BrowserUrl::new("https://example.com"),
         );
 
         assert_eq!(runtime.pane_id, pid("pane-b"));
         assert!(matches!(runtime.kind, RuntimeKind::Browser));
         assert!(matches!(runtime.status, RuntimeStatus::Running));
         assert_eq!(
-            runtime.browser_location,
-            Some(String::from("https://example.com"))
+            runtime.browser_location.as_ref().map(|u| u.as_str()),
+            Some("https://example.com")
         );
     }
 
@@ -498,7 +508,7 @@ mod tests {
     fn update_browser_location_for_nonexistent_pane_returns_error() {
         let mut registry = RuntimeRegistry::default();
         let result = registry
-            .update_browser_location(&pid("nonexistent"), String::from("https://example.com"));
+            .update_browser_location(&pid("nonexistent"), BrowserUrl::new("https://example.com"));
         assert!(
             result.is_err(),
             "updating location for nonexistent pane should fail"
@@ -512,7 +522,7 @@ mod tests {
         registry.register_browser(
             &pid("pane-2"),
             sid("browser-1"),
-            String::from("https://example.com"),
+            BrowserUrl::new("https://example.com"),
         );
         registry.register_terminal(&pid("pane-3"), sid("pty-3"));
 
@@ -557,10 +567,13 @@ mod tests {
 
         // 3. Update cwd in the runtime registry (simulating observe_terminal_cwd)
         let runtime = registry
-            .update_terminal_cwd(&pane_id, String::from("/projects/tabby"))
+            .update_terminal_cwd(
+                &pane_id,
+                tabby_kernel::WorkingDirectory::new("/projects/tabby").expect("valid path"),
+            )
             .expect("cwd update should succeed");
         assert_eq!(
-            runtime.terminal_cwd.as_deref(),
+            runtime.terminal_cwd.as_ref().map(|w| w.as_str()),
             Some("/projects/tabby"),
             "runtime registry should reflect the observed cwd"
         );
@@ -729,7 +742,7 @@ mod tests {
 
     use super::RuntimeApplicationService;
     use tabby_settings::UserPreferences;
-    use tabby_workspace::{BrowserPaneSpec, BrowserUrl, PaneSpec, TerminalPaneSpec};
+    use tabby_workspace::{BrowserPaneSpec, PaneSpec, TerminalPaneSpec};
 
     fn default_preferences() -> UserPreferences {
         tabby_settings::default_preferences()
@@ -1126,7 +1139,10 @@ mod tests {
             .find(|r| r.pane_id.as_ref() == "pane-b")
             .expect("found");
         assert_eq!(
-            browser_runtime.browser_location.as_deref(),
+            browser_runtime
+                .browser_location
+                .as_ref()
+                .map(|u| u.as_str()),
             Some("https://docs.rs/tauri"),
             "registry should reflect observed browser location"
         );
@@ -1166,7 +1182,7 @@ mod tests {
             .find(|r| r.pane_id.as_ref() == "pane-b")
             .expect("found");
         assert_eq!(
-            runtime.browser_location.as_deref(),
+            runtime.browser_location.as_ref().map(|u| u.as_str()),
             Some("https://github.com"),
         );
 
@@ -1233,7 +1249,7 @@ mod tests {
             kind: tabby_runtime::RuntimeKind::Browser,
             status: RuntimeStatus::Running,
             runtime_session_id: None,
-            browser_location: Some(String::from("https://example.com")),
+            browser_location: Some(BrowserUrl::new("https://example.com")),
             last_error: None,
             terminal_cwd: None,
         };
