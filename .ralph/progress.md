@@ -199,3 +199,35 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-it
 
 ## Codebase Patterns
 - (add reusable patterns here)
+
+## [2026-03-10 00:14] - DDD-008: Remove SettingsApplicationService from runtime_service observe_terminal_cwd
+Thread:
+Run: 20260310-000917-71928 (iteration 2)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-2.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-2.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 1eea5c1 refactor: remove SettingsApplicationService from runtime_service observe_terminal_cwd (DDD-008)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (172 tests)
+- Files changed:
+  - src-tauri/src/application/runtime_service.rs
+  - src-tauri/src/application/runtime_integration_tests.rs
+  - src-tauri/src/shell/mod.rs
+- What was implemented:
+  - Removed `&SettingsApplicationService` parameter from `observe_terminal_cwd` in RuntimeApplicationService
+  - Removed `SettingsApplicationService` import from runtime_service.rs
+  - Moved settings persistence (last_working_directory) to AppShell's `dispatch_runtime_command` coordinator
+  - Updated integration test to verify runtime_service does NOT touch settings (cross-context decoupling)
+  - Removed dead code: `last_saved_preferences` helper and `last_saved` field from test mock
+- **Learnings for future iterations:**
+  - When removing cross-context parameters, move the side effect to the coordinator (AppShell) to preserve behavior
+  - Removing test helpers that were specific to old behavior may cascade to removing mock struct fields — check clippy for dead_code warnings
+  - All 4 acceptance criteria met: param removed, AppShell handles persistence, Runtime only updates its own state, all quality gates pass
+---

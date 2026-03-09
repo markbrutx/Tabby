@@ -710,7 +710,7 @@ mod tests {
     }
 
     impl ProjectionPublisherPort for MockProjectionEmitter {
-        fn publish_workspace_projection(&self, _workspace: &tabby_contracts::WorkspaceView) {
+        fn publish_workspace_projection(&self, _workspace: &tabby_workspace::WorkspaceSession) {
             if let Ok(mut count) = self.workspace_calls.lock() {
                 *count += 1;
             }
@@ -833,7 +833,7 @@ mod tests {
     struct ArcEmitter(Arc<MockProjectionEmitter>);
 
     impl ProjectionPublisherPort for ArcEmitter {
-        fn publish_workspace_projection(&self, _workspace: &tabby_contracts::WorkspaceView) {}
+        fn publish_workspace_projection(&self, _workspace: &tabby_workspace::WorkspaceSession) {}
         fn publish_settings_projection(&self, _preferences: &UserPreferences) {}
         fn publish_runtime_status(&self, runtime: &tabby_runtime::PaneRuntime) {
             self.0.publish_runtime_status(runtime);
@@ -1184,11 +1184,8 @@ mod tests {
         let publisher = MockProjectionEmitter::default();
 
         // 1. publish_workspace_projection
-        let workspace_view = tabby_contracts::WorkspaceView {
-            tabs: vec![],
-            active_tab_id: String::new(),
-        };
-        publisher.publish_workspace_projection(&workspace_view);
+        let session = tabby_workspace::WorkspaceSession::default();
+        publisher.publish_workspace_projection(&session);
         assert_eq!(
             *publisher.workspace_calls.lock().expect("lock"),
             1,
@@ -1227,11 +1224,8 @@ mod tests {
         let publisher: Box<dyn ProjectionPublisherPort> =
             Box::new(MockProjectionEmitter::default());
 
-        let workspace_view = tabby_contracts::WorkspaceView {
-            tabs: vec![],
-            active_tab_id: String::new(),
-        };
-        publisher.publish_workspace_projection(&workspace_view);
+        let session = tabby_workspace::WorkspaceSession::default();
+        publisher.publish_workspace_projection(&session);
         publisher.publish_settings_projection(&tabby_settings::default_preferences());
 
         let runtime = tabby_runtime::PaneRuntime {

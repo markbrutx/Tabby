@@ -104,10 +104,10 @@ impl AppShell {
         let command = dto_mappers::workspace_command_from_dto(dto, default_layout);
         self.execute_workspace_command(command)?;
 
-        let view = self
-            .workspace_service
-            .with_session(dto_mappers::workspace_view_from_session)?;
-        self.publisher.publish_workspace_projection(&view);
+        let view = self.workspace_service.with_session(|session| {
+            self.publisher.publish_workspace_projection(session);
+            dto_mappers::workspace_view_from_session(session)
+        })?;
         Ok(view)
     }
 

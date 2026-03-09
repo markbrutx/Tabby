@@ -3,10 +3,10 @@ use tracing::warn;
 
 use tabby_contracts::{
     RuntimeStatusChangedEvent, SettingsProjectionUpdatedEvent, WorkspaceProjectionUpdatedEvent,
-    WorkspaceView,
 };
 use tabby_runtime::PaneRuntime;
 use tabby_settings::{built_in_profile_catalog, UserPreferences};
+use tabby_workspace::WorkspaceSession;
 
 use crate::application::ports::ProjectionPublisherPort;
 use crate::mapping::dto_mappers;
@@ -27,12 +27,11 @@ impl TauriProjectionPublisher {
 }
 
 impl ProjectionPublisherPort for TauriProjectionPublisher {
-    fn publish_workspace_projection(&self, workspace: &WorkspaceView) {
+    fn publish_workspace_projection(&self, workspace: &WorkspaceSession) {
+        let view = dto_mappers::workspace_view_from_session(workspace);
         if let Err(error) = self.app.emit(
             WORKSPACE_PROJECTION_UPDATED_EVENT,
-            WorkspaceProjectionUpdatedEvent {
-                workspace: workspace.clone(),
-            },
+            WorkspaceProjectionUpdatedEvent { workspace: view },
         ) {
             warn!(?error, "Failed to emit workspace projection update");
         }

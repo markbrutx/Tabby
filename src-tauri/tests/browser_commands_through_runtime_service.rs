@@ -45,8 +45,6 @@ mod mocks {
     use tabby_runtime::PaneRuntime;
     use tabby_settings::UserPreferences;
 
-    use tabby_contracts::WorkspaceView;
-
     // Re-use the parent module's BrowserCall
     use super::BrowserCall;
 
@@ -178,7 +176,7 @@ mod mocks {
     pub struct StubProjectionPublisher;
 
     impl ProjectionPublisherPort for StubProjectionPublisher {
-        fn publish_workspace_projection(&self, _workspace: &WorkspaceView) {}
+        fn publish_workspace_projection(&self, _workspace: &tabby_workspace::WorkspaceSession) {}
         fn publish_settings_projection(&self, _preferences: &UserPreferences) {}
         fn publish_runtime_status(&self, _runtime: &PaneRuntime) {}
     }

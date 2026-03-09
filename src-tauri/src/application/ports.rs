@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use tabby_contracts::WorkspaceView;
 use tabby_runtime::PaneRuntime;
 use tabby_settings::UserPreferences;
+use tabby_workspace::WorkspaceSession;
 
 use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use crate::shell::error::ShellError;
@@ -25,7 +25,7 @@ pub trait PreferencesRepository: Send + Sync + std::fmt::Debug {
 /// from any specific event transport (e.g., Tauri `app.emit`).
 pub trait ProjectionPublisherPort: Send + Sync + std::fmt::Debug {
     /// Publish a workspace projection update to the frontend.
-    fn publish_workspace_projection(&self, workspace: &WorkspaceView);
+    fn publish_workspace_projection(&self, workspace: &WorkspaceSession);
 
     /// Publish a settings projection update to the frontend.
     fn publish_settings_projection(&self, preferences: &UserPreferences);

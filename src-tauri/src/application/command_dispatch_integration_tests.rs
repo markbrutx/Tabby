@@ -141,7 +141,7 @@ mod tests {
     }
 
     impl ProjectionPublisherPort for MockEmitter {
-        fn publish_workspace_projection(&self, _workspace: &tabby_contracts::WorkspaceView) {}
+        fn publish_workspace_projection(&self, _workspace: &tabby_workspace::WorkspaceSession) {}
         fn publish_settings_projection(&self, _preferences: &UserPreferences) {}
         fn publish_runtime_status(&self, runtime: &tabby_runtime::PaneRuntime) {
             if let Ok(mut statuses) = self.runtime_statuses.lock() {
@@ -246,7 +246,7 @@ mod tests {
     struct ArcEmitter(Arc<MockEmitter>);
 
     impl ProjectionPublisherPort for ArcEmitter {
-        fn publish_workspace_projection(&self, w: &tabby_contracts::WorkspaceView) {
+        fn publish_workspace_projection(&self, w: &tabby_workspace::WorkspaceSession) {
             self.0.publish_workspace_projection(w);
         }
         fn publish_settings_projection(&self, p: &UserPreferences) {
