@@ -1,5 +1,38 @@
 # Progress Log
 
+## [2026-03-10 01:00] - DDD-016: Comprehensive arch tests for all 7 violations
+Thread:
+Run: 20260310-000917-71928 (iteration 10)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-10.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-10.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: ff5698d test: comprehensive arch tests for all 7 DDD violations (DDD-016)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (all tests including 5 arch + 5 browser-cmd integration)
+- Files changed:
+  - src-tauri/tests/arch_ddd_violations.rs (created — consolidated arch test file with 5 tests)
+  - src-tauri/tests/arch_domain_crate_dependencies.rs (deleted — consolidated into arch_ddd_violations.rs)
+- What was implemented:
+  - Created single comprehensive arch test file guarding all 7 DDD violations
+  - Test 1: domain crates must not depend on tabby-contracts (parses Cargo.toml, extends DDD-004)
+  - Test 2: no SettingsApplicationService reference in runtime_service.rs (DDD-008)
+  - Test 3: ProjectionPublisherPort must not reference WorkspaceView DTO (DDD-009, scoped to trait block)
+  - Test 4: commands/ directory must not reference browser surface infra directly (DDD-005/007)
+  - Test 5: helper unit test for TOML dependency parser
+  - Consolidated from old standalone arch_domain_crate_dependencies.rs into single file
+- **Learnings for future iterations:**
+  - clippy prefers `is_none_or` over `map_or(true, ...)` on Option — use idiomatic Rust 1.94+ patterns
+  - Scoping assertions to trait blocks (brace-counting) prevents false positives from unrelated code in the same file
+  - Consolidating arch tests into one file makes regression checking easier to maintain
+---
+
 ## [2026-03-10 00:55] - DDD-015: CommandTemplate VO and typed browser_location/terminal_cwd
 Thread:
 Run: 20260310-000917-71928 (iteration 9)
