@@ -113,5 +113,34 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-it
   - rustfmt reformatted multi-line unwrap_or_else closures — always run fmt before committing
 ---
 
+## [2026-03-09 07:51] - DDD-005: Route browser surface commands through RuntimeApplicationService
+Thread:
+Run: 20260309-073631-33953 (iteration 5)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-iter-5.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260309-073631-33953-iter-5.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 5bfcd24 refactor: route browser surface commands through RuntimeApplicationService (DDD-005)
+- Post-commit status: clean
+- Verification:
+  - Command: `bun run lint` -> PASS
+  - Command: `bun run typecheck` -> PASS
+  - Command: `bun run test` -> PASS (19 files, 203 tests)
+  - Command: `cargo fmt --all --check` -> PASS
+  - Command: `cargo clippy --workspace --all-targets --all-features -- -D warnings` -> PASS
+  - Command: `cargo test --workspace` -> PASS (303 tests: 172 app-lib + 2 arch + 0 contracts + 29 kernel + 11 runtime + 35 settings + 53 workspace)
+- Files changed:
+  - src-tauri/src/commands/shell.rs (dispatch_browser_surface_command now routes through AppShell state instead of direct infra call)
+  - src-tauri/src/shell/mod.rs (added dispatch_browser_surface_command delegating to RuntimeApplicationService)
+  - src-tauri/src/application/runtime_service.rs (added dispatch_browser_surface_command dispatching to BrowserSurfacePort)
+  - src-tauri/src/application/ports.rs (removed #[allow(dead_code)] and stale doc comment from BrowserSurfacePort)
+  - src-tauri/src/infrastructure/tauri_browser_surface_adapter.rs (removed #[allow(dead_code)] from bounds_dto helper)
+- Browser surface commands now flow: Tauri command → AppShell → RuntimeApplicationService → BrowserSurfacePort. RuntimeApplicationService is the single owner of all runtime lifecycle operations (terminal and browser).
+- **Learnings for future iterations:**
+  - The TauriBrowserSurfaceAdapter already implements BrowserSurfacePort and gets the window from AppHandle internally — no need to pass window from the command handler
+  - Removing #[allow(dead_code)] from a trait definition also activates warnings on unused items in implementations — check adapter too
+  - The command handler signature changed from taking `window: tauri::Window` to `state: State<'_, Arc<AppShell>>` — Tauri injects both automatically
+---
+
 ## Codebase Patterns
 - (add reusable patterns here)
