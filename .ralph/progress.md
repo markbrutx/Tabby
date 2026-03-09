@@ -1,5 +1,40 @@
 # Progress Log
 
+## 2026-03-09 01:50 - US-031: Add Rust integration test for full command-to-side-effect dispatch
+Thread:
+Run: 20260308-215923-84117 (iteration 32)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-32.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-32.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: a72215e test: add Rust integration test for full command-to-side-effect dispatch (US-031)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests, 19 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (300 tests: 172 app + 29 contracts + 11 runtime + 35 settings + 53 workspace)
+- Files changed:
+  - src-tauri/src/application/command_dispatch_integration_tests.rs (new — 9 integration tests)
+  - src-tauri/src/application/mod.rs (registered new test module)
+  - .ralph/test-strategy.md (new — test approach documentation)
+- What was implemented:
+  - AC#1: DispatchHarness wires real WorkspaceApplicationService, SettingsApplicationService, RuntimeApplicationService with mock ports
+  - AC#2: 4 tests exercise open_tab → PaneAdded → RuntimeCoordinator → spawn (single, multiple, browser, mixed)
+  - AC#3: 3 tests exercise close_pane/close_tab → PaneRemoved → RuntimeCoordinator → kill/close_surface
+  - AC#4: 1 test exercises replace_pane_spec → PaneContentChanged → stop old + start new
+  - AC#5: 1 full lifecycle test covering open → close pane → open second tab → close tabs with argument and call count assertions
+  - AC#6: All ports mocked (TerminalProcessPort, BrowserSurfacePort, ProjectionPublisherPort, PreferencesRepository)
+  - AC#7: Test strategy documented in .ralph/test-strategy.md
+  - AC#8: All quality gates pass
+- **Learnings for future iterations:**
+  - The DispatchHarness pattern (wiring all 3 real services with mock ports) enables end-to-end backend tests without Tauri
+  - cargo fmt must be run before checking — formatting differences in test files are common with multi-line assertions
+  - .ralph/ is gitignored but progress.md is tracked; new files need `git add -f`
+---
+
 ## 2026-03-09 01:40 - US-030: Add frontend mapper boundary and app coordinator tests
 Thread:
 Run: 20260308-215923-84117 (iteration 31)

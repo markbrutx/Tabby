@@ -47,12 +47,12 @@ export interface AppShellClients {
   runtime: RuntimeClient;
 }
 
-export const WORKSPACE_PROJECTION_UPDATED_EVENT = "workspace_projection_updated";
-export const SETTINGS_PROJECTION_UPDATED_EVENT = "settings_projection_updated";
-export const RUNTIME_STATUS_CHANGED_EVENT = "runtime_status_changed";
-export const TERMINAL_OUTPUT_RECEIVED_EVENT = "terminal_output_received";
+const WORKSPACE_PROJECTION_UPDATED_EVENT = "workspace_projection_updated";
+const SETTINGS_PROJECTION_UPDATED_EVENT = "settings_projection_updated";
+const RUNTIME_STATUS_CHANGED_EVENT = "runtime_status_changed";
+const TERMINAL_OUTPUT_RECEIVED_EVENT = "terminal_output_received";
 
-export function unwrapResult<T>(result: Result<T, unknown>): T {
+function unwrapResult<T>(result: Result<T, unknown>): T {
   if (result.status === "ok") {
     return result.data;
   }

@@ -34,7 +34,7 @@ export interface AppBootstrapCoordinatorDeps {
   runtimeStore: BootstrapableRuntimeStore;
 }
 
-export interface AppBootstrapCoordinator {
+interface AppBootstrapCoordinator {
   initialize: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
 }

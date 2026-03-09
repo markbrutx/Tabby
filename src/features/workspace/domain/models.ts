@@ -22,8 +22,6 @@ export type SplitNode =
       second: SplitNode;
     };
 
-export type LayoutPreset = "1x1" | "1x2" | "2x2" | "2x3" | "3x3";
-
 // ---------------------------------------------------------------------------
 // Pane specification (what a pane _should_ run)
 // ---------------------------------------------------------------------------
