@@ -22,7 +22,6 @@ impl TauriBrowserSurfaceAdapter {
             .ok_or_else(|| ShellError::NotFound(String::from("main window")))
     }
 
-    #[allow(dead_code)]
     fn bounds_dto(x: f64, y: f64, width: f64, height: f64) -> BrowserSurfaceBoundsDto {
         BrowserSurfaceBoundsDto {
             x,

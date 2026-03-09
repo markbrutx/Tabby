@@ -7,8 +7,8 @@ use std::sync::Arc;
 use tauri::AppHandle;
 
 use tabby_contracts::{
-    RuntimeCommandDto, SettingsCommandDto, SettingsView, WorkspaceBootstrapView,
-    WorkspaceCommandDto, WorkspaceView,
+    BrowserSurfaceCommandDto, RuntimeCommandDto, SettingsCommandDto, SettingsView,
+    WorkspaceBootstrapView, WorkspaceCommandDto, WorkspaceView,
 };
 use tabby_settings::{built_in_profile_catalog, default_preferences};
 use tabby_workspace::layout::LayoutPreset;
@@ -148,6 +148,14 @@ impl AppShell {
             }
         }
         Ok(())
+    }
+
+    pub fn dispatch_browser_surface_command(
+        &self,
+        command: BrowserSurfaceCommandDto,
+    ) -> Result<(), ShellError> {
+        self.runtime_service
+            .dispatch_browser_surface_command(command)
     }
 
     pub fn handle_browser_location_observation(

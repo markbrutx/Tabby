@@ -7,7 +7,6 @@ use tabby_contracts::{
     WorkspaceBootstrapView, WorkspaceCommandDto, WorkspaceView,
 };
 
-use crate::shell::browser_surface::execute_browser_surface_command;
 use crate::shell::error::ShellError;
 use crate::shell::AppShell;
 
@@ -49,8 +48,8 @@ pub fn dispatch_runtime_command(
 #[tauri::command]
 #[specta::specta]
 pub fn dispatch_browser_surface_command(
-    window: tauri::Window,
+    state: State<'_, Arc<AppShell>>,
     command: BrowserSurfaceCommandDto,
 ) -> Result<(), ShellError> {
-    execute_browser_surface_command(&window, command)
+    state.dispatch_browser_surface_command(command)
 }

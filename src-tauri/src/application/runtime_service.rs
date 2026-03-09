@@ -2,6 +2,8 @@ use std::sync::Mutex;
 
 use tracing::warn;
 
+use tabby_contracts::BrowserSurfaceCommandDto;
+
 use crate::application::commands::RuntimeCommand;
 use crate::application::ports::{BrowserSurfacePort, ProjectionPublisherPort, TerminalProcessPort};
 use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
@@ -172,6 +174,48 @@ impl RuntimeApplicationService {
             }
         }
 
+        Ok(())
+    }
+
+    /// Dispatch a browser surface command through the `BrowserSurfacePort`.
+    ///
+    /// This keeps `RuntimeApplicationService` as the single owner of all
+    /// runtime lifecycle operations, including browser surface management.
+    pub fn dispatch_browser_surface_command(
+        &self,
+        command: BrowserSurfaceCommandDto,
+    ) -> Result<(), ShellError> {
+        match command {
+            BrowserSurfaceCommandDto::Ensure {
+                pane_id,
+                url,
+                bounds,
+            } => {
+                self.browser_port.ensure_surface(
+                    &pane_id,
+                    &url,
+                    bounds.x,
+                    bounds.y,
+                    bounds.width,
+                    bounds.height,
+                )?;
+            }
+            BrowserSurfaceCommandDto::SetBounds { pane_id, bounds } => {
+                self.browser_port.set_bounds(
+                    &pane_id,
+                    bounds.x,
+                    bounds.y,
+                    bounds.width,
+                    bounds.height,
+                )?;
+            }
+            BrowserSurfaceCommandDto::SetVisible { pane_id, visible } => {
+                self.browser_port.set_visible(&pane_id, visible)?;
+            }
+            BrowserSurfaceCommandDto::Close { pane_id } => {
+                self.browser_port.close_surface(&pane_id)?;
+            }
+        }
         Ok(())
     }
 

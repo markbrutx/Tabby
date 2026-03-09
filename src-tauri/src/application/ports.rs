@@ -63,10 +63,6 @@ pub trait TerminalProcessPort: Send + Sync + std::fmt::Debug {
 /// Infrastructure adapters implement this trait to decouple
 /// `RuntimeApplicationService` from any specific webview backend.
 ///
-/// Some methods (`ensure_surface`, `set_bounds`, `set_visible`) are not yet
-/// called from application code — they will be wired in a future story when
-/// the browser surface command handler is routed through RuntimeApplicationService.
-#[allow(dead_code)]
 pub trait BrowserSurfacePort: Send + Sync + std::fmt::Debug {
     /// Ensure a browser surface exists for the given pane, creating it if needed.
     fn ensure_surface(
