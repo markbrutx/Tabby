@@ -1,5 +1,44 @@
 # Progress Log
 
+## [2026-03-10 00:45] - DDD-014: LayoutPreset enum in tabby-kernel replaces stringly-typed default_layout
+Thread:
+Run: 20260310-000917-71928 (iteration 8)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-8.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-8.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: af4b004 refactor: LayoutPreset enum in tabby-kernel replaces stringly-typed default_layout (DDD-014)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (314 tests: 172 app-lib + 2 arch + 5 browser-cmd + 35 kernel + 11 runtime + 36 settings + 53 workspace)
+- Files changed:
+  - src-tauri/crates/tabby-kernel/src/lib.rs (export LayoutPreset)
+  - src-tauri/crates/tabby-kernel/src/value_objects.rs (added LayoutPreset enum with parse, as_str, pane_count, Display, Default + 7 tests)
+  - src-tauri/crates/tabby-settings/src/lib.rs (UserPreferences.default_layout: String → LayoutPreset, removed DEFAULT_LAYOUT_PRESET, is_known_layout_preset, string validation)
+  - src-tauri/crates/tabby-settings/src/persistence.rs (String↔LayoutPreset conversion at persistence boundary, backward compat for unknown values)
+  - src-tauri/crates/tabby-workspace/src/layout.rs (re-export LayoutPreset from tabby-kernel instead of defining own)
+  - src-tauri/src/application/bootstrap_service.rs (simplified — no more LayoutPreset::parse on preferences)
+  - src-tauri/src/mapping/dto_mappers.rs (direct enum mapping, removed layout_preset_to_string helper)
+  - src-tauri/src/shell/mod.rs (simplified resolve_default_layout — direct field access)
+- What was implemented:
+  - Created LayoutPreset enum in tabby-kernel with all 5 variants (OneByOne, OneByTwo, TwoByTwo, TwoByThree, ThreeByThree)
+  - Changed UserPreferences.default_layout from String to LayoutPreset — compile-time validation
+  - Persistence layer (PersistedPreferences) keeps String on disk for backward compatibility, converts via parse/as_str
+  - Unknown persisted layout values gracefully fall back to LayoutPreset::default() (OneByOne)
+  - Removed all stringly-typed layout validation: is_known_layout_preset(), DEFAULT_LAYOUT_PRESET constant, LayoutPreset::parse calls at usage sites
+  - tabby-workspace re-exports LayoutPreset from tabby-kernel (canonical definition in shared kernel)
+- **Learnings for future iterations:**
+  - When adding Default derive to an enum, use `#[default]` attribute on the variant — clippy rejects manual Default impl for derivable cases
+  - clippy::unwrap_or_default catches `.unwrap_or(T::default())` patterns — use `.unwrap_or_default()`
+  - Persistence boundary is the right place for String↔enum conversion — domain stays typed, disk format stays stable
+  - LayoutPreset::parse now returns ValueObjectError (from tabby-kernel) instead of LayoutError (from tabby-workspace), but .to_string() works for both at error mapping sites
+---
+
 ## [2026-03-10 00:35] - DDD-013: RuntimeStore.loadBootstrap accepts RuntimeReadModel[] not DTO
 Thread:
 Run: 20260310-000917-71928 (iteration 7)
