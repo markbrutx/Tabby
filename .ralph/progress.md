@@ -1,5 +1,39 @@
 # Progress Log
 
+## 2026-03-09 01:40 - US-030: Add frontend mapper boundary and app coordinator tests
+Thread:
+Run: 20260308-215923-84117 (iteration 31)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-31.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260308-215923-84117-iter-31.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: dc76641 test: add frontend mapper boundary and app coordinator tests (US-030)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests, 19 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (290 tests: 162 app + 29 contracts + 11 runtime + 35 settings + 53 workspace)
+- Files changed:
+  - src/app-shell/acl-boundary.test.ts (new — 3 compile-time type assertions + runtime checks)
+  - src/app-shell/AppBootstrapCoordinator.test.ts (3 new integration tests with real settings store)
+  - src/features/runtime/application/snapshot-mappers.test.ts (10 new tests: 8 exhaustive status×kind + 2 nullable edge cases)
+- What was implemented:
+  - AC#1: RuntimeSnapshotMapper tested for all 8 status×kind combinations (4 statuses × 2 kinds) plus nullable edge cases
+  - AC#2: AppBootstrapCoordinator distribution already covered by 6 existing tests; verified complete
+  - AC#3: Each feature store isolation already verified by existing "isolation" describe blocks in all 3 store test files
+  - AC#4: New acl-boundary.test.ts with compile-time type assertions (Exact<T,U> pattern) verifying store state uses ReadModel types, not DTO types; also verifies PaneSpec differs from PaneSpecDto structurally
+  - AC#5: 3 integration tests wiring coordinator with real createSettingsStore — completeOnboarding updates state, idempotency, full bootstrap→onboarding end-to-end flow
+  - Total new tests: 16 (203 total, up from 187)
+- **Learnings for future iterations:**
+  - Many ACs were already partially covered by existing tests from prior stories (US-024 established mapper tests, store tests, coordinator tests)
+  - TypeScript compile-time type assertions using `Exact<T,U>` pattern work well for verifying ACL boundary integrity
+  - Integration tests with real Zustand stores (not mocks) are straightforward — just inject a mock client into createSettingsStore
+  - The runtime mapper is a simple pass-through (field names match), so exhaustive testing is about completeness not complexity
+---
+
 ## 2026-03-09 01:35 - US-029: Add backend runtime lifecycle integration tests
 Thread:
 Run: 20260308-215923-84117 (iteration 30)

@@ -1,4 +1,6 @@
 mod bootstrap_service;
+#[cfg(test)]
+mod command_dispatch_integration_tests;
 pub mod commands;
 pub mod ports;
 mod runtime_coordinator;
