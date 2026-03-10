@@ -1,5 +1,37 @@
 # Progress Log
 
+## 2026-03-10 10:05 - GIT-022: Update DTO mappers for Git pane spec and runtime
+Thread:
+Run: 20260310-012951-93839 (iteration 24)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-24.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-24.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: d3a664d feat: add unit tests for Git DTO mapper paths (GIT-022)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (563 tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/src/mapping/dto_mappers.rs (added 8 Git-specific unit tests)
+- All 7 acceptance criteria verified:
+  - pane_spec_from_dto handles PaneSpecDto::Git -> PaneSpec::Git (already implemented, line 222-224)
+  - pane_content_to_spec_dto handles PaneContentDefinition::Git -> PaneSpecDto::Git (already implemented, line 136-140)
+  - pane_runtime_to_view maps git_repo_path to PaneRuntimeView for Git runtimes (already implemented, line 179-182)
+  - runtime_kind_to_dto maps RuntimeKind::Git correctly (already implemented, line 727)
+  - Bootstrap view generation includes Git pane data correctly (already implemented, line 186-198)
+  - Unit tests for all new mapper paths: added 8 tests (git_pane_spec_round_trips_through_dto, pane_spec_from_dto_git_maps_working_directory, pane_content_to_spec_dto_maps_git_content, pane_runtime_to_view_maps_git_with_repo_path, pane_runtime_to_view_maps_git_without_repo_path, runtime_kind_to_dto_maps_git, bootstrap_view_includes_git_runtime_projections)
+  - All existing mapper tests still pass
+- **Learnings for future iterations:**
+  - GIT-022 mapper implementations were already done across GIT-005, GIT-007, GIT-011 — the main work was adding dedicated test coverage
+  - PaneContentDefinition::git() constructor requires a PaneContentId as first argument
+  - When a story's implementation is spread across prior stories, focus on verification and test gaps
+---
+
 ## 2026-03-10 10:01 - GIT-021: Add dispatch_git_command IPC handler and regenerate bindings
 Thread:
 Run: 20260310-012951-93839 (iteration 23)

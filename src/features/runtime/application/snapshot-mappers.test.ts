@@ -109,7 +109,7 @@ describe("mapRuntimeFromDto", () => {
   // AC1: Exhaustive status × kind field combinations
   describe("all status × kind combinations", () => {
     const statuses = ["starting", "running", "exited", "failed"] as const;
-    const kinds = ["terminal", "browser"] as const;
+    const kinds = ["terminal", "browser", "git"] as const;
 
     for (const status of statuses) {
       for (const kind of kinds) {
@@ -120,6 +120,7 @@ describe("mapRuntimeFromDto", () => {
             status,
             browserLocation: kind === "browser" ? "https://example.com" : null,
             terminalCwd: kind === "terminal" ? "/home/user" : null,
+            gitRepoPath: kind === "git" ? "/home/user/repo" : null,
             lastError: status === "failed" ? "spawn error" : null,
             runtimeSessionId: status === "starting" ? null : `session-${kind}-${status}`,
           });
@@ -134,6 +135,9 @@ describe("mapRuntimeFromDto", () => {
           );
           expect(result.terminalCwd).toBe(
             kind === "terminal" ? "/home/user" : null,
+          );
+          expect(result.gitRepoPath).toBe(
+            kind === "git" ? "/home/user/repo" : null,
           );
           expect(result.lastError).toBe(
             status === "failed" ? "spawn error" : null,
