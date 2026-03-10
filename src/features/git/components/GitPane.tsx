@@ -8,6 +8,7 @@ import {
   type GitPaneState,
 } from "@/features/git/application/useGitPaneStore";
 import { FileTreePanel } from "./FileTreePanel";
+import { DiffViewer } from "./DiffViewer";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -161,33 +162,10 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
         {/* Center — diff content */}
         <div className="flex min-w-0 flex-1 flex-col">
           <div
-            className="flex-1 overflow-auto p-3"
+            className="min-h-0 flex-1"
             data-testid="git-diff-area"
           >
-            {diffContent ? (
-              <pre className="font-mono text-xs leading-5 text-[var(--color-text)]">
-                {diffContent.hunks.map((hunk) =>
-                  hunk.lines.map((line, idx) => (
-                    <div
-                      key={`${hunk.header}-${idx}`}
-                      className={
-                        line.kind === "addition"
-                          ? "bg-green-900/20 text-green-300"
-                          : line.kind === "deletion"
-                            ? "bg-red-900/20 text-red-300"
-                            : ""
-                      }
-                    >
-                      {line.content}
-                    </div>
-                  )),
-                )}
-              </pre>
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-[var(--color-text-soft)]">
-                Select a file to view diff
-              </div>
-            )}
+            <DiffViewer diffContent={diffContent} />
           </div>
 
           {/* Bottom — commit area */}
