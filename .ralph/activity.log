@@ -1,6 +1,7 @@
 # Activity Log
 
 ## Run Summary
+- 2026-03-10 00:59:15 | run=20260310-000917-71928 | iter=10 | mode=build | story=DDD-016 | duration=132s | status=success
 - 2026-03-10 00:57:01 | run=20260310-000917-71928 | iter=9 | mode=build | story=DDD-015 | duration=861s | status=success
 - 2026-03-10 00:42:37 | run=20260310-000917-71928 | iter=8 | mode=build | story=DDD-014 | duration=438s | status=success
 - 2026-03-10 00:35:17 | run=20260310-000917-71928 | iter=7 | mode=build | story=DDD-013 | duration=250s | status=success
@@ -275,3 +276,7 @@
 [2026-03-10 00:57:01] ITERATION 9 end (duration=861s)
 [2026-03-10 00:57:03] ITERATION 10 start (mode=build story=DDD-016)
 [2026-03-10 00:57:17] DDD-016: Starting work on comprehensive arch tests for all 7 violations
+[2026-03-10 00:59:06] DDD-016: All arch tests pass, committed, progress log updated
+[2026-03-10 00:59:15] ITERATION 10 end (duration=132s)
+[2026-03-10 00:59:18] ITERATION 11 start (mode=build story=DDD-017)
+[2026-03-10 00:59:33] DDD-017: Starting work — clean tabby-contracts value_objects.rs to re-exports only
