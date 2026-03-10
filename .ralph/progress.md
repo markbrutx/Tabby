@@ -1,5 +1,44 @@
 # Progress Log
 
+## 2026-03-10 09:30 - GIT-016: Implement diff parsing (unified format)
+Thread:
+Run: 20260310-012951-93839 (iteration 18)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-18.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-18.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: cedb373 feat: implement diff parsing with unified format (GIT-016)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (264 Rust tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/src/infrastructure/cli_git_adapter.rs
+- What was implemented:
+  - Implemented diff() method in CliGitAdapter calling `git diff --find-renames` (unstaged) or `git diff --staged --find-renames` (staged)
+  - Created parse_unified_diff() function parsing full unified diff output into Vec<DiffContent>
+  - Helper functions: extract_diff_git_path, parse_hunk_at, parse_hunk_header, parse_range
+  - Parses: diff headers (--- a/file, +++ b/file), hunk headers (@@ -start,count +start,count @@), context/addition/deletion lines
+  - Correctly assigns old_line_no and new_line_no to each DiffLine
+  - Detects binary files (Binary files ... differ)
+  - Handles rename detection (rename from/rename to extended headers)
+  - Handles empty diff (no changes) returning empty vec
+  - Handles new file (all additions from /dev/null) and deleted file (all deletions to /dev/null)
+  - Handles file mode changes (old mode/new mode)
+  - Handles "No newline at end of file" marker
+  - Handles hunk count omission (defaults to 1)
+  - 13 unit tests: empty, whitespace-only, single-hunk, multi-hunk, binary, new file, deleted file, rename, multiple files, hunk without count, hunk with context text, no-newline marker, file mode change
+- **Learnings for future iterations:**
+  - Unified diff "diff --git a/path b/path" line uses `rfind(" b/")` to extract the new path reliably
+  - Hunk count can be omitted (e.g., `@@ -1 +1 @@`) meaning count=1; parse_range handles this
+  - `\\ No newline at end of file` is a literal line in the diff that must be skipped during parsing
+  - Extended headers (rename from/to, old/new mode, similarity index) appear between the diff header and the --- line
+---
+
 ## 2026-03-10 09:25 - GIT-015: Implement git status parsing (porcelain v2)
 Thread:
 Run: 20260310-012951-93839 (iteration 17)

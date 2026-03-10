@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use tabby_git::value_objects::{BranchName, RemoteName, StashId};
+use tabby_git::value_objects::{BranchName, CommitHash, RemoteName, StashId};
 use tabby_git::{
     BlameEntry, BranchInfo, CommitInfo, DiffContent, DiffHunk, DiffLine, DiffLineKind, FileStatus,
     FileStatusKind, GitRepositoryState, StashEntry,
@@ -385,6 +385,201 @@ fn parse_range(range: &str) -> Option<(u32, u32)> {
     }
 }
 
+/// Filter a unified diff to only include changes within the specified new-file line ranges.
+///
+/// Keeps context lines and only includes additions/deletions whose new-file line numbers
+/// fall within one of the given `(start, end)` ranges (inclusive).
+/// Returns a valid unified diff patch suitable for `git apply --cached`.
+fn filter_diff_to_line_ranges(diff_output: &str, line_ranges: &[(u32, u32)]) -> String {
+    let lines: Vec<&str> = diff_output.lines().collect();
+    let mut result = String::new();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+
+        // Pass through diff header lines
+        if line.starts_with("diff --git ")
+            || line.starts_with("index ")
+            || line.starts_with("--- ")
+            || line.starts_with("+++ ")
+            || line.starts_with("new file ")
+            || line.starts_with("deleted file ")
+            || line.starts_with("old mode ")
+            || line.starts_with("new mode ")
+            || line.starts_with("similarity index ")
+            || line.starts_with("rename from ")
+            || line.starts_with("rename to ")
+        {
+            result.push_str(line);
+            result.push('\n');
+            i += 1;
+            continue;
+        }
+
+        // Parse hunk headers and filter their content
+        if line.starts_with("@@ ") {
+            if let Some((old_start, _old_count, new_start, _new_count)) = parse_hunk_header(line) {
+                // Collect all lines in this hunk
+                let mut hunk_lines: Vec<&str> = Vec::new();
+                let mut old_line = old_start;
+                let mut new_line = new_start;
+
+                // Track which hunk lines to keep (true = keep as-is, false = convert to context)
+                let mut keep_flags: Vec<bool> = Vec::new();
+                let mut line_numbers: Vec<(u32, u32)> = Vec::new(); // (old_line, new_line) at each position
+
+                i += 1;
+                while i < lines.len() {
+                    let hline = lines[i];
+                    if hline.starts_with("diff --git ") || hline.starts_with("@@ ") {
+                        break;
+                    }
+
+                    if hline.starts_with('+') {
+                        let in_range = line_ranges
+                            .iter()
+                            .any(|&(start, end)| new_line >= start && new_line <= end);
+                        keep_flags.push(in_range);
+                        line_numbers.push((old_line, new_line));
+                        hunk_lines.push(hline);
+                        new_line += 1;
+                    } else if hline.starts_with('-') {
+                        // For deletions, check if the old line number's corresponding new
+                        // position falls in range
+                        let in_range = line_ranges
+                            .iter()
+                            .any(|&(start, end)| old_line >= start && old_line <= end);
+                        keep_flags.push(in_range);
+                        line_numbers.push((old_line, new_line));
+                        hunk_lines.push(hline);
+                        old_line += 1;
+                    } else if hline.starts_with(' ') {
+                        keep_flags.push(true); // context always kept
+                        line_numbers.push((old_line, new_line));
+                        hunk_lines.push(hline);
+                        old_line += 1;
+                        new_line += 1;
+                    } else if hline == "\\ No newline at end of file" {
+                        keep_flags.push(true);
+                        line_numbers.push((old_line, new_line));
+                        hunk_lines.push(hline);
+                    } else {
+                        break;
+                    }
+                    i += 1;
+                }
+
+                // Check if any non-context lines are kept
+                let has_changes = hunk_lines
+                    .iter()
+                    .zip(keep_flags.iter())
+                    .any(|(l, &keep)| keep && (l.starts_with('+') || l.starts_with('-')));
+
+                if !has_changes {
+                    continue;
+                }
+
+                // Build filtered hunk: convert excluded changes to context lines
+                let mut filtered: Vec<String> = Vec::new();
+                let mut new_old_count: u32 = 0;
+                let mut new_new_count: u32 = 0;
+
+                for (hline, &keep) in hunk_lines.iter().zip(keep_flags.iter()) {
+                    if hline.starts_with('+') {
+                        if keep {
+                            filtered.push(hline.to_string());
+                            new_new_count += 1;
+                        }
+                        // Excluded additions are simply dropped
+                    } else if let Some(content) = hline.strip_prefix('-') {
+                        if keep {
+                            filtered.push(hline.to_string());
+                            new_old_count += 1;
+                        } else {
+                            // Convert excluded deletion to context
+                            filtered.push(format!(" {content}"));
+                            new_old_count += 1;
+                            new_new_count += 1;
+                        }
+                    } else if hline.starts_with(' ') {
+                        filtered.push(hline.to_string());
+                        new_old_count += 1;
+                        new_new_count += 1;
+                    } else if *hline == "\\ No newline at end of file" {
+                        filtered.push(hline.to_string());
+                    }
+                }
+
+                result.push_str(&format!(
+                    "@@ -{},{} +{},{} @@\n",
+                    old_start, new_old_count, new_start, new_new_count
+                ));
+                for fl in &filtered {
+                    result.push_str(fl);
+                    result.push('\n');
+                }
+            } else {
+                i += 1;
+            }
+            continue;
+        }
+
+        i += 1;
+    }
+
+    result
+}
+
+/// Parse the output of `git show -s --format=%H%n%h%n%an%n%ae%n%aI%n%P%n%s HEAD`
+/// into a `CommitInfo`.
+fn parse_commit_show_output(
+    show_output: &str,
+    _commit_output: &str,
+) -> Result<CommitInfo, ShellError> {
+    let lines: Vec<&str> = show_output.lines().collect();
+    if lines.len() < 7 {
+        return Err(ShellError::Io(format!(
+            "unexpected git show output (expected 7 lines, got {}): {}",
+            lines.len(),
+            show_output
+        )));
+    }
+
+    let full_hash = lines[0].trim();
+    let short_hash = lines[1].trim();
+    let author_name = lines[2].trim();
+    let author_email = lines[3].trim();
+    let date = lines[4].trim();
+    let parent_line = lines[5].trim();
+    let subject = lines[6].trim();
+
+    let hash = CommitHash::try_new(full_hash)
+        .map_err(|e| ShellError::Io(format!("failed to parse commit hash '{full_hash}': {e}")))?;
+
+    let parent_hashes: Vec<CommitHash> = if parent_line.is_empty() {
+        Vec::new()
+    } else {
+        parent_line
+            .split(' ')
+            .map(|h| {
+                CommitHash::try_new(h.trim())
+                    .map_err(|e| ShellError::Io(format!("failed to parse parent hash '{h}': {e}")))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+
+    Ok(CommitInfo::new(
+        hash,
+        short_hash.to_string(),
+        author_name.to_string(),
+        author_email.to_string(),
+        date.to_string(),
+        subject.to_string(),
+        parent_hashes,
+    ))
+}
+
 impl GitOperationsPort for CliGitAdapter {
     fn status(&self, repo_path: &Path) -> Result<Vec<FileStatus>, ShellError> {
         let output = self.run_git(repo_path, &["status", "--porcelain=v2"])?;
@@ -400,25 +595,116 @@ impl GitOperationsPort for CliGitAdapter {
         Ok(parse_unified_diff(&output))
     }
 
-    fn stage(&self, _repo_path: &Path, _paths: &[&str]) -> Result<(), ShellError> {
-        todo!("GIT-014: stage will be implemented in a follow-up story")
+    fn stage(&self, repo_path: &Path, paths: &[&str]) -> Result<(), ShellError> {
+        if paths.is_empty() {
+            return Err(ShellError::Validation(
+                "stage requires at least one path".to_string(),
+            ));
+        }
+        let mut args = vec!["add", "--"];
+        args.extend(paths);
+        self.run_git(repo_path, &args)?;
+        Ok(())
     }
 
-    fn unstage(&self, _repo_path: &Path, _paths: &[&str]) -> Result<(), ShellError> {
-        todo!("GIT-014: unstage will be implemented in a follow-up story")
+    fn unstage(&self, repo_path: &Path, paths: &[&str]) -> Result<(), ShellError> {
+        if paths.is_empty() {
+            return Err(ShellError::Validation(
+                "unstage requires at least one path".to_string(),
+            ));
+        }
+        let mut args = vec!["restore", "--staged", "--"];
+        args.extend(paths);
+        self.run_git(repo_path, &args)?;
+        Ok(())
     }
 
     fn stage_lines(
         &self,
-        _repo_path: &Path,
-        _file_path: &str,
-        _line_ranges: &[(u32, u32)],
+        repo_path: &Path,
+        file_path: &str,
+        line_ranges: &[(u32, u32)],
     ) -> Result<(), ShellError> {
-        todo!("GIT-014: stage_lines will be implemented in a follow-up story")
+        if line_ranges.is_empty() {
+            return Err(ShellError::Validation(
+                "stage_lines requires at least one line range".to_string(),
+            ));
+        }
+
+        // Get the unstaged diff for the file to extract relevant hunks
+        let diff_output = self.run_git(repo_path, &["diff", "--", file_path])?;
+        if diff_output.trim().is_empty() {
+            return Err(ShellError::Validation(format!(
+                "no unstaged changes found for {file_path}"
+            )));
+        }
+
+        // Filter the diff to only include lines within the requested ranges,
+        // then apply the filtered patch to the index.
+        let filtered_patch = filter_diff_to_line_ranges(&diff_output, line_ranges);
+        if filtered_patch.is_empty() {
+            return Err(ShellError::Validation(
+                "no matching lines found in diff for the given ranges".to_string(),
+            ));
+        }
+
+        // Apply the filtered patch to the index via stdin
+        let output = Command::new("git")
+            .args(["apply", "--cached", "--allow-empty", "-"])
+            .current_dir(repo_path)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| ShellError::Io(format!("failed to spawn git apply: {e}")))?;
+
+        use std::io::Write;
+        let mut child = output;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(filtered_patch.as_bytes())
+                .map_err(|e| ShellError::Io(format!("failed to write patch to stdin: {e}")))?;
+        }
+
+        let result = child
+            .wait_with_output()
+            .map_err(|e| ShellError::Io(format!("failed to wait for git apply: {e}")))?;
+
+        if !result.status.success() {
+            let stderr = String::from_utf8_lossy(&result.stderr);
+            return Err(ShellError::Io(format!(
+                "git apply --cached failed (exit {}): {}",
+                result
+                    .status
+                    .code()
+                    .map_or("unknown".to_string(), |c| c.to_string()),
+                stderr.trim()
+            )));
+        }
+
+        Ok(())
     }
 
-    fn commit(&self, _repo_path: &Path, _message: &str) -> Result<CommitInfo, ShellError> {
-        todo!("GIT-014: commit will be implemented in a follow-up story")
+    fn commit(&self, repo_path: &Path, message: &str) -> Result<CommitInfo, ShellError> {
+        if message.trim().is_empty() {
+            return Err(ShellError::Validation(
+                "commit message must not be empty".to_string(),
+            ));
+        }
+        let output = self.run_git(repo_path, &["commit", "-m", message])?;
+
+        // Parse the commit hash from `git show` after committing
+        let show_output = self.run_git(
+            repo_path,
+            &[
+                "show",
+                "-s",
+                "--format=%H%n%h%n%an%n%ae%n%aI%n%P%n%s",
+                "HEAD",
+            ],
+        )?;
+
+        parse_commit_show_output(&show_output, &output)
     }
 
     fn push(
@@ -487,8 +773,48 @@ impl GitOperationsPort for CliGitAdapter {
         todo!("GIT-014: stash_drop will be implemented in a follow-up story")
     }
 
-    fn discard_changes(&self, _repo_path: &Path, _paths: &[&str]) -> Result<(), ShellError> {
-        todo!("GIT-014: discard_changes will be implemented in a follow-up story")
+    fn discard_changes(&self, repo_path: &Path, paths: &[&str]) -> Result<(), ShellError> {
+        if paths.is_empty() {
+            return Err(ShellError::Validation(
+                "discard_changes requires at least one path".to_string(),
+            ));
+        }
+
+        // Separate tracked files (use git restore) from untracked (use git clean).
+        // First get the status to determine which files are untracked.
+        let status_output = self.run_git(repo_path, &["status", "--porcelain=v2"])?;
+        let statuses = parse_porcelain_v2(&status_output)?;
+
+        let mut tracked_paths: Vec<&str> = Vec::new();
+        let mut untracked_paths: Vec<&str> = Vec::new();
+
+        for path in paths {
+            let is_untracked = statuses
+                .iter()
+                .any(|s| s.path() == *path && s.worktree_status() == FileStatusKind::Untracked);
+
+            if is_untracked {
+                untracked_paths.push(path);
+            } else {
+                tracked_paths.push(path);
+            }
+        }
+
+        // Restore tracked files
+        if !tracked_paths.is_empty() {
+            let mut args = vec!["restore", "--"];
+            args.extend(tracked_paths.iter());
+            self.run_git(repo_path, &args)?;
+        }
+
+        // Clean untracked files
+        if !untracked_paths.is_empty() {
+            let mut args = vec!["clean", "-f", "--"];
+            args.extend(untracked_paths.iter());
+            self.run_git(repo_path, &args)?;
+        }
+
+        Ok(())
     }
 
     fn repo_state(&self, _repo_path: &Path) -> Result<GitRepositoryState, ShellError> {
@@ -1046,5 +1372,212 @@ new mode 100755
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].file_mode_change(), Some("100644 -> 100755"));
         assert!(result[0].hunks().is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // stage / unstage / commit / discard_changes argument construction tests (GIT-017)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn stage_rejects_empty_paths() {
+        let adapter = CliGitAdapter::new();
+        let result = adapter.stage(Path::new("/tmp"), &[]);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShellError::Validation(msg) => {
+                assert!(msg.contains("at least one path"), "msg: {msg}");
+            }
+            other => panic!("expected Validation error, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unstage_rejects_empty_paths() {
+        let adapter = CliGitAdapter::new();
+        let result = adapter.unstage(Path::new("/tmp"), &[]);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShellError::Validation(msg) => {
+                assert!(msg.contains("at least one path"), "msg: {msg}");
+            }
+            other => panic!("expected Validation error, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn commit_rejects_empty_message() {
+        let adapter = CliGitAdapter::new();
+        let result = adapter.commit(Path::new("/tmp"), "");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShellError::Validation(msg) => {
+                assert!(msg.contains("must not be empty"), "msg: {msg}");
+            }
+            other => panic!("expected Validation error, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn commit_rejects_whitespace_only_message() {
+        let adapter = CliGitAdapter::new();
+        let result = adapter.commit(Path::new("/tmp"), "   \t  ");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShellError::Validation(msg) => {
+                assert!(msg.contains("must not be empty"), "msg: {msg}");
+            }
+            other => panic!("expected Validation error, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn discard_changes_rejects_empty_paths() {
+        let adapter = CliGitAdapter::new();
+        let result = adapter.discard_changes(Path::new("/tmp"), &[]);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShellError::Validation(msg) => {
+                assert!(msg.contains("at least one path"), "msg: {msg}");
+            }
+            other => panic!("expected Validation error, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stage_lines_rejects_empty_line_ranges() {
+        let adapter = CliGitAdapter::new();
+        let result = adapter.stage_lines(Path::new("/tmp"), "file.rs", &[]);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShellError::Validation(msg) => {
+                assert!(msg.contains("at least one line range"), "msg: {msg}");
+            }
+            other => panic!("expected Validation error, got: {other:?}"),
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_commit_show_output tests (GIT-017)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_commit_show_output_basic() {
+        let show_output = "\
+abc123def456abc123def456abc123def456abc1
+abc123d
+Alice
+alice@example.com
+2026-03-10T01:00:00+00:00
+1111111111111111111111111111111111111111
+feat: add new feature
+";
+        let result = parse_commit_show_output(show_output, "").expect("should parse");
+        assert_eq!(
+            result.hash().as_ref(),
+            "abc123def456abc123def456abc123def456abc1"
+        );
+        assert_eq!(result.short_hash(), "abc123d");
+        assert_eq!(result.author_name(), "Alice");
+        assert_eq!(result.author_email(), "alice@example.com");
+        assert_eq!(result.date(), "2026-03-10T01:00:00+00:00");
+        assert_eq!(result.message(), "feat: add new feature");
+        assert_eq!(result.parent_hashes().len(), 1);
+    }
+
+    #[test]
+    fn parse_commit_show_output_no_parents() {
+        let show_output = "\
+abc123def456abc123def456abc123def456abc1
+abc123d
+Alice
+alice@example.com
+2026-03-10T01:00:00+00:00
+
+initial commit
+";
+        let result = parse_commit_show_output(show_output, "").expect("should parse");
+        assert!(result.parent_hashes().is_empty());
+        assert_eq!(result.message(), "initial commit");
+    }
+
+    #[test]
+    fn parse_commit_show_output_multiple_parents() {
+        let show_output = "\
+abc123def456abc123def456abc123def456abc1
+abc123d
+Alice
+alice@example.com
+2026-03-10T01:00:00+00:00
+1111111111111111111111111111111111111111 2222222222222222222222222222222222222222
+Merge branch 'feature'
+";
+        let result = parse_commit_show_output(show_output, "").expect("should parse");
+        assert_eq!(result.parent_hashes().len(), 2);
+    }
+
+    #[test]
+    fn parse_commit_show_output_rejects_insufficient_lines() {
+        let show_output = "abc123\nshort\n";
+        let result = parse_commit_show_output(show_output, "");
+        assert!(result.is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // filter_diff_to_line_ranges tests (GIT-017)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn filter_diff_keeps_additions_in_range() {
+        let diff = "\
+diff --git a/file.rs b/file.rs
+index abc..def 100644
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,5 @@
+ line1
++added_line2
++added_line3
+ line2
+ line3
+";
+        let filtered = filter_diff_to_line_ranges(diff, &[(2, 2)]);
+        assert!(filtered.contains("+added_line2"));
+        // added_line3 (new line 3) should be excluded
+        assert!(!filtered.contains("+added_line3"));
+    }
+
+    #[test]
+    fn filter_diff_returns_empty_when_no_lines_match() {
+        let diff = "\
+diff --git a/file.rs b/file.rs
+index abc..def 100644
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,4 @@
+ line1
++added
+ line2
+ line3
+";
+        // Line 2 is the addition, but range 100-200 won't match
+        let filtered = filter_diff_to_line_ranges(diff, &[(100, 200)]);
+        // No hunk should be emitted since no changes match
+        assert!(!filtered.contains("@@"));
+    }
+
+    #[test]
+    fn filter_diff_keeps_deletions_in_range() {
+        let diff = "\
+diff --git a/file.rs b/file.rs
+index abc..def 100644
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,2 @@
+ line1
+-removed_line
+ line3
+";
+        let filtered = filter_diff_to_line_ranges(diff, &[(2, 2)]);
+        assert!(filtered.contains("-removed_line"));
     }
 }
