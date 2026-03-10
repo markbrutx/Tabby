@@ -40,6 +40,10 @@ yarn-debug.log*
 yarn-error.log*
 bun-debug.log*
 
+# VitePress build output
+docs/.vitepress/dist
+docs/.vitepress/cache
+
 # OS files
 .DS_Store
 Thumbs.db
