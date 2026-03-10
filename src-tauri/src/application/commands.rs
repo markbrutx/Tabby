@@ -172,10 +172,12 @@ pub enum GitCommand {
     CreateBranch {
         repo_path: PathBuf,
         branch: BranchName,
+        start_point: Option<BranchName>,
     },
     DeleteBranch {
         repo_path: PathBuf,
         branch: BranchName,
+        force: bool,
     },
     MergeBranch {
         repo_path: PathBuf,

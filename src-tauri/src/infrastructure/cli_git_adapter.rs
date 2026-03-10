@@ -580,6 +580,81 @@ fn parse_commit_show_output(
     ))
 }
 
+/// Parse output of `git branch -vv --format=%(HEAD)%(refname:short)\t%(upstream:short)\t%(upstream:track,nobracket)`
+///
+/// Each line has the format:
+///   `*main\torigin/main\tahead 2, behind 1`   (current branch with upstream + tracking)
+///   ` feature\torigin/feature\t`               (non-current, upstream but no divergence)
+///   ` local-only\t\t`                          (no upstream)
+///
+/// The leading `*` means the branch is the current HEAD branch, space otherwise.
+fn parse_branch_list(output: &str) -> Result<Vec<BranchInfo>, ShellError> {
+    let mut branches = Vec::new();
+
+    for line in output.lines() {
+        if line.is_empty() {
+            continue;
+        }
+
+        let is_current = line.starts_with('*');
+        // Strip the HEAD indicator character
+        let rest = &line[1..];
+
+        let parts: Vec<&str> = rest.splitn(3, '\t').collect();
+        let name_str = parts.first().copied().unwrap_or("").trim();
+        if name_str.is_empty() {
+            continue;
+        }
+
+        // Skip detached HEAD entries like "(HEAD detached at ...)"
+        if name_str.starts_with('(') {
+            continue;
+        }
+
+        let upstream_str = parts.get(1).copied().unwrap_or("").trim();
+        let tracking_str = parts.get(2).copied().unwrap_or("").trim();
+
+        let upstream = if upstream_str.is_empty() {
+            None
+        } else {
+            Some(upstream_str.to_string())
+        };
+
+        let (ahead, behind) = parse_tracking_info(tracking_str);
+
+        let name = BranchName::try_new(name_str).map_err(|e| {
+            ShellError::Io(format!("failed to parse branch name '{name_str}': {e}"))
+        })?;
+
+        branches.push(BranchInfo::new(name, is_current, upstream, ahead, behind));
+    }
+
+    Ok(branches)
+}
+
+/// Parse the tracking info string from `%(upstream:track,nobracket)`.
+///
+/// Examples: `"ahead 2, behind 1"`, `"ahead 3"`, `"behind 5"`, `"gone"`, `""`.
+fn parse_tracking_info(info: &str) -> (u32, u32) {
+    if info.is_empty() || info == "gone" {
+        return (0, 0);
+    }
+
+    let mut ahead: u32 = 0;
+    let mut behind: u32 = 0;
+
+    for part in info.split(", ") {
+        let part = part.trim();
+        if let Some(n) = part.strip_prefix("ahead ") {
+            ahead = n.trim().parse().unwrap_or(0);
+        } else if let Some(n) = part.strip_prefix("behind ") {
+            behind = n.trim().parse().unwrap_or(0);
+        }
+    }
+
+    (ahead, behind)
+}
+
 impl GitOperationsPort for CliGitAdapter {
     fn status(&self, repo_path: &Path) -> Result<Vec<FileStatus>, ShellError> {
         let output = self.run_git(repo_path, &["status", "--porcelain=v2"])?;
@@ -709,44 +784,77 @@ impl GitOperationsPort for CliGitAdapter {
 
     fn push(
         &self,
-        _repo_path: &Path,
-        _remote: &RemoteName,
-        _branch: &BranchName,
+        repo_path: &Path,
+        remote: &RemoteName,
+        branch: &BranchName,
     ) -> Result<(), ShellError> {
-        todo!("GIT-014: push will be implemented in a follow-up story")
+        self.run_git(repo_path, &["push", remote.as_ref(), branch.as_ref()])?;
+        Ok(())
     }
 
     fn pull(
         &self,
-        _repo_path: &Path,
-        _remote: &RemoteName,
-        _branch: &BranchName,
+        repo_path: &Path,
+        remote: &RemoteName,
+        branch: &BranchName,
     ) -> Result<(), ShellError> {
-        todo!("GIT-014: pull will be implemented in a follow-up story")
+        self.run_git(repo_path, &["pull", remote.as_ref(), branch.as_ref()])?;
+        Ok(())
     }
 
-    fn fetch(&self, _repo_path: &Path, _remote: &RemoteName) -> Result<(), ShellError> {
-        todo!("GIT-014: fetch will be implemented in a follow-up story")
+    fn fetch(&self, repo_path: &Path, remote: &RemoteName) -> Result<(), ShellError> {
+        self.run_git(repo_path, &["fetch", remote.as_ref()])?;
+        Ok(())
     }
 
-    fn branches(&self, _repo_path: &Path) -> Result<Vec<BranchInfo>, ShellError> {
-        todo!("GIT-014: branches will be implemented in a follow-up story")
+    fn branches(&self, repo_path: &Path) -> Result<Vec<BranchInfo>, ShellError> {
+        let output = self.run_git(
+            repo_path,
+            &[
+                "branch",
+                "-vv",
+                "--format=%(HEAD)%(refname:short)\t%(upstream:short)\t%(upstream:track,nobracket)",
+            ],
+        )?;
+        parse_branch_list(&output)
     }
 
-    fn checkout_branch(&self, _repo_path: &Path, _branch: &BranchName) -> Result<(), ShellError> {
-        todo!("GIT-014: checkout_branch will be implemented in a follow-up story")
+    fn checkout_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError> {
+        self.run_git(repo_path, &["checkout", branch.as_ref()])?;
+        Ok(())
     }
 
-    fn create_branch(&self, _repo_path: &Path, _branch: &BranchName) -> Result<(), ShellError> {
-        todo!("GIT-014: create_branch will be implemented in a follow-up story")
+    fn create_branch(
+        &self,
+        repo_path: &Path,
+        branch: &BranchName,
+        start_point: Option<&BranchName>,
+    ) -> Result<(), ShellError> {
+        match start_point {
+            Some(sp) => {
+                self.run_git(repo_path, &["checkout", "-b", branch.as_ref(), sp.as_ref()])?;
+            }
+            None => {
+                self.run_git(repo_path, &["checkout", "-b", branch.as_ref()])?;
+            }
+        }
+        Ok(())
     }
 
-    fn delete_branch(&self, _repo_path: &Path, _branch: &BranchName) -> Result<(), ShellError> {
-        todo!("GIT-014: delete_branch will be implemented in a follow-up story")
+    fn delete_branch(
+        &self,
+        repo_path: &Path,
+        branch: &BranchName,
+        force: bool,
+    ) -> Result<(), ShellError> {
+        let flag = if force { "-D" } else { "-d" };
+        self.run_git(repo_path, &["branch", flag, branch.as_ref()])?;
+        Ok(())
     }
 
-    fn merge_branch(&self, _repo_path: &Path, _branch: &BranchName) -> Result<(), ShellError> {
-        todo!("GIT-014: merge_branch will be implemented in a follow-up story")
+    fn merge_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError> {
+        self.run_git(repo_path, &["merge", branch.as_ref()])?;
+        Ok(())
     }
 
     fn log(&self, _repo_path: &Path, _max_count: u32) -> Result<Vec<CommitInfo>, ShellError> {
@@ -1579,5 +1687,161 @@ index abc..def 100644
 ";
         let filtered = filter_diff_to_line_ranges(diff, &[(2, 2)]);
         assert!(filtered.contains("-removed_line"));
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_branch_list tests (GIT-018)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_branch_list_empty_output() {
+        let result = parse_branch_list("").expect("should parse empty output");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_branch_list_single_current_branch() {
+        let output = "*main\torigin/main\t\n";
+        let result = parse_branch_list(output).expect("should parse single branch");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name().as_ref(), "main");
+        assert!(result[0].is_current());
+        assert_eq!(result[0].upstream(), Some("origin/main"));
+        assert_eq!(result[0].ahead(), 0);
+        assert_eq!(result[0].behind(), 0);
+    }
+
+    #[test]
+    fn parse_branch_list_non_current_branch() {
+        let output = " feature/login\torigin/feature/login\t\n";
+        let result = parse_branch_list(output).expect("should parse non-current branch");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name().as_ref(), "feature/login");
+        assert!(!result[0].is_current());
+        assert_eq!(result[0].upstream(), Some("origin/feature/login"));
+    }
+
+    #[test]
+    fn parse_branch_list_with_ahead_behind() {
+        let output = "*main\torigin/main\tahead 2, behind 1\n";
+        let result = parse_branch_list(output).expect("should parse ahead/behind");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].ahead(), 2);
+        assert_eq!(result[0].behind(), 1);
+    }
+
+    #[test]
+    fn parse_branch_list_ahead_only() {
+        let output = "*develop\torigin/develop\tahead 5\n";
+        let result = parse_branch_list(output).expect("should parse ahead only");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].ahead(), 5);
+        assert_eq!(result[0].behind(), 0);
+    }
+
+    #[test]
+    fn parse_branch_list_behind_only() {
+        let output = " staging\torigin/staging\tbehind 3\n";
+        let result = parse_branch_list(output).expect("should parse behind only");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].ahead(), 0);
+        assert_eq!(result[0].behind(), 3);
+    }
+
+    #[test]
+    fn parse_branch_list_no_upstream() {
+        let output = " local-only\t\t\n";
+        let result = parse_branch_list(output).expect("should parse branch with no upstream");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name().as_ref(), "local-only");
+        assert_eq!(result[0].upstream(), None);
+        assert_eq!(result[0].ahead(), 0);
+        assert_eq!(result[0].behind(), 0);
+    }
+
+    #[test]
+    fn parse_branch_list_multiple_branches() {
+        let output = "\
+*main\torigin/main\tahead 1
+ develop\torigin/develop\tbehind 2
+ feature/auth\t\t
+ release-v1.0\torigin/release-v1.0\tahead 3, behind 1
+";
+        let result = parse_branch_list(output).expect("should parse multiple branches");
+        assert_eq!(result.len(), 4);
+
+        assert_eq!(result[0].name().as_ref(), "main");
+        assert!(result[0].is_current());
+        assert_eq!(result[0].ahead(), 1);
+
+        assert_eq!(result[1].name().as_ref(), "develop");
+        assert!(!result[1].is_current());
+        assert_eq!(result[1].behind(), 2);
+
+        assert_eq!(result[2].name().as_ref(), "feature/auth");
+        assert_eq!(result[2].upstream(), None);
+
+        assert_eq!(result[3].name().as_ref(), "release-v1.0");
+        assert_eq!(result[3].ahead(), 3);
+        assert_eq!(result[3].behind(), 1);
+    }
+
+    #[test]
+    fn parse_branch_list_skips_detached_head() {
+        let output = "*(HEAD detached at abc1234)\t\t\n main\torigin/main\t\n";
+        let result = parse_branch_list(output).expect("should skip detached HEAD");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name().as_ref(), "main");
+    }
+
+    #[test]
+    fn parse_branch_list_gone_upstream() {
+        let output = " stale-branch\torigin/stale-branch\tgone\n";
+        let result = parse_branch_list(output).expect("should handle gone upstream");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].upstream(), Some("origin/stale-branch"));
+        assert_eq!(result[0].ahead(), 0);
+        assert_eq!(result[0].behind(), 0);
+    }
+
+    #[test]
+    fn parse_branch_list_skips_empty_lines() {
+        let output = "\n*main\torigin/main\t\n\n develop\t\t\n\n";
+        let result = parse_branch_list(output).expect("should skip empty lines");
+        assert_eq!(result.len(), 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_tracking_info tests (GIT-018)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_tracking_info_empty() {
+        assert_eq!(parse_tracking_info(""), (0, 0));
+    }
+
+    #[test]
+    fn parse_tracking_info_gone() {
+        assert_eq!(parse_tracking_info("gone"), (0, 0));
+    }
+
+    #[test]
+    fn parse_tracking_info_ahead_only() {
+        assert_eq!(parse_tracking_info("ahead 7"), (7, 0));
+    }
+
+    #[test]
+    fn parse_tracking_info_behind_only() {
+        assert_eq!(parse_tracking_info("behind 4"), (0, 4));
+    }
+
+    #[test]
+    fn parse_tracking_info_ahead_and_behind() {
+        assert_eq!(parse_tracking_info("ahead 2, behind 1"), (2, 1));
+    }
+
+    #[test]
+    fn parse_tracking_info_large_numbers() {
+        assert_eq!(parse_tracking_info("ahead 999, behind 500"), (999, 500));
     }
 }

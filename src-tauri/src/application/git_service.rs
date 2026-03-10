@@ -73,12 +73,21 @@ impl GitApplicationService {
                 self.git_port.checkout_branch(&repo_path, &branch)?;
                 Ok(GitResult::CheckoutBranch)
             }
-            GitCommand::CreateBranch { repo_path, branch } => {
-                self.git_port.create_branch(&repo_path, &branch)?;
+            GitCommand::CreateBranch {
+                repo_path,
+                branch,
+                start_point,
+            } => {
+                self.git_port
+                    .create_branch(&repo_path, &branch, start_point.as_ref())?;
                 Ok(GitResult::CreateBranch)
             }
-            GitCommand::DeleteBranch { repo_path, branch } => {
-                self.git_port.delete_branch(&repo_path, &branch)?;
+            GitCommand::DeleteBranch {
+                repo_path,
+                branch,
+                force,
+            } => {
+                self.git_port.delete_branch(&repo_path, &branch, force)?;
                 Ok(GitResult::DeleteBranch)
             }
             GitCommand::MergeBranch { repo_path, branch } => {
@@ -159,8 +168,8 @@ mod tests {
         Fetch(PathBuf, String),
         Branches(PathBuf),
         CheckoutBranch(PathBuf, String),
-        CreateBranch(PathBuf, String),
-        DeleteBranch(PathBuf, String),
+        CreateBranch(PathBuf, String, Option<String>),
+        DeleteBranch(PathBuf, String, bool),
         MergeBranch(PathBuf, String),
         Log(PathBuf, u32),
         Blame(PathBuf, String),
@@ -337,24 +346,36 @@ mod tests {
             Ok(())
         }
 
-        fn create_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError> {
+        fn create_branch(
+            &self,
+            repo_path: &Path,
+            branch: &BranchName,
+            start_point: Option<&BranchName>,
+        ) -> Result<(), ShellError> {
             self.calls
                 .lock()
                 .map_err(|e| ShellError::State(e.to_string()))?
                 .push(PortCall::CreateBranch(
                     repo_path.to_path_buf(),
                     branch.to_string(),
+                    start_point.map(|sp| sp.to_string()),
                 ));
             Ok(())
         }
 
-        fn delete_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError> {
+        fn delete_branch(
+            &self,
+            repo_path: &Path,
+            branch: &BranchName,
+            force: bool,
+        ) -> Result<(), ShellError> {
             self.calls
                 .lock()
                 .map_err(|e| ShellError::State(e.to_string()))?
                 .push(PortCall::DeleteBranch(
                     repo_path.to_path_buf(),
                     branch.to_string(),
+                    force,
                 ));
             Ok(())
         }
@@ -504,11 +525,21 @@ mod tests {
             fn checkout_branch(&self, p: &Path, b: &BranchName) -> Result<(), ShellError> {
                 self.0.checkout_branch(p, b)
             }
-            fn create_branch(&self, p: &Path, b: &BranchName) -> Result<(), ShellError> {
-                self.0.create_branch(p, b)
+            fn create_branch(
+                &self,
+                p: &Path,
+                b: &BranchName,
+                sp: Option<&BranchName>,
+            ) -> Result<(), ShellError> {
+                self.0.create_branch(p, b, sp)
             }
-            fn delete_branch(&self, p: &Path, b: &BranchName) -> Result<(), ShellError> {
-                self.0.delete_branch(p, b)
+            fn delete_branch(
+                &self,
+                p: &Path,
+                b: &BranchName,
+                force: bool,
+            ) -> Result<(), ShellError> {
+                self.0.delete_branch(p, b, force)
             }
             fn merge_branch(&self, p: &Path, b: &BranchName) -> Result<(), ShellError> {
                 self.0.merge_branch(p, b)

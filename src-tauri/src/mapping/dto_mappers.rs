@@ -412,15 +412,30 @@ pub fn git_command_from_dto(
                 BranchName::try_new(&name).map_err(|e| ShellError::Validation(e.to_string()))?;
             GitCommand::CheckoutBranch { repo_path, branch }
         }
-        GitCommandDto::CreateBranch { name, .. } => {
+        GitCommandDto::CreateBranch {
+            name, start_point, ..
+        } => {
             let branch =
                 BranchName::try_new(&name).map_err(|e| ShellError::Validation(e.to_string()))?;
-            GitCommand::CreateBranch { repo_path, branch }
+            let start_point = start_point
+                .map(|sp| {
+                    BranchName::try_new(&sp).map_err(|e| ShellError::Validation(e.to_string()))
+                })
+                .transpose()?;
+            GitCommand::CreateBranch {
+                repo_path,
+                branch,
+                start_point,
+            }
         }
-        GitCommandDto::DeleteBranch { name, .. } => {
+        GitCommandDto::DeleteBranch { name, force, .. } => {
             let branch =
                 BranchName::try_new(&name).map_err(|e| ShellError::Validation(e.to_string()))?;
-            GitCommand::DeleteBranch { repo_path, branch }
+            GitCommand::DeleteBranch {
+                repo_path,
+                branch,
+                force,
+            }
         }
         GitCommandDto::MergeBranch { name, .. } => {
             let branch =

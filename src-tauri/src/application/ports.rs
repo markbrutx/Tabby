@@ -153,11 +153,21 @@ pub trait GitOperationsPort: Send + Sync + std::fmt::Debug {
     /// Check out an existing branch by name.
     fn checkout_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError>;
 
-    /// Create a new branch from the current HEAD.
-    fn create_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError>;
+    /// Create a new branch, optionally from a given start point instead of HEAD.
+    fn create_branch(
+        &self,
+        repo_path: &Path,
+        branch: &BranchName,
+        start_point: Option<&BranchName>,
+    ) -> Result<(), ShellError>;
 
-    /// Delete a local branch.
-    fn delete_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError>;
+    /// Delete a local branch. If `force` is true, uses `-D` instead of `-d`.
+    fn delete_branch(
+        &self,
+        repo_path: &Path,
+        branch: &BranchName,
+        force: bool,
+    ) -> Result<(), ShellError>;
 
     /// Merge another branch into the current branch.
     fn merge_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError>;
