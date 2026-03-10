@@ -19,12 +19,12 @@ Core stack:
 
 ## Architecture Map
 
-The codebase follows a layered architecture with four bounded contexts: **Workspace**, **Runtime**, **Settings**, and **Shell/Transport**. Application services depend on abstract port traits; infrastructure adapters implement those ports.
+The codebase follows a layered architecture with five bounded contexts: **Workspace**, **Runtime**, **Settings**, **Git**, and **Shell/Transport**. Application services depend on abstract port traits; infrastructure adapters implement those ports.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Presentation (src/)                   │
-│  features/{workspace,terminal,browser,settings,runtime} │
+│  features/{workspace,terminal,browser,settings,runtime,git} │
 │  app-shell/  ·  components/  ·  hooks/                  │
 ├─────────────────────────────────────────────────────────┤
 │              Transport Boundary (IPC)                    │
@@ -35,8 +35,8 @@ The codebase follows a layered architecture with four bounded contexts: **Worksp
 │              Application Services (Rust)                 │
 │  src-tauri/src/application/                              │
 │    workspace_service · settings_service · runtime_service│
-│    runtime_coordinator · bootstrap_service               │
-│    ports (4 trait definitions)                            │
+│    git_service · runtime_coordinator · bootstrap_service │
+│    ports (5 trait definitions)                            │
 │    runtime_observation_receiver (callback port)          │
 │    commands (internal command enums)                      │
 ├─────────────────────────────────────────────────────────┤
@@ -49,6 +49,7 @@ The codebase follows a layered architecture with four bounded contexts: **Worksp
 ├─────────────────────────────────────────────────────────┤
 │              Domain Model (Rust crates)                  │
 │  tabby-workspace · tabby-runtime · tabby-settings       │
+│  tabby-git                                               │
 │        ↓ depend on                                       │
 │  tabby-kernel (shared kernel: value objects, id types)   │
 ├─────────────────────────────────────────────────────────┤
@@ -66,14 +67,16 @@ The codebase follows a layered architecture with four bounded contexts: **Worksp
   - `settings_service.rs` — `SettingsApplicationService` (preferences load/save)
   - `runtime_service.rs` — `RuntimeApplicationService` (runtime registry management)
   - `runtime_coordinator.rs` — `RuntimeCoordinator` (reacts to workspace domain events for runtime lifecycle)
+  - `git_service.rs` — `GitApplicationService` (Git repository queries: status, branches, commits, diffs, blame, stash)
   - `bootstrap_service.rs` — `BootstrapService` (CLI launch overrides, initial state)
-  - `ports.rs` — four port traits: `PreferencesRepository`, `ProjectionPublisherPort`, `TerminalProcessPort`, `BrowserSurfacePort`
+  - `ports.rs` — five port traits: `PreferencesRepository`, `ProjectionPublisherPort`, `TerminalProcessPort`, `BrowserSurfacePort`, `GitOperationsPort`
   - `runtime_observation_receiver.rs` — callback port for PTY output and terminal exit events
   - `commands.rs` — internal command enums (`WorkspaceCommand`, `SettingsCommand`, `RuntimeCommand`)
 - `src-tauri/src/infrastructure/` — concrete port implementations:
   - `tauri_projection_publisher.rs` — implements `ProjectionPublisherPort` (emits events to frontend)
   - `tauri_store_preferences_repository.rs` — implements `PreferencesRepository` (Tauri plugin-store)
   - `tauri_browser_surface_adapter.rs` — implements `BrowserSurfacePort` (webview lifecycle)
+  - `cli_git_adapter.rs` — implements `GitOperationsPort` (CLI-based Git operations)
 - `src-tauri/src/commands/` — thin Tauri IPC command handlers that delegate to application services.
 - `src-tauri/src/mapping/` — DTO-to-domain and domain-to-DTO mappers at the transport boundary.
 - `src-tauri/src/shell/` — `AppShell` facade coordinating all services; `PtyManager` (implements `TerminalProcessPort`).
@@ -86,6 +89,7 @@ The codebase follows a layered architecture with four bounded contexts: **Worksp
 - `src-tauri/crates/tabby-workspace/` — Workspace context: `WorkspaceSession`, `Tab`, `PaneSlot`, `SplitNode`, `PaneSpec` (Terminal | Browser), `PaneContentDefinition`, layout presets, domain events. Depends on `tabby-kernel`.
 - `src-tauri/crates/tabby-runtime/` — Runtime context: `RuntimeRegistry`, `PaneRuntime`, `RuntimeStatus`, `RuntimeKind`, `RuntimeSessionId`. Depends on `tabby-kernel`.
 - `src-tauri/crates/tabby-settings/` — Settings context: `UserPreferences`, `TerminalProfile`, `ProfileCatalog`, value objects (`FontSize`, `ProfileId`), persistence helpers. Depends on `tabby-kernel`.
+- `src-tauri/crates/tabby-git/` — Git context: `GitRepositoryState`, `CommitInfo`, `BranchInfo`, `FileStatus`, `DiffContent`, `DiffHunk`, `BlameEntry`, `StashEntry`, value objects (`BranchName`, `CommitHash`, `RemoteName`, `StashId`). Depends on `tabby-kernel`. Zero transport dependencies.
 - `src-tauri/crates/tabby-contracts/` — Transport DTOs, view models, command enums, event structs. Re-exports value objects from `tabby-kernel` for IPC compatibility. Consumed by both Rust and TypeScript via specta.
 
 ### Frontend (TypeScript/React)
@@ -96,6 +100,7 @@ The codebase follows a layered architecture with four bounded contexts: **Worksp
 - `src/features/browser/` — browser pane webview container and toolbar.
 - `src/features/settings/` — settings modal, shortcuts reference. Contains `domain/`, `application/` (store, snapshot-mappers), and `components/`.
 - `src/features/runtime/` — runtime status tracking store and domain models. Contains `domain/` and `application/` (store, snapshot-mappers).
+- `src/features/git/` — Git integration UI: repository status, branch info, commit history, diffs, blame, and stash management. Contains `domain/`, `application/` (store), and `components/`.
 - `src/contexts/` — app-level Zustand store factories (`useWorkspaceStore`, `useSettingsStore`, `useRuntimeStore`).
 - `src/contracts/tauri-bindings.ts` — auto-generated TypeScript bindings from specta (do not edit).
 - `src/components/` — shared UI components (`Button`, `Input`, `Select`, `ErrorBoundary`, `RecoveryScreen`).
@@ -109,6 +114,7 @@ Each bounded context owns its domain model and exposes it only through applicati
 | Workspace | `tabby-workspace` | `WorkspaceApplicationService` | `features/workspace/` |
 | Runtime | `tabby-runtime` | `RuntimeApplicationService`, `RuntimeCoordinator` | `features/runtime/` |
 | Settings | `tabby-settings` | `SettingsApplicationService` | `features/settings/` |
+| Git | `tabby-git` | `GitApplicationService` | `features/git/` |
 | Shell/Transport | — (infrastructure) | `AppShell`, `BootstrapService` | `app-shell/` |
 
 **Port traits and implementations:**
@@ -119,6 +125,7 @@ Each bounded context owns its domain model and exposes it only through applicati
 | `ProjectionPublisherPort` | `application/ports.rs` | `TauriProjectionPublisher` |
 | `TerminalProcessPort` | `application/ports.rs` | `PtyManager` (in `shell/`) |
 | `BrowserSurfacePort` | `application/ports.rs` | `TauriBrowserSurfaceAdapter` |
+| `GitOperationsPort` | `application/ports.rs` | `CliGitAdapter` |
 | `RuntimeObservationReceiver` | `application/runtime_observation_receiver.rs` | `RuntimeApplicationService` |
 
 **Allowed dependency directions:**
@@ -148,6 +155,7 @@ Each bounded context owns its domain model and exposes it only through applicati
 - Workspace aggregate owns only structural concerns (tabs, panes, layout). Runtime-observed state (cwd, status) belongs to the runtime context.
 - Frontend stores use internal read models; generated DTOs (`tauri-bindings.ts`) exist only at the transport boundary (clients and snapshot-mappers).
 - Frontend cross-context orchestration is handled by `AppBootstrapCoordinator`, not by stores reaching into each other.
+- Git operations are request/response (no persistent process); each query spawns a short-lived CLI call via `GitOperationsPort`.
 - Never cite or mention private reference material under `workbench/` in user-facing docs, specs, PR text, or release notes.
 
 ## Commands
