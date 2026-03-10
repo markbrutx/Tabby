@@ -37,6 +37,7 @@ interface SplitTreeCtx {
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
   onSwapPaneSlots: (paneIdA: string, paneIdB: string) => void;
+  onOpenGitView: (paneId: string, cwd: string) => void;
   dragSourceRef: React.MutableRefObject<string | null>;
   dragOverPaneId: string | null;
   onDragOverChange: (paneId: string | null) => void;
@@ -65,6 +66,7 @@ interface SplitTreeRendererProps {
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
   onSwapPaneSlots: (paneIdA: string, paneIdB: string) => void;
+  onOpenGitView: (paneId: string, cwd: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -188,6 +190,7 @@ function PaneLeaf({ paneId }: { paneId: string }) {
             isActive={isActive}
             paneCount={tab.panes.length}
             onClose={() => onClosePane(pane.id)}
+            onOpenGitView={pane.cwd ? () => ctx.onOpenGitView(pane.id, pane.cwd) : undefined}
             {...dragProps}
           />
         )}
@@ -265,6 +268,7 @@ export function SplitTreeRenderer({
   onRestart,
   onClosePane,
   onSwapPaneSlots,
+  onOpenGitView,
 }: SplitTreeRendererProps) {
   const dragSourceRef = useRef<string | null>(null);
   const [dragOverPaneId, setDragOverPaneId] = useState<string | null>(null);
@@ -284,12 +288,13 @@ export function SplitTreeRenderer({
     onRestart,
     onClosePane,
     onSwapPaneSlots,
+    onOpenGitView,
     dragSourceRef,
     dragOverPaneId,
     onDragOverChange: handleDragOverChange,
   }), [
     tab, fontSize, theme, visible, modalOpen, gitClient,
-    onFocus, onRestart, onClosePane, onSwapPaneSlots,
+    onFocus, onRestart, onClosePane, onSwapPaneSlots, onOpenGitView,
     dragSourceRef, dragOverPaneId, handleDragOverChange,
   ]);
 

@@ -1,4 +1,4 @@
-import { GripVertical, X } from "lucide-react";
+import { GitBranch, GripVertical, X } from "lucide-react";
 import { shortenPath } from "@/features/workspace/utils/shortenPath";
 
 interface PaneHeaderProps {
@@ -7,6 +7,7 @@ interface PaneHeaderProps {
   isActive: boolean;
   paneCount: number;
   onClose: () => void;
+  onOpenGitView?: () => void;
   draggable?: boolean;
   onDragStart?: React.DragEventHandler;
   onDragOver?: React.DragEventHandler;
@@ -23,6 +24,7 @@ export function PaneHeader({
   isActive,
   paneCount,
   onClose,
+  onOpenGitView,
   draggable = false,
   onDragStart,
   onDragOver,
@@ -64,6 +66,20 @@ export function PaneHeader({
       >
         {shortenPath(cwd)}
       </span>
+
+      {onOpenGitView && cwd ? (
+        <button
+          className="ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenGitView();
+          }}
+          title="Open Git View"
+          data-testid="pane-header-open-git"
+        >
+          <GitBranch size={12} />
+        </button>
+      ) : null}
 
       {paneCount > 1 ? (
         <button

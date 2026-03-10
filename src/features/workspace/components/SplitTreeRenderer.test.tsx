@@ -60,6 +60,7 @@ const defaultHandlers = {
   onRestart: vi.fn().mockResolvedValue(undefined),
   onClosePane: vi.fn(),
   onSwapPaneSlots: vi.fn(),
+  onOpenGitView: vi.fn(),
 };
 
 describe("SplitTreeRenderer", () => {

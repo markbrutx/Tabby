@@ -122,6 +122,16 @@ function App() {
     [swapPaneSlots],
   );
 
+  const handleOpenGitView = useCallback(
+    (paneId: string, cwd: string) => {
+      void splitPane(paneId, "horizontal", {
+        kind: "git",
+        workingDirectory: cwd,
+      });
+    },
+    [splitPane],
+  );
+
   useWorkspaceShortcuts({
     workspace: workspaceModel,
     onCreateTab: openSetupWizard,
@@ -237,6 +247,7 @@ function App() {
                 onRestart={restartPaneRuntime}
                 onClosePane={confirmDialog.requestClosePane}
                 onSwapPaneSlots={handleSwapPaneSlots}
+                onOpenGitView={handleOpenGitView}
               />
             </div>
           );

@@ -4,6 +4,7 @@ import { PaneHeader } from "./PaneHeader";
 
 function renderHeader(overrides: Partial<Parameters<typeof PaneHeader>[0]> = {}) {
   const onClose = vi.fn();
+  const onOpenGitView = vi.fn();
 
   render(
     <PaneHeader
@@ -12,11 +13,12 @@ function renderHeader(overrides: Partial<Parameters<typeof PaneHeader>[0]> = {})
       isActive={false}
       paneCount={2}
       onClose={onClose}
+      onOpenGitView={onOpenGitView}
       {...overrides}
     />,
   );
 
-  return { onClose };
+  return { onClose, onOpenGitView };
 }
 
 describe("PaneHeader", () => {
@@ -59,6 +61,27 @@ describe("PaneHeader", () => {
     renderHeader({ isDragOver: true });
     const header = screen.getByTestId("pane-header");
     expect(header.className).toContain("ring-2");
+  });
+
+  it("shows Open Git View button when onOpenGitView and cwd are provided", () => {
+    renderHeader();
+    expect(screen.getByTestId("pane-header-open-git")).toBeInTheDocument();
+  });
+
+  it("Open Git View button fires onOpenGitView", () => {
+    const { onOpenGitView } = renderHeader();
+    fireEvent.click(screen.getByTestId("pane-header-open-git"));
+    expect(onOpenGitView).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides Open Git View button when cwd is empty", () => {
+    renderHeader({ cwd: "" });
+    expect(screen.queryByTestId("pane-header-open-git")).toBeNull();
+  });
+
+  it("hides Open Git View button when onOpenGitView is not provided", () => {
+    renderHeader({ onOpenGitView: undefined });
+    expect(screen.queryByTestId("pane-header-open-git")).toBeNull();
   });
 
 });
