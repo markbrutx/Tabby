@@ -1,5 +1,44 @@
 # Progress Log
 
+## 2026-03-10 11:00 - GIT-032: Add lightweight syntax highlighting to DiffViewer
+Thread:
+Run: 20260310-012951-93839 (iteration 34)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-34.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-34.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: fc7f33b feat: add lightweight syntax highlighting to DiffViewer (GIT-032)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (381 tests, 56 new syntax highlighting + 4 DiffViewer integration tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS
+- Files changed:
+  - src/features/git/components/syntaxHighlight.ts (new, 425 lines)
+  - src/features/git/components/syntaxHighlight.test.ts (new, 56 tests)
+  - src/features/git/components/DiffViewer.tsx (integrated highlighting)
+  - src/features/git/components/DiffViewer.test.tsx (4 new integration tests)
+  - src/styles.css (token color CSS variables for both themes)
+- Implemented lightweight syntax highlighting for DiffViewer:
+  - Language detection from file extension: js/ts/jsx/tsx/mjs/cjs, rs, py, go, json, html/htm/xml/svg, css/scss/less, md/mdx, sh/bash/zsh/fish, yaml/yml, toml
+  - Regex-based tokenizer: keywords, strings (single/double/backtick), comments (// and /* */), hash comments, numbers (decimal/hex/octal/binary), types/classes (built-in + PascalCase heuristic)
+  - Tokens wrapped in `<span>` with `data-token-type` attribute and CSS classes
+  - Theme-aware colors via `--color-token-*` CSS variables (dark and dawn themes)
+  - Unknown/unsupported languages gracefully degrade to plain text
+  - Total highlighting code: 425 lines (under 500 limit)
+  - No external highlighting libraries used
+  - HighlightedContent component with useMemo for performance
+  - Works in both unified and split view modes
+- **Learnings for future iterations:**
+  - Regex-based tokenizers work well for line-by-line highlighting but can't handle multi-line constructs (block comments spanning lines)
+  - PascalCase heuristic for type detection catches most class/type names without language-specific grammar
+  - Using `data-token-type` attribute enables easy test assertions without relying on CSS class names
+  - Config caching avoids regex recompilation on every line
+---
+
 ## 2026-03-10 10:55 - GIT-031: Add line-level and hunk-level staging to DiffViewer
 Thread:
 Run: 20260310-012951-93839 (iteration 33)
