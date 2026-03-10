@@ -1,5 +1,41 @@
 # Progress Log
 
+## 2026-03-10 11:20 - GIT-034: Create BranchSelector component
+Thread:
+Run: 20260310-012951-93839 (iteration 36)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-36.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-36.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 1e780b5 feat: add BranchSelector component with checkout, create, delete support (GIT-034)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (414 tests, 27 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (312 tests)
+- Files changed:
+  - src/features/git/components/BranchSelector.tsx (new)
+  - src/features/git/components/BranchSelector.test.tsx (new)
+  - src/features/git/application/useGitPaneStore.ts (added branch state/actions)
+  - src/features/git/components/GitPane.tsx (wired BranchSelector for branches view)
+- Implemented BranchSelector component with:
+  - Dropdown showing all branches with current branch highlighted
+  - Current branch name displayed in header area
+  - Ahead/behind counts shown next to tracking branches (+N -N)
+  - Click to switch branches (checkout_branch API)
+  - Create branch form with name input, optional start point, creates and switches
+  - Delete branch with confirmation dialog (normal and force delete options)
+  - Search/filter input for branch lists
+  - 21 component tests covering all acceptance criteria
+- **Learnings for future iterations:**
+  - BranchSelector follows same patterns as FileTreePanel: SectionHeader, DiscardConfirm inline dialogs
+  - Store branch actions parallel existing patterns (dispatch + refresh)
+  - useEffect in GitPane triggers listBranches when activeView switches to "branches"
+---
+
 ## 2026-03-10 11:15 - GIT-033: Create CommitPanel component
 Thread:
 Run: 20260310-012951-93839 (iteration 35)
