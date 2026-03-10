@@ -760,13 +760,22 @@ impl GitOperationsPort for CliGitAdapter {
         Ok(())
     }
 
-    fn commit(&self, repo_path: &Path, message: &str) -> Result<CommitInfo, ShellError> {
+    fn commit(
+        &self,
+        repo_path: &Path,
+        message: &str,
+        amend: bool,
+    ) -> Result<CommitInfo, ShellError> {
         if message.trim().is_empty() {
             return Err(ShellError::Validation(
                 "commit message must not be empty".to_string(),
             ));
         }
-        let output = self.run_git(repo_path, &["commit", "-m", message])?;
+        let mut args = vec!["commit", "-m", message];
+        if amend {
+            args.push("--amend");
+        }
+        let output = self.run_git(repo_path, &args)?;
 
         // Parse the commit hash from `git show` after committing
         let show_output = self.run_git(
@@ -1777,7 +1786,7 @@ new mode 100755
     #[test]
     fn commit_rejects_empty_message() {
         let adapter = CliGitAdapter::new();
-        let result = adapter.commit(Path::new("/tmp"), "");
+        let result = adapter.commit(Path::new("/tmp"), "", false);
         assert!(result.is_err());
         match result.unwrap_err() {
             ShellError::Validation(msg) => {
@@ -1790,7 +1799,7 @@ new mode 100755
     #[test]
     fn commit_rejects_whitespace_only_message() {
         let adapter = CliGitAdapter::new();
-        let result = adapter.commit(Path::new("/tmp"), "   \t  ");
+        let result = adapter.commit(Path::new("/tmp"), "   \t  ", false);
         assert!(result.is_err());
         match result.unwrap_err() {
             ShellError::Validation(msg) => {

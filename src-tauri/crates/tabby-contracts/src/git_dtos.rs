@@ -147,6 +147,7 @@ pub enum GitCommandDto {
     Commit {
         pane_id: String,
         message: String,
+        amend: bool,
     },
     Push {
         pane_id: String,
@@ -270,6 +271,7 @@ mod tests {
         let cmd = GitCommandDto::Commit {
             pane_id: "p1".to_string(),
             message: "feat: hello".to_string(),
+            amend: false,
         };
         let json = serde_json::to_string(&cmd).expect("serialize");
         let deserialized: GitCommandDto = serde_json::from_str(&json).expect("deserialize");
@@ -528,6 +530,7 @@ mod tests {
             GitCommandDto::Commit {
                 pane_id: "p".to_string(),
                 message: "m".to_string(),
+                amend: false,
             },
             GitCommandDto::Push {
                 pane_id: "p".to_string(),

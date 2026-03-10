@@ -125,8 +125,13 @@ pub trait GitOperationsPort: Send + Sync + std::fmt::Debug {
         line_ranges: &[(u32, u32)],
     ) -> Result<(), ShellError>;
 
-    /// Create a commit with the given message.
-    fn commit(&self, repo_path: &Path, message: &str) -> Result<CommitInfo, ShellError>;
+    /// Create a commit with the given message. If `amend` is true, amend the previous commit.
+    fn commit(
+        &self,
+        repo_path: &Path,
+        message: &str,
+        amend: bool,
+    ) -> Result<CommitInfo, ShellError>;
 
     /// Push the current branch to the remote.
     fn push(

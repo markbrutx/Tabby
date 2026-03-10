@@ -13,7 +13,7 @@ describe("createMockGitClient", () => {
     { command: { kind: "stage", pane_id: PANE_ID, paths: ["file.ts"] }, expectedKind: "stage" },
     { command: { kind: "unstage", pane_id: PANE_ID, paths: ["file.ts"] }, expectedKind: "unstage" },
     { command: { kind: "stageLines", pane_id: PANE_ID, path: "file.ts", line_ranges: ["1-3"] }, expectedKind: "stageLines" },
-    { command: { kind: "commit", pane_id: PANE_ID, message: "test commit" }, expectedKind: "commit" },
+    { command: { kind: "commit", pane_id: PANE_ID, message: "test commit", amend: false }, expectedKind: "commit" },
     { command: { kind: "push", pane_id: PANE_ID, remote: null, branch: null }, expectedKind: "push" },
     { command: { kind: "pull", pane_id: PANE_ID, remote: null, branch: null }, expectedKind: "pull" },
     { command: { kind: "fetch", pane_id: PANE_ID, remote: null }, expectedKind: "fetch" },
@@ -93,7 +93,7 @@ describe("createMockGitClient", () => {
   });
 
   it("returns a commit hash for commit command", async () => {
-    const result = await client.dispatch({ kind: "commit", pane_id: PANE_ID, message: "test" });
+    const result = await client.dispatch({ kind: "commit", pane_id: PANE_ID, message: "test", amend: false });
     if (result.kind !== "commit") throw new Error("unexpected kind");
     expect(result.hash).toBeTruthy();
   });

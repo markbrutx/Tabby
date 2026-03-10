@@ -147,6 +147,7 @@ pub enum GitCommand {
     Commit {
         repo_path: PathBuf,
         message: String,
+        amend: bool,
     },
     Push {
         repo_path: PathBuf,

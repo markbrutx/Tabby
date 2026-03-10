@@ -9,6 +9,7 @@ import {
 } from "@/features/git/application/useGitPaneStore";
 import { FileTreePanel } from "./FileTreePanel";
 import { DiffViewer, type StagingCallbacks } from "./DiffViewer";
+import { CommitPanel } from "./CommitPanel";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -96,6 +97,8 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
   const stageHunk = store((s) => s.stageHunk);
   const unstageHunk = store((s) => s.unstageHunk);
   const stagedLinesSet = store((s) => s.stagedLines);
+  const commitAction = store((s) => s.commit);
+  const fetchLastCommitInfo = store((s) => s.fetchLastCommitInfo);
 
   const stagingCallbacks: StagingCallbacks = useMemo(() => ({
     onStageLines: (filePath: string, lineRanges: string[]) => void stageLines(filePath, lineRanges),
@@ -185,10 +188,11 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
             className="border-t border-[var(--color-border)] p-3"
             data-testid="git-commit-area"
           >
-            <textarea
-              className="w-full resize-none rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-soft)] focus:border-[var(--color-accent)] focus:outline-none"
-              placeholder="Commit message..."
-              rows={2}
+            <CommitPanel
+              files={files}
+              onCommit={commitAction}
+              onFetchLastCommitInfo={fetchLastCommitInfo}
+              onCommitSuccess={async () => { await refreshStatus(); }}
             />
           </div>
         </div>

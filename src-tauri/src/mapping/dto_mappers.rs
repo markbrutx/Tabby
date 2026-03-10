@@ -410,7 +410,11 @@ pub fn git_command_from_dto(
                 line_ranges: parsed,
             }
         }
-        GitCommandDto::Commit { message, .. } => GitCommand::Commit { repo_path, message },
+        GitCommandDto::Commit { message, amend, .. } => GitCommand::Commit {
+            repo_path,
+            message,
+            amend,
+        },
         GitCommandDto::Push { remote, branch, .. } => {
             let remote = remote_name_or_default(remote.as_deref())?;
             let branch = branch_name_required(branch.as_deref(), "Push requires a branch name")?;
@@ -1502,10 +1506,14 @@ mod tests {
         let dto = GitCommandDto::Commit {
             pane_id: "p1".to_string(),
             message: "feat: hello".to_string(),
+            amend: false,
         };
         let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
         match cmd {
-            GitCommand::Commit { message, .. } => assert_eq!(message, "feat: hello"),
+            GitCommand::Commit { message, amend, .. } => {
+                assert_eq!(message, "feat: hello");
+                assert!(!amend);
+            }
             other => panic!("Expected Commit, got {other:?}"),
         }
     }

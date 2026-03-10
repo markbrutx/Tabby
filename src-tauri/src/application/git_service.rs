@@ -41,8 +41,12 @@ impl GitApplicationService {
                     .stage_lines(&repo_path, &file_path, &line_ranges)?;
                 Ok(GitResult::StageLines)
             }
-            GitCommand::Commit { repo_path, message } => {
-                let info = self.git_port.commit(&repo_path, &message)?;
+            GitCommand::Commit {
+                repo_path,
+                message,
+                amend,
+            } => {
+                let info = self.git_port.commit(&repo_path, &message, amend)?;
                 Ok(GitResult::Commit(info))
             }
             GitCommand::Push {
@@ -162,7 +166,7 @@ mod tests {
         Stage(PathBuf, Vec<String>),
         Unstage(PathBuf, Vec<String>),
         StageLines(PathBuf, String, Vec<(u32, u32)>),
-        Commit(PathBuf, String),
+        Commit(PathBuf, String, bool),
         Push(PathBuf, String, String),
         Pull(PathBuf, String, String),
         Fetch(PathBuf, String),
@@ -259,13 +263,19 @@ mod tests {
             Ok(())
         }
 
-        fn commit(&self, repo_path: &Path, message: &str) -> Result<CommitInfo, ShellError> {
+        fn commit(
+            &self,
+            repo_path: &Path,
+            message: &str,
+            amend: bool,
+        ) -> Result<CommitInfo, ShellError> {
             self.calls
                 .lock()
                 .map_err(|e| ShellError::State(e.to_string()))?
                 .push(PortCall::Commit(
                     repo_path.to_path_buf(),
                     message.to_string(),
+                    amend,
                 ));
             Ok(CommitInfo::new(
                 CommitHash::try_new("abc1234def5678")
@@ -507,8 +517,8 @@ mod tests {
             fn stage_lines(&self, p: &Path, fp: &str, lr: &[(u32, u32)]) -> Result<(), ShellError> {
                 self.0.stage_lines(p, fp, lr)
             }
-            fn commit(&self, p: &Path, m: &str) -> Result<CommitInfo, ShellError> {
-                self.0.commit(p, m)
+            fn commit(&self, p: &Path, m: &str, amend: bool) -> Result<CommitInfo, ShellError> {
+                self.0.commit(p, m, amend)
             }
             fn push(&self, p: &Path, r: &RemoteName, b: &BranchName) -> Result<(), ShellError> {
                 self.0.push(p, r, b)
@@ -606,13 +616,14 @@ mod tests {
             .dispatch_command(GitCommand::Commit {
                 repo_path: repo(),
                 message: "feat: test".to_string(),
+                amend: false,
             })
             .expect("should succeed");
 
         assert!(matches!(result, GitResult::Commit(info) if info.short_hash() == "abc1234"));
         assert_eq!(
             mock.recorded_calls(),
-            vec![PortCall::Commit(repo(), "feat: test".to_string())]
+            vec![PortCall::Commit(repo(), "feat: test".to_string(), false)]
         );
     }
 

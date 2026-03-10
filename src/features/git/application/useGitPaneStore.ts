@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { GitClient } from "@/app-shell/clients";
 import type {
+  CommitInfo,
   DiffContent,
   FileStatus,
   GitRepoState,
@@ -33,6 +34,8 @@ export interface GitPaneState {
   unstageLines: (filePath: string, lineRanges: string[]) => Promise<void>;
   stageHunk: (filePath: string, hunkIndex: number) => Promise<void>;
   unstageHunk: (filePath: string, hunkIndex: number) => Promise<void>;
+  commit: (message: string, amend: boolean) => Promise<void>;
+  fetchLastCommitInfo: () => Promise<CommitInfo | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +244,40 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
       const ranges = hunkLineRanges(hunk);
       if (ranges.length === 0) return;
       await currentState.unstageLines(filePath, ranges);
+    },
+
+    async commit(message: string, amend: boolean) {
+      const result = await gitClient.dispatch({
+        kind: "commit",
+        pane_id: paneId,
+        message,
+        amend,
+      });
+      if (result.kind !== "commit") {
+        throw new Error("Unexpected commit result");
+      }
+    },
+
+    async fetchLastCommitInfo(): Promise<CommitInfo | null> {
+      const result = await gitClient.dispatch({
+        kind: "log",
+        pane_id: paneId,
+        max_count: 1,
+        path: null,
+      });
+      if (result.kind === "log" && result.commits.length > 0) {
+        const c = result.commits[0];
+        return {
+          hash: c.hash,
+          shortHash: c.shortHash,
+          authorName: c.authorName,
+          authorEmail: c.authorEmail,
+          date: c.date,
+          message: c.message,
+          parentHashes: [...c.parentHashes],
+        };
+      }
+      return null;
     },
   }));
 }
