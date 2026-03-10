@@ -16,6 +16,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/' },
       { text: 'Architecture', link: '/architecture/' },
       { text: 'Contributing', link: '/contributing/' },
+      { text: 'About', link: '/about' },
       { text: 'GitHub', link: 'https://github.com/markbrutx/Tabby' },
     ],
 
@@ -28,6 +29,7 @@ export default defineConfig({
             { text: 'Installation', link: '/guide/installation' },
             { text: 'Features', link: '/guide/features' },
             { text: 'CLI Usage', link: '/guide/cli' },
+            { text: 'FAQ & Troubleshooting', link: '/guide/faq' },
           ],
         },
       ],
@@ -68,7 +70,7 @@ export default defineConfig({
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright 2025-present Tabby Contributors',
+      copyright: `Copyright ${new Date().getFullYear()} Tabby Contributors`,
     },
   },
 })
