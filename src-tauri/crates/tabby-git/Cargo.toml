@@ -1,0 +1,8 @@
+[package]
+name = "tabby-git"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tabby-kernel = { path = "../tabby-kernel" }
+# Zero transport dependencies — no serde, no specta, no tauri.

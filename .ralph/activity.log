@@ -3,3 +3,5 @@
 ## Run Summary
 
 ## Events
+[2026-03-10 01:29:51] ITERATION 1 start (mode=build story=GIT-001)
+[2026-03-10 01:30:02] GIT-001: Starting work on tabby-git domain crate skeleton

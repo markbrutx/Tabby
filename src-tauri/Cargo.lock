@@ -3637,6 +3637,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tabby-git"
+version = "0.1.0"
+dependencies = [
+ "tabby-kernel",
+]
+
+[[package]]
 name = "tabby-kernel"
 version = "0.1.0"
 
