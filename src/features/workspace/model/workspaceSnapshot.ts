@@ -17,7 +17,7 @@ export interface PaneSnapshotModel {
   profileLabel: string;
   startupCommand: string | null;
   status: RuntimeStatus | null;
-  paneKind: "terminal" | "browser";
+  paneKind: "terminal" | "browser" | "git";
   url: string | null;
   spec: PaneSpec;
   runtime: RuntimeReadModel | null;
@@ -74,6 +74,23 @@ export function buildWorkspaceSnapshotModel(
             status: runtime?.status ?? null,
             paneKind: "browser" as const,
             url: runtime?.browserLocation ?? pane.spec.initialUrl ?? DEFAULT_BROWSER_URL,
+            spec: pane.spec,
+            runtime,
+          };
+        }
+
+        if (pane.spec.kind === "git") {
+          return {
+            id: pane.paneId,
+            title: pane.title,
+            sessionId: runtime?.runtimeSessionId ?? null,
+            cwd: pane.spec.workingDirectory,
+            profileId: "git",
+            profileLabel: "Git",
+            startupCommand: null,
+            status: runtime?.status ?? null,
+            paneKind: "git" as const,
+            url: null,
             spec: pane.spec,
             runtime,
           };

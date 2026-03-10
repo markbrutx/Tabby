@@ -20,6 +20,10 @@ pub enum PaneContentDefinition {
         id: PaneContentId,
         initial_url: BrowserUrl,
     },
+    Git {
+        id: PaneContentId,
+        working_directory: String,
+    },
 }
 
 impl PaneContentDefinition {
@@ -43,10 +47,18 @@ impl PaneContentDefinition {
         Self::Browser { id, initial_url }
     }
 
+    /// Creates a new git content definition with a unique ID.
+    pub fn git(id: PaneContentId, working_directory: impl Into<String>) -> Self {
+        Self::Git {
+            id,
+            working_directory: working_directory.into(),
+        }
+    }
+
     /// Returns the content ID for this definition.
     pub fn content_id(&self) -> &PaneContentId {
         match self {
-            Self::Terminal { id, .. } | Self::Browser { id, .. } => id,
+            Self::Terminal { id, .. } | Self::Browser { id, .. } | Self::Git { id, .. } => id,
         }
     }
 
@@ -54,7 +66,7 @@ impl PaneContentDefinition {
     pub fn terminal_profile_id(&self) -> Option<&str> {
         match self {
             Self::Terminal { profile_id, .. } => Some(profile_id.as_str()),
-            Self::Browser { .. } => None,
+            Self::Browser { .. } | Self::Git { .. } => None,
         }
     }
 
@@ -62,6 +74,9 @@ impl PaneContentDefinition {
     pub fn working_directory(&self) -> Option<&str> {
         match self {
             Self::Terminal {
+                working_directory, ..
+            } => Some(working_directory.as_str()),
+            Self::Git {
                 working_directory, ..
             } => Some(working_directory.as_str()),
             Self::Browser { .. } => None,
@@ -72,7 +87,7 @@ impl PaneContentDefinition {
     pub fn browser_url(&self) -> Option<&BrowserUrl> {
         match self {
             Self::Browser { initial_url, .. } => Some(initial_url),
-            Self::Terminal { .. } => None,
+            Self::Terminal { .. } | Self::Git { .. } => None,
         }
     }
 }

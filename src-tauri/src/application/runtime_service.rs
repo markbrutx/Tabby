@@ -73,6 +73,11 @@ impl RuntimeApplicationService {
                 RuntimeSessionId::from(format!("browser-{}", uuid::Uuid::new_v4())),
                 spec.initial_url.clone(),
             ),
+            PaneSpec::Git(_) => {
+                // Git panes do not have a runtime process yet.
+                // Runtime registration will be added when the git runtime is implemented.
+                return Ok(());
+            }
         };
         self.emitter.publish_runtime_status(&runtime);
         Ok(())
@@ -589,7 +594,7 @@ mod tests {
                     "workspace domain must NOT be mutated by cwd observation"
                 );
             }
-            PaneSpec::Browser(_) => panic!("expected terminal pane"),
+            other => panic!("expected terminal pane, got {other:?}"),
         }
 
         // 5. Workspace session should have no track_terminal_working_directory method

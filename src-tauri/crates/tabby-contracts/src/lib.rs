@@ -64,6 +64,9 @@ pub enum PaneSpecDto {
     Browser {
         initial_url: String,
     },
+    Git {
+        working_directory: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]

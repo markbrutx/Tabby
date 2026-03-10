@@ -706,6 +706,9 @@ mod tests {
                                 browser.initial_url.clone(),
                             );
                         }
+                        tabby_workspace::PaneSpec::Git(_) => {
+                            // Git panes do not have a runtime process yet.
+                        }
                     }
                 }
                 WorkspaceDomainEvent::ActivePaneChanged { .. }

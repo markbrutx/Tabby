@@ -79,6 +79,10 @@ mod tests {
                     let session = self.next_session_id("browser");
                     reg.register_browser(&pid, session, browser.initial_url.clone())
                 }
+                PaneSpec::Git(_) => {
+                    // Git panes do not have a runtime process yet.
+                    return;
+                }
             };
             self.emit_projection(runtime.pane_id.as_ref(), runtime.status);
         }

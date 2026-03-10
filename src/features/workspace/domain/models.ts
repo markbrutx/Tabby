@@ -38,7 +38,12 @@ export interface BrowserPaneSpec {
   readonly initialUrl: string;
 }
 
-export type PaneSpec = TerminalPaneSpec | BrowserPaneSpec;
+export interface GitPaneSpec {
+  readonly kind: "git";
+  readonly workingDirectory: string;
+}
+
+export type PaneSpec = TerminalPaneSpec | BrowserPaneSpec | GitPaneSpec;
 
 // ---------------------------------------------------------------------------
 // Read models (projections consumed by UI)

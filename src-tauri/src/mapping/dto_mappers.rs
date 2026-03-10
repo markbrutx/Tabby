@@ -123,6 +123,11 @@ fn pane_content_to_spec_dto(content: &PaneContentDefinition) -> PaneSpecDto {
         PaneContentDefinition::Browser { initial_url, .. } => PaneSpecDto::Browser {
             initial_url: initial_url.as_str().to_string(),
         },
+        PaneContentDefinition::Git {
+            working_directory, ..
+        } => PaneSpecDto::Git {
+            working_directory: working_directory.clone(),
+        },
     }
 }
 
@@ -139,6 +144,9 @@ fn pane_spec_to_dto(value: &PaneSpec) -> PaneSpecDto {
         },
         PaneSpec::Browser(spec) => PaneSpecDto::Browser {
             initial_url: spec.initial_url.as_str().to_string(),
+        },
+        PaneSpec::Git(spec) => PaneSpecDto::Git {
+            working_directory: spec.working_directory.clone(),
         },
     }
 }
@@ -196,6 +204,9 @@ pub fn pane_spec_from_dto(value: PaneSpecDto) -> PaneSpec {
             PaneSpec::Browser(tabby_workspace::BrowserPaneSpec {
                 initial_url: tabby_workspace::BrowserUrl::new(initial_url),
             })
+        }
+        PaneSpecDto::Git { working_directory } => {
+            PaneSpec::Git(tabby_workspace::GitPaneSpec { working_directory })
         }
     }
 }
@@ -432,7 +443,7 @@ mod tests {
                     Some("bash")
                 );
             }
-            PaneSpec::Browser(_) => panic!("Expected Terminal spec"),
+            other => panic!("Expected Terminal spec, got {other:?}"),
         }
     }
 
@@ -449,7 +460,7 @@ mod tests {
             PaneSpec::Browser(b) => {
                 assert_eq!(b.initial_url.as_str(), "https://example.com");
             }
-            PaneSpec::Terminal(_) => panic!("Expected Browser spec"),
+            other => panic!("Expected Browser spec, got {other:?}"),
         }
     }
 
@@ -759,7 +770,7 @@ mod tests {
                             Some("codex")
                         );
                     }
-                    PaneSpec::Browser(_) => panic!("Expected Terminal"),
+                    other => panic!("Expected Terminal, got {other:?}"),
                 }
             }
             other => panic!("Expected ReplacePaneSpec, got {other:?}"),

@@ -29,6 +29,13 @@ export function mapPaneSpecFromDto(dto: PaneSpecDto): PaneSpec {
     };
   }
 
+  if (dto.kind === "git") {
+    return {
+      kind: "git",
+      workingDirectory: dto.working_directory,
+    };
+  }
+
   return {
     kind: "terminal",
     launchProfileId: dto.launch_profile_id,
@@ -42,6 +49,13 @@ export function mapPaneSpecToDto(spec: PaneSpec): PaneSpecDto {
     return {
       kind: "browser",
       initial_url: spec.initialUrl,
+    };
+  }
+
+  if (spec.kind === "git") {
+    return {
+      kind: "git",
+      working_directory: spec.workingDirectory,
     };
   }
 

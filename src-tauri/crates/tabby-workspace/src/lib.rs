@@ -29,16 +29,22 @@ pub struct BrowserPaneSpec {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitPaneSpec {
+    pub working_directory: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PaneSpec {
     Terminal(TerminalPaneSpec),
     Browser(BrowserPaneSpec),
+    Git(GitPaneSpec),
 }
 
 impl PaneSpec {
     pub fn terminal_profile_id(&self) -> Option<&str> {
         match self {
             Self::Terminal(spec) => Some(spec.launch_profile_id.as_str()),
-            Self::Browser(_) => None,
+            Self::Browser(_) | Self::Git(_) => None,
         }
     }
 }
@@ -630,6 +636,7 @@ fn content_from_spec(spec: &PaneSpec) -> PaneContentDefinition {
             t.command_override.clone(),
         ),
         PaneSpec::Browser(b) => PaneContentDefinition::browser(id, b.initial_url.clone()),
+        PaneSpec::Git(g) => PaneContentDefinition::git(id, &g.working_directory),
     }
 }
 
@@ -647,6 +654,11 @@ pub fn spec_from_content(content: &PaneContentDefinition) -> PaneSpec {
         }),
         PaneContentDefinition::Browser { initial_url, .. } => PaneSpec::Browser(BrowserPaneSpec {
             initial_url: initial_url.clone(),
+        }),
+        PaneContentDefinition::Git {
+            working_directory, ..
+        } => PaneSpec::Git(GitPaneSpec {
+            working_directory: working_directory.clone(),
         }),
     }
 }
@@ -1198,7 +1210,7 @@ mod tests {
                 assert_eq!(t.launch_profile_id, "terminal");
                 assert_eq!(t.working_directory, "/home/user");
             }
-            PaneSpec::Browser(_) => panic!("expected terminal"),
+            other => panic!("expected terminal, got {other:?}"),
         }
     }
 
