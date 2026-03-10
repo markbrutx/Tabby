@@ -1,5 +1,11 @@
+mod git_dtos;
 mod value_objects;
 
+pub use git_dtos::{
+    BlameEntryDto, BranchInfoDto, CommitInfoDto, DiffContentDto, DiffHunkDto, DiffLineDto,
+    DiffLineKindDto, FileStatusDto, FileStatusKindDto, GitCommandDto, GitRepoStateDto,
+    GitResultDto, StashEntryDto,
+};
 pub use value_objects::{
     BrowserUrl, CommandTemplate, LayoutPreset, PaneId, TabId, ValueObjectError, WorkingDirectory,
 };
