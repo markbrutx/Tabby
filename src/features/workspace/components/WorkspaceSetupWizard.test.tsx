@@ -60,7 +60,6 @@ describe("WorkspaceSetupWizard", () => {
       />,
     );
     expect(screen.getByTestId("group-0-profile")).toHaveValue("terminal");
-    expect(screen.getByTestId("group-0-dir")).toHaveValue("/Users/test");
     expect(screen.getByTestId("group-count-0")).toHaveTextContent("1");
   });
 

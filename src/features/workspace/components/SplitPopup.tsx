@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Terminal, Globe, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
 import { CUSTOM_PROFILE_ID, DEFAULT_BROWSER_URL, type PaneSpec, type SplitDirection } from "@/features/workspace/domain/models";
 import type { ProfileReadModel } from "@/features/settings/domain/models";
 import { PaneConfigurator, isFieldValuesValid, type PaneFieldValues } from "./PaneConfigurator";
@@ -112,21 +112,44 @@ export function SplitPopup({
       }}
       role="dialog"
     >
-      <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl">
-        <p className="mb-3 text-sm font-medium">
+      <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl">
+        <p className="mb-4 text-sm font-medium">
           Split {dirLabel}
         </p>
 
-        <div className="space-y-3">
-          <Select
-            value={fieldValues.mode}
-            onChange={(event) => handleModeChange(event.target.value as PaneFieldValues["mode"])}
-            className="text-sm"
-          >
-            <option value="terminal">Terminal</option>
-            <option value="browser">Browser</option>
-            <option value="git">Git</option>
-          </Select>
+        <div className="space-y-4">
+          <div className="flex w-full gap-1 rounded-lg bg-[var(--color-surface-hover)] p-1">
+            <button
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md py-1.5 text-sm font-medium transition ${fieldValues.mode === "terminal"
+                  ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm ring-1 ring-black/5"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                }`}
+              onClick={() => handleModeChange("terminal")}
+            >
+              <Terminal size={14} />
+              Terminal
+            </button>
+            <button
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md py-1.5 text-sm font-medium transition ${fieldValues.mode === "browser"
+                  ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm ring-1 ring-black/5"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                }`}
+              onClick={() => handleModeChange("browser")}
+            >
+              <Globe size={14} />
+              Browser
+            </button>
+            <button
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md py-1.5 text-sm font-medium transition ${fieldValues.mode === "git"
+                  ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm ring-1 ring-black/5"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                }`}
+              onClick={() => handleModeChange("git")}
+            >
+              <GitBranch size={14} />
+              Git
+            </button>
+          </div>
 
           <PaneConfigurator
             values={fieldValues}

@@ -1,4 +1,4 @@
-import { Minus, Plus, X } from "lucide-react";
+import { Minus, Plus, X, Terminal, Globe, GitBranch } from "lucide-react";
 import type { ProfileReadModel } from "@/features/settings/domain/models";
 import type { PaneGroupConfig } from "@/features/workspace/store/types";
 import { PaneConfigurator, type PaneFieldValues } from "./PaneConfigurator";
@@ -15,6 +15,12 @@ const MODE_LABELS: Record<PaneGroupConfig["mode"], string> = {
   terminal: "Terminal",
   browser: "Browser",
   git: "Git",
+};
+
+const MODE_ICONS: Record<PaneGroupConfig["mode"], React.ElementType> = {
+  terminal: Terminal,
+  browser: Globe,
+  git: GitBranch,
 };
 
 interface PaneGroupRowProps {
@@ -74,62 +80,66 @@ export function PaneGroupRow({
   onRemove,
 }: PaneGroupRowProps) {
   const dotColor = GROUP_DOT_COLORS[index % GROUP_DOT_COLORS.length];
+  const Icon = MODE_ICONS[group.mode];
 
   return (
     <div
       data-testid={`pane-group-${index}`}
-      className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-4"
+      className="flex items-center gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2 pl-3 shadow-sm transition hover:border-[var(--color-border-strong)]"
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className={`h-2 w-2 rounded-full ${dotColor}`} />
-          <span className="text-xs font-medium text-[var(--color-text-muted)]">
-            Group {index + 1} — {MODE_LABELS[group.mode]}
-          </span>
+      <div className="flex w-[100px] shrink-0 items-center gap-2.5">
+        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${dotColor} text-white shadow-sm`}>
+          <Icon size={14} />
         </div>
-        <div className="flex items-center gap-1">
-          <div className="flex items-center gap-0.5 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-overlay)] px-1">
-            <button
-              data-testid={`group-decrement-${index}`}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text)] transition hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
-              disabled={group.count <= 1}
-              onClick={() => onChange(withCount(group, group.count - 1))}
-            >
-              <Minus size={14} />
-            </button>
-            <span
-              data-testid={`group-count-${index}`}
-              className="w-6 text-center text-sm font-medium text-[var(--color-text)]"
-            >
-              {group.count}
-            </span>
-            <button
-              data-testid={`group-increment-${index}`}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text)] transition hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
-              disabled={group.count >= maxCount}
-              onClick={() => onChange(withCount(group, group.count + 1))}
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-          {canRemove ? (
-            <button
-              data-testid={`group-remove-${index}`}
-              className="rounded p-1 text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
-              onClick={onRemove}
-            >
-              <X size={14} />
-            </button>
-          ) : null}
-        </div>
+        <span className="font-medium text-[var(--color-text)] text-sm">
+          {MODE_LABELS[group.mode]}
+        </span>
       </div>
 
       <PaneConfigurator
+        layout="inline"
         values={groupToFieldValues(group)}
         profiles={profiles}
         onChange={(values) => onChange(fieldValuesToGroup(values, group.count))}
         testIdPrefix={`group-${index}`}
       />
+
+      <div className="flex shrink-0 items-center gap-2 border-l border-[var(--color-border)] pl-4">
+        <div className="flex items-center gap-0.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-0.5 shadow-sm">
+          <button
+            data-testid={`group-decrement-${index}`}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] disabled:opacity-40"
+            disabled={group.count <= 1}
+            onClick={() => onChange(withCount(group, group.count - 1))}
+          >
+            <Minus size={12} />
+          </button>
+          <span
+            data-testid={`group-count-${index}`}
+            className="w-5 text-center text-xs font-medium text-[var(--color-text)]"
+          >
+            {group.count}
+          </span>
+          <button
+            data-testid={`group-increment-${index}`}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] disabled:opacity-40"
+            disabled={group.count >= maxCount}
+            onClick={() => onChange(withCount(group, group.count + 1))}
+          >
+            <Plus size={12} />
+          </button>
+        </div>
+
+        {canRemove ? (
+          <button
+            data-testid={`group-remove-${index}`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
+            onClick={onRemove}
+          >
+            <X size={14} />
+          </button>
+        ) : <div className="h-7 w-7" />}
+      </div>
     </div>
   );
 }

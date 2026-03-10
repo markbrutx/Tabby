@@ -29,7 +29,7 @@ describe("SplitPopup", () => {
       />,
     );
 
-    expect(screen.getAllByRole("combobox")[1]).toHaveValue("terminal");
+    expect(screen.getByRole("combobox")).toHaveValue("terminal");
   });
 
   it("disables split for custom profile without a command", () => {
@@ -119,10 +119,7 @@ describe("SplitPopup", () => {
       />,
     );
 
-    const modeSelect = screen.getAllByRole("combobox")[0];
-    const options = Array.from(modeSelect.querySelectorAll("option"));
-    const values = options.map((opt) => opt.getAttribute("value"));
-    expect(values).toContain("git");
+    expect(screen.getByRole("button", { name: /Git/i })).toBeInTheDocument();
   });
 
   it("shows working directory input when Git mode is selected", () => {
@@ -141,8 +138,7 @@ describe("SplitPopup", () => {
       />,
     );
 
-    const modeSelect = screen.getAllByRole("combobox")[0];
-    fireEvent.change(modeSelect, { target: { value: "git" } });
+    fireEvent.click(screen.getByRole("button", { name: /Git/i }));
 
     expect(screen.getByPlaceholderText("Working directory")).toBeInTheDocument();
   });
@@ -164,8 +160,7 @@ describe("SplitPopup", () => {
       />,
     );
 
-    const modeSelect = screen.getAllByRole("combobox")[0];
-    fireEvent.change(modeSelect, { target: { value: "git" } });
+    fireEvent.click(screen.getByRole("button", { name: /Git/i }));
     fireEvent.click(screen.getByRole("button", { name: "Split" }));
 
     expect(onConfirm).toHaveBeenCalledWith({
@@ -188,8 +183,6 @@ describe("SplitPopup", () => {
       />,
     );
 
-    const modeSelect = screen.getAllByRole("combobox")[0];
-    expect(modeSelect).toHaveValue("git");
     expect(screen.getByDisplayValue("/projects/git-repo")).toBeInTheDocument();
   });
 

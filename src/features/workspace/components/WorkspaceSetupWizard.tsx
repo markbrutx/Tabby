@@ -99,7 +99,7 @@ export function WorkspaceSetupWizard({
 
   return (
     <div className="flex h-screen items-center justify-center bg-[var(--color-bg)] p-8">
-      <div className="w-full max-w-4xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-2xl">
+      <div className="w-full max-w-5xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-2xl">
         <div className="text-center">
           <h1
             data-testid="wizard-title"
@@ -112,7 +112,7 @@ export function WorkspaceSetupWizard({
           </p>
         </div>
 
-        <div className="mt-6 flex gap-8">
+        <div className="mt-8 flex gap-10">
           <div className="flex-1 space-y-3">
             <h3 className="text-xs font-medium text-[var(--color-text-muted)]">
               Groups
@@ -131,10 +131,10 @@ export function WorkspaceSetupWizard({
             ))}
 
             {canAddMore ? (
-              <div className="flex gap-2">
+              <div className="mt-2 flex gap-2.5">
                 <button
                   data-testid="add-terminal-group"
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2.5 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
                   onClick={() => handleAddGroup("terminal")}
                 >
                   <Terminal size={14} />
@@ -142,7 +142,7 @@ export function WorkspaceSetupWizard({
                 </button>
                 <button
                   data-testid="add-browser-group"
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2.5 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
                   onClick={() => handleAddGroup("browser")}
                 >
                   <Globe size={14} />
@@ -150,7 +150,7 @@ export function WorkspaceSetupWizard({
                 </button>
                 <button
                   data-testid="add-git-group"
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2.5 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
                   onClick={() => handleAddGroup("git")}
                 >
                   <GitBranch size={14} />
@@ -160,7 +160,7 @@ export function WorkspaceSetupWizard({
             ) : null}
           </div>
 
-          <div className="w-[280px] shrink-0">
+          <div className="w-[300px] shrink-0">
             <LayoutPreview groups={groups} />
           </div>
         </div>
