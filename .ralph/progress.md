@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-03-10 11:48 - GIT-038: Add GitPane to SplitTreeRenderer
+Thread:
+Run: 20260310-012951-93839 (iteration 40)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-40.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-40.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 6ff2269 feat: add GitPane to SplitTreeRenderer with GitPaneHeader (GIT-038)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (454 tests, 31 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (563 tests)
+- Files changed:
+  - src/features/git/components/GitPaneHeader.tsx (new - header component with repo name, branch, drag/close)
+  - src/features/workspace/components/SplitTreeRenderer.tsx (modified - three-way conditional for terminal/browser/git)
+  - src/features/workspace/components/SplitTreeRenderer.test.tsx (new - 3 component tests for git pane in split tree)
+  - src/App.tsx (modified - pass gitClient to SplitTreeRenderer)
+- Implemented GitPaneHeader showing repo basename and branch info with drag support
+- Extended SplitTreeRenderer PaneLeaf with three-way conditional: browser -> git -> terminal
+- Threaded gitClient through SplitTreeCtx context from App.tsx via shellClients.git
+- Git pane state preserved via useRef store pattern in GitPane (survives tab switches)
+- Git pane resizes correctly via react-resizable-panels Panel wrapping
+- **Learnings for future iterations:**
+  - ResolvedTheme is a string literal ("dawn" | "midnight"), not an object
+  - TerminalPaneSpec uses launchProfileId/commandOverride, not profileId/startupCommand
+  - TerminalPane tests need Tauri internals mocked (transformCallback) - avoid rendering TerminalPane in unit tests without proper mocking
+  - RuntimeReadModel doesn't have headBranch - branch info comes from GitPane's internal store via repoState
+---
+
 ## 2026-03-10 11:42 - GIT-037: Create StashPanel component
 Thread:
 Run: 20260310-012951-93839 (iteration 39)
