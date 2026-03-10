@@ -13,6 +13,7 @@ import { CommitPanel } from "./CommitPanel";
 import { BranchSelector } from "./BranchSelector";
 import { HistoryPanel } from "./HistoryPanel";
 import { BlameView } from "./BlameView";
+import { StashPanel } from "./StashPanel";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -120,6 +121,13 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
   const blameFilePath = store((s) => s.blameFilePath);
   const blameLoading = store((s) => s.blameLoading);
   const fetchBlame = store((s) => s.fetchBlame);
+  const stashes = store((s) => s.stashes);
+  const stashesLoading = store((s) => s.stashesLoading);
+  const listStashes = store((s) => s.listStashes);
+  const stashPush = store((s) => s.stashPush);
+  const stashPop = store((s) => s.stashPop);
+  const stashApply = store((s) => s.stashApply);
+  const stashDrop = store((s) => s.stashDrop);
 
   const stagingCallbacks: StagingCallbacks = useMemo(() => ({
     onStageLines: (filePath: string, lineRanges: string[]) => void stageLines(filePath, lineRanges),
@@ -139,7 +147,10 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
     if (activeView === "history") {
       void fetchCommitLog();
     }
-  }, [activeView, listBranches, fetchCommitLog]);
+    if (activeView === "stash") {
+      void listStashes();
+    }
+  }, [activeView, listBranches, fetchCommitLog, listStashes]);
 
   if (loading) {
     return (
@@ -243,6 +254,18 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
               </div>
             </div>
           </>
+        ) : activeView === "stash" ? (
+          <div className="flex min-w-0 flex-1 flex-col" data-testid="git-stash-view">
+            <StashPanel
+              stashes={stashes}
+              loading={stashesLoading}
+              onPush={stashPush}
+              onPop={stashPop}
+              onApply={stashApply}
+              onDrop={stashDrop}
+              onRefresh={listStashes}
+            />
+          </div>
         ) : (
           <>
             {/* Left panel — file tree */}

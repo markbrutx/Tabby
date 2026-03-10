@@ -7,6 +7,7 @@ import type {
   DiffContent,
   FileStatus,
   GitRepoState,
+  StashEntry,
 } from "@/features/git/domain/models";
 import { hunkLineRanges } from "@/features/git/components/DiffViewer";
 
@@ -35,6 +36,8 @@ export interface GitPaneState {
   readonly blameEntries: readonly BlameEntry[];
   readonly blameFilePath: string | null;
   readonly blameLoading: boolean;
+  readonly stashes: readonly StashEntry[];
+  readonly stashesLoading: boolean;
 
   refreshStatus: () => Promise<void>;
   selectFile: (filePath: string | null) => Promise<void>;
@@ -56,6 +59,11 @@ export interface GitPaneState {
   fetchMoreCommits: () => Promise<void>;
   selectCommit: (hash: string | null) => Promise<void>;
   fetchBlame: (filePath: string) => Promise<void>;
+  listStashes: () => Promise<void>;
+  stashPush: (message: string | null) => Promise<void>;
+  stashPop: (index: number) => Promise<void>;
+  stashApply: (index: number) => Promise<void>;
+  stashDrop: (index: number) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +97,8 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
     blameEntries: [],
     blameFilePath: null,
     blameLoading: false,
+    stashes: [],
+    stashesLoading: false,
 
     async refreshStatus() {
       set({ loading: true, error: null });
@@ -525,6 +535,92 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
         const message =
           err instanceof Error ? err.message : "Failed to fetch blame";
         set({ error: message, blameLoading: false });
+      }
+    },
+
+    async listStashes() {
+      set({ stashesLoading: true });
+      try {
+        const result = await gitClient.dispatch({
+          kind: "stashList",
+          pane_id: paneId,
+        });
+        if (result.kind === "stashList") {
+          set({
+            stashes: result.entries.map((e) => ({
+              index: e.index,
+              message: e.message,
+              date: e.date,
+            })),
+            stashesLoading: false,
+          });
+        } else {
+          set({ stashesLoading: false });
+        }
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to list stashes";
+        set({ error: message, stashesLoading: false });
+      }
+    },
+
+    async stashPush(message: string | null) {
+      try {
+        await gitClient.dispatch({
+          kind: "stashPush",
+          pane_id: paneId,
+          message,
+        });
+        await Promise.all([get().listStashes(), get().refreshStatus()]);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to push stash";
+        set({ error: msg });
+      }
+    },
+
+    async stashPop(index: number) {
+      try {
+        await gitClient.dispatch({
+          kind: "stashPop",
+          pane_id: paneId,
+          index,
+        });
+        await Promise.all([get().listStashes(), get().refreshStatus()]);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to pop stash";
+        set({ error: msg });
+      }
+    },
+
+    async stashApply(index: number) {
+      try {
+        await gitClient.dispatch({
+          kind: "stashPop",
+          pane_id: paneId,
+          index,
+        });
+        await Promise.all([get().listStashes(), get().refreshStatus()]);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to apply stash";
+        set({ error: msg });
+      }
+    },
+
+    async stashDrop(index: number) {
+      try {
+        await gitClient.dispatch({
+          kind: "stashDrop",
+          pane_id: paneId,
+          index,
+        });
+        await get().listStashes();
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to drop stash";
+        set({ error: msg });
       }
     },
   }));
