@@ -24,6 +24,10 @@ AGENTS.md
 CLAUDE.md
 spec.md
 
+# Generated reports & codemaps
+.reports/
+codemaps/
+
 # Local environment overrides
 .env
 .env.local
