@@ -1,0 +1,28 @@
+name: Build Test
+
+on: workflow_dispatch
+
+jobs:
+  build-test:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+            target: aarch64-apple-darwin
+          - platform: macos-13
+            args: "--target x86_64-apple-darwin"
+            target: x86_64-apple-darwin
+
+    uses: ./.github/workflows/build.yml
+    with:
+      platform: ${{ matrix.platform }}
+      target: ${{ matrix.target }}
+      build-args: ${{ matrix.args }}
+      sign-binaries: false
+      asset-prefix: tabby-test
+      upload-artifacts: true
+    secrets: inherit
