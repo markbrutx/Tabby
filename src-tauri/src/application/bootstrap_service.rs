@@ -106,7 +106,8 @@ impl BootstrapService {
                 .filter(|s| !s.trim().is_empty())
                 .map(tabby_kernel::CommandTemplate::new),
         });
-        let events = workspace_service.open_tab(layout, false, vec![pane_spec])?;
+        let pane_specs = vec![pane_spec; layout.pane_count()];
+        let events = workspace_service.open_tab(layout, false, pane_specs)?;
         RuntimeCoordinator::handle_workspace_events(
             events,
             settings_service,
@@ -130,7 +131,8 @@ impl BootstrapService {
             working_directory: resolve_default_working_directory(None, &preferences),
             command_override: None,
         });
-        let events = workspace_service.open_tab(layout, false, vec![pane_spec])?;
+        let pane_specs = vec![pane_spec; layout.pane_count()];
+        let events = workspace_service.open_tab(layout, false, pane_specs)?;
         RuntimeCoordinator::handle_workspace_events(
             events,
             settings_service,

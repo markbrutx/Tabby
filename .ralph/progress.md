@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-03-10 12:20 - GIT-042: Update CLAUDE.md architecture documentation
+Thread:
+Run: 20260310-012951-93839 (iteration 44)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-44.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-44.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 312df5c docs: update CLAUDE.md architecture documentation for Git context (GIT-042)
+- Post-commit status: clean (only .ralph/activity.log gitignored)
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (514 tests, 33 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (312 Rust tests)
+- Files changed:
+  - CLAUDE.md
+- What was implemented:
+  - Updated architecture map ASCII art to include tabby-git in Domain Model layer and features/git in Presentation layer
+  - Changed "four bounded contexts" to "five bounded contexts" including Git
+  - Added Git row to Bounded Contexts table: tabby-git | GitApplicationService | features/git/
+  - Added GitOperationsPort to Port traits table with CliGitAdapter as implementation
+  - Added tabby-git domain crate documentation with its types and value objects
+  - Added git_service.rs and cli_git_adapter.rs to Backend/Infrastructure sections
+  - Updated port count from 4 to 5 in application services description
+  - Added features/git/ to Frontend section
+  - Added Git invariant: "Git operations are request/response (no persistent process)"
+- **Learnings for future iterations:**
+  - Documentation-only stories are fast; verify actual code structures before documenting
+  - .ralph/ is gitignored so activity.log cannot be committed
+---
+
 ## 2026-03-10 12:15 - GIT-041: Comprehensive test coverage for Git feature
 Thread:
 Run: 20260310-012951-93839 (iteration 43)
