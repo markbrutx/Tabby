@@ -1,5 +1,10 @@
+use std::path::Path;
 use std::sync::Arc;
 
+use tabby_git::value_objects::{BranchName, RemoteName, StashId};
+use tabby_git::{
+    BlameEntry, BranchInfo, CommitInfo, DiffContent, FileStatus, GitRepositoryState, StashEntry,
+};
 use tabby_runtime::PaneRuntime;
 use tabby_settings::UserPreferences;
 use tabby_workspace::WorkspaceSession;
@@ -93,4 +98,91 @@ pub trait BrowserSurfacePort: Send + Sync + std::fmt::Debug {
 
     /// Navigate an existing browser surface to a new URL.
     fn navigate(&self, pane_id: &str, url: &str) -> Result<(), ShellError>;
+}
+
+/// Port for executing Git operations against a repository on disk.
+///
+/// Infrastructure adapters implement this trait to decouple application services
+/// from any specific Git backend (CLI, libgit2, etc.).
+pub trait GitOperationsPort: Send + Sync + std::fmt::Debug {
+    /// Return the status of all files in the repository (staged and unstaged).
+    fn status(&self, repo_path: &Path) -> Result<Vec<FileStatus>, ShellError>;
+
+    /// Return the diff for the repository (unstaged changes by default).
+    fn diff(&self, repo_path: &Path, staged: bool) -> Result<Vec<DiffContent>, ShellError>;
+
+    /// Stage one or more files by path.
+    fn stage(&self, repo_path: &Path, paths: &[&str]) -> Result<(), ShellError>;
+
+    /// Unstage one or more files by path.
+    fn unstage(&self, repo_path: &Path, paths: &[&str]) -> Result<(), ShellError>;
+
+    /// Stage specific line ranges within a file (partial/hunk staging).
+    fn stage_lines(
+        &self,
+        repo_path: &Path,
+        file_path: &str,
+        line_ranges: &[(u32, u32)],
+    ) -> Result<(), ShellError>;
+
+    /// Create a commit with the given message.
+    fn commit(&self, repo_path: &Path, message: &str) -> Result<CommitInfo, ShellError>;
+
+    /// Push the current branch to the remote.
+    fn push(
+        &self,
+        repo_path: &Path,
+        remote: &RemoteName,
+        branch: &BranchName,
+    ) -> Result<(), ShellError>;
+
+    /// Pull changes from the remote into the current branch.
+    fn pull(
+        &self,
+        repo_path: &Path,
+        remote: &RemoteName,
+        branch: &BranchName,
+    ) -> Result<(), ShellError>;
+
+    /// Fetch refs from a remote without merging.
+    fn fetch(&self, repo_path: &Path, remote: &RemoteName) -> Result<(), ShellError>;
+
+    /// List all local branches.
+    fn branches(&self, repo_path: &Path) -> Result<Vec<BranchInfo>, ShellError>;
+
+    /// Check out an existing branch by name.
+    fn checkout_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError>;
+
+    /// Create a new branch from the current HEAD.
+    fn create_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError>;
+
+    /// Delete a local branch.
+    fn delete_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError>;
+
+    /// Merge another branch into the current branch.
+    fn merge_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError>;
+
+    /// Return the commit log, limited to `max_count` entries.
+    fn log(&self, repo_path: &Path, max_count: u32) -> Result<Vec<CommitInfo>, ShellError>;
+
+    /// Return blame information for a file.
+    fn blame(&self, repo_path: &Path, file_path: &str) -> Result<Vec<BlameEntry>, ShellError>;
+
+    /// Push the current worktree state onto the stash stack.
+    fn stash_push(&self, repo_path: &Path, message: Option<&str>) -> Result<(), ShellError>;
+
+    /// Pop the top stash entry and apply it to the worktree.
+    fn stash_pop(&self, repo_path: &Path) -> Result<(), ShellError>;
+
+    /// List all stash entries.
+    fn stash_list(&self, repo_path: &Path) -> Result<Vec<StashEntry>, ShellError>;
+
+    /// Drop a specific stash entry.
+    fn stash_drop(&self, repo_path: &Path, stash_id: StashId) -> Result<(), ShellError>;
+
+    /// Discard unstaged changes for the given file paths.
+    fn discard_changes(&self, repo_path: &Path, paths: &[&str]) -> Result<(), ShellError>;
+
+    /// Return the high-level repository state (HEAD branch, detached status, etc.).
+    fn repo_state(&self, repo_path: &Path) -> Result<GitRepositoryState, ShellError>;
 }
