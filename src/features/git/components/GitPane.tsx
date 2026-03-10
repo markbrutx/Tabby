@@ -7,6 +7,9 @@ import {
   type GitActiveView,
   type GitPaneState,
 } from "@/features/git/application/useGitPaneStore";
+import { PaneErrorState } from "@/components/PaneErrorState";
+import { Button } from "@/components/ui/Button";
+import { RotateCcw } from "lucide-react";
 import { FileTreePanel } from "./FileTreePanel";
 import { DiffViewer, type StagingCallbacks } from "./DiffViewer";
 import { CommitPanel } from "./CommitPanel";
@@ -55,21 +58,6 @@ function LoadingSkeleton() {
   );
 }
 
-function ErrorState({ message }: { readonly message: string }) {
-  return (
-    <div
-      className="flex h-full items-center justify-center"
-      data-testid="git-error"
-    >
-      <div className="flex flex-col items-center gap-2 text-center">
-        <span className="text-sm font-medium text-red-400">Error</span>
-        <span className="max-w-xs text-sm text-[var(--color-text-soft)]">
-          {message}
-        </span>
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -162,9 +150,16 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
 
   if (error) {
     return (
-      <div className="flex h-full flex-col bg-[var(--color-bg)]">
-        <ErrorState message={error} />
-      </div>
+      <PaneErrorState
+        title="Git Error"
+        message={error}
+        action={
+          <Button variant="secondary" onClick={() => { void refreshStatus(); }}>
+            <RotateCcw size={14} className="mr-2" />
+            Retry
+          </Button>
+        }
+      />
     );
   }
 
@@ -185,11 +180,10 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
             <button
               key={tab.key}
               type="button"
-              className={`rounded px-2 py-0.5 text-xs transition-colors ${
-                activeView === tab.key
-                  ? "bg-[var(--color-accent)] text-white"
-                  : "text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
-              }`}
+              className={`rounded px-2 py-0.5 text-xs transition-colors ${activeView === tab.key
+                ? "bg-[var(--color-accent)] text-white"
+                : "text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+                }`}
               onClick={() => setActiveView(tab.key)}
             >
               {tab.label}

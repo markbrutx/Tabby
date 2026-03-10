@@ -6,6 +6,7 @@ import {
 } from "react-resizable-panels";
 import { RefreshCw } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { PaneErrorState } from "@/components/PaneErrorState";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain/models";
 import type {
@@ -138,23 +139,23 @@ function PaneLeaf({ paneId }: { paneId: string }) {
 
   return (
     <ErrorBoundary
-      fallback={(_error, reset) => (
-        <div className="flex h-full items-center justify-center gap-3 text-center">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Pane crashed
-          </p>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              reset();
-              void onRestart(pane.id);
-            }}
-          >
-            <RefreshCw size={14} />
-            Restart
-          </Button>
-        </div>
+      fallback={(error, reset) => (
+        <PaneErrorState
+          title="Pane Crashed"
+          message={error.message || "An unexpected error occurred in this pane."}
+          action={
+            <Button
+              variant="secondary"
+              onClick={() => {
+                reset();
+                void onRestart(pane.id);
+              }}
+            >
+              <RefreshCw size={14} className="mr-2" />
+              Restart
+            </Button>
+          }
+        />
       )}
     >
       <div className={`flex h-full flex-col ${isDragSource ? "opacity-50" : ""}`}>
@@ -239,9 +240,8 @@ function NodeRenderer({ node }: { node: SplitNode }) {
         <NodeRenderer node={node.first} />
       </Panel>
       <PanelResizeHandle
-        className={`resize-handle ${
-          direction === "horizontal" ? "w-[3px]" : "h-[3px]"
-        } shrink-0 bg-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]`}
+        className={`resize-handle ${direction === "horizontal" ? "w-[3px]" : "h-[3px]"
+          } shrink-0 bg-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]`}
       />
       <Panel defaultSize={secondSize} minSize={5}>
         <NodeRenderer node={node.second} />
