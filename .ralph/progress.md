@@ -1,5 +1,42 @@
 # Progress Log
 
+## 2026-03-10 11:42 - GIT-037: Create StashPanel component
+Thread:
+Run: 20260310-012951-93839 (iteration 39)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-39.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-39.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 4b7c45d feat: add StashPanel component with push/pop/apply/drop actions (GIT-037)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (452 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS
+- Files changed:
+  - src/features/git/components/StashPanel.tsx (new)
+  - src/features/git/components/StashPanel.test.tsx (new - 17 tests)
+  - src/features/git/application/useGitPaneStore.ts (added stash state & actions)
+  - src/features/git/components/GitPane.tsx (wired StashPanel into stash tab view)
+- Implemented StashPanel component with:
+  - Stash list with index, message, date
+  - Push button with optional message input (Enter key support)
+  - Pop button for applying and removing selected stash
+  - Apply button for applying stash without removing
+  - Drop button with confirmation dialog
+  - Empty state when no stashes
+  - Loading indicator
+  - Selection toggle (click to select/deselect)
+  - Accessible as the "Stash" tab in GitPane
+- Added store actions: listStashes, stashPush, stashPop, stashApply, stashDrop
+- **Learnings for future iterations:**
+  - The stash API was already fully defined in transport DTOs and mock client — only store + UI needed
+  - GitPane view routing uses nested ternaries; stash view slots in between history and default changes view
+---
+
 ## 2026-03-10 11:38 - GIT-036: Create BlameView component
 Thread:
 Run: 20260310-012951-93839 (iteration 38)
