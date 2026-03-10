@@ -171,3 +171,34 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - Use wildcard `other => panic!()` in test match arms to be future-proof when new variants are added
   - Auto-generated tauri-bindings.ts must be manually updated in sync until specta regeneration runs
 ---
+
+## 2026-03-10 01:49 - GIT-006: Add PaneContentDefinition::Git variant to tabby-workspace
+Thread:
+Run: 20260310-012951-93839 (iteration 6)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-6.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-6.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: e3d509b docs: update progress log for GIT-006 completion
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (402 tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - .ralph/progress.md (progress log update)
+  - .ralph/activity.log (activity logging)
+- GIT-006 was already fully implemented as part of GIT-005. All acceptance criteria verified:
+  - PaneContentDefinition::Git { id: PaneContentId, working_directory: String } variant exists in content.rs:23-26
+  - content_id() accessor returns id for Git variant (content.rs:61)
+  - working_directory() accessor returns working_directory for Git variant (content.rs:79-81)
+  - All existing match arms on PaneContentDefinition updated across 7 files (content.rs, dto_mappers.rs, runtime_coordinator.rs, runtime_service.rs, runtime_lifecycle_tests.rs, runtime_integration_tests.rs, lib.rs)
+  - cargo test --workspace passes with 402 tests, 0 failures
+- **Learnings for future iterations:**
+  - GIT-005 scope was broader than its story description — it implemented both PaneSpec::Git AND PaneContentDefinition::Git in a single iteration
+  - When verifying already-complete stories, still run all quality gates to confirm nothing regressed
+  - PRD story overlap: future stories should check if work was already done by preceding stories
+---
