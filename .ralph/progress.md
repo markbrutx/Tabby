@@ -128,3 +128,46 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - Reuse value objects from value_objects.rs and tabby-kernel (WorkingDirectory) as field types
   - No validation needed in struct constructors when fields use already-validated value objects
 ---
+
+## 2026-03-10 01:46 - GIT-005: Add GitPaneSpec and PaneSpec::Git to tabby-workspace
+Thread:
+Run: 20260310-012951-93839 (iteration 5)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-5.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-5.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 0288996 feat: add GitPaneSpec and PaneSpec::Git to tabby-workspace (GIT-005)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (402 tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/crates/tabby-workspace/src/lib.rs (GitPaneSpec struct, PaneSpec::Git variant, updated match arms)
+  - src-tauri/crates/tabby-workspace/src/content.rs (PaneContentDefinition::Git variant, git() constructor, updated match arms)
+  - src-tauri/crates/tabby-contracts/src/lib.rs (PaneSpecDto::Git variant)
+  - src-tauri/src/mapping/dto_mappers.rs (Git handling in all mapper functions)
+  - src-tauri/src/application/runtime_service.rs (Git pane returns early from start_runtime — no runtime yet)
+  - src-tauri/src/application/runtime_coordinator.rs (Git arm in test match blocks)
+  - src-tauri/src/application/runtime_lifecycle_tests.rs (Git arm in test helper)
+  - src/contracts/tauri-bindings.ts (PaneSpecDto Git variant)
+  - src/features/workspace/domain/models.ts (GitPaneSpec interface, PaneSpec union)
+  - src/features/workspace/application/snapshot-mappers.ts (Git handling in mappers)
+  - src/features/workspace/model/workspaceSnapshot.ts (Git pane kind + snapshot builder)
+- Implemented all acceptance criteria:
+  - GitPaneSpec struct with working_directory: String in tabby-workspace
+  - PaneSpec::Git(GitPaneSpec) variant added
+  - All match arms updated for exhaustiveness across 7 Rust files
+  - spec_from_content handles Git content definition
+  - PaneContentDefinition::Git variant added with constructor and field access
+  - Frontend types and mappers updated for full-stack consistency
+  - All 402 Rust tests + 203 frontend tests pass
+- **Learnings for future iterations:**
+  - Adding a PaneSpec variant ripples across both Rust and TypeScript — need to update contracts, domain models, mappers, and snapshot builders
+  - Git panes have no runtime process yet; return early from start_runtime to avoid registering a runtime
+  - Use wildcard `other => panic!()` in test match arms to be future-proof when new variants are added
+  - Auto-generated tauri-bindings.ts must be manually updated in sync until specta regeneration runs
+---
