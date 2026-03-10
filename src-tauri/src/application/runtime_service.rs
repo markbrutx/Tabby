@@ -73,10 +73,15 @@ impl RuntimeApplicationService {
                 RuntimeSessionId::from(format!("browser-{}", uuid::Uuid::new_v4())),
                 spec.initial_url.clone(),
             ),
-            PaneSpec::Git(_) => {
-                // Git panes do not have a runtime process yet.
-                // Runtime registration will be added when the git runtime is implemented.
-                return Ok(());
+            PaneSpec::Git(spec) => {
+                let synthetic_session_id =
+                    RuntimeSessionId::from(format!("git-{}", uuid::Uuid::new_v4()));
+                let repo_path = tabby_kernel::WorkingDirectory::new(&spec.working_directory)
+                    .map_err(|error| {
+                        ShellError::Validation(format!("invalid git repo path: {error}"))
+                    })?;
+                self.lock_runtimes()?
+                    .register_git(pane_id, synthetic_session_id, repo_path)
             }
         };
         self.emitter.publish_runtime_status(&runtime);
@@ -750,7 +755,7 @@ mod tests {
 
     use super::RuntimeApplicationService;
     use tabby_settings::UserPreferences;
-    use tabby_workspace::{BrowserPaneSpec, PaneSpec, TerminalPaneSpec};
+    use tabby_workspace::{BrowserPaneSpec, GitPaneSpec, PaneSpec, TerminalPaneSpec};
 
     fn default_preferences() -> UserPreferences {
         tabby_settings::default_preferences()
@@ -1264,5 +1269,206 @@ mod tests {
             git_repo_path: None,
         };
         publisher.publish_runtime_status(&runtime);
+    }
+
+    // -----------------------------------------------------------------------
+    // GIT-012: Git pane start/stop/restart lifecycle
+    // -----------------------------------------------------------------------
+
+    fn git_spec_for_test(path: &str) -> PaneSpec {
+        PaneSpec::Git(GitPaneSpec {
+            working_directory: String::from(path),
+        })
+    }
+
+    #[test]
+    fn start_git_runtime_registers_in_registry_without_spawning_process() {
+        let (service, terminal, _browser, emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = git_spec_for_test("/projects/tabby");
+
+        service
+            .start_runtime(&pid("git-pane-1"), &spec, &prefs, mock_receiver())
+            .expect("start git runtime should succeed");
+
+        // Terminal port was NOT called (no OS process)
+        let spawn_calls = terminal.spawn_calls.lock().expect("lock");
+        assert!(
+            spawn_calls.is_empty(),
+            "terminal port should not be called for git runtime"
+        );
+
+        // Runtime registered in registry
+        let snapshot = service.snapshot().expect("snapshot");
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].pane_id.as_ref(), "git-pane-1");
+        assert!(matches!(snapshot[0].kind, RuntimeKind::Git));
+        assert!(matches!(snapshot[0].status, RuntimeStatus::Running));
+        assert!(
+            snapshot[0].runtime_session_id.is_some(),
+            "git runtime should have a synthetic session id"
+        );
+        assert_eq!(
+            snapshot[0].git_repo_path.as_ref().map(|p| p.as_str()),
+            Some("/projects/tabby"),
+            "git runtime should record repo path"
+        );
+
+        // Projection emitted
+        let emitted = emitter.emitted.lock().expect("lock");
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "git-pane-1");
+        assert_eq!(emitted[0].1, RuntimeStatus::Running);
+    }
+
+    #[test]
+    fn stop_git_runtime_removes_from_registry_without_killing_process() {
+        let (service, terminal, browser, emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = git_spec_for_test("/projects/tabby");
+
+        service
+            .start_runtime(&pid("git-pane-1"), &spec, &prefs, mock_receiver())
+            .expect("start");
+
+        service.stop_runtime(&pid("git-pane-1"));
+
+        // No OS process kill calls
+        let kill_calls = terminal.kill_calls.lock().expect("lock");
+        assert!(
+            kill_calls.is_empty(),
+            "terminal kill should not be called for git runtime"
+        );
+        let close_calls = browser.close_calls.lock().expect("lock");
+        assert!(
+            close_calls.is_empty(),
+            "browser close should not be called for git runtime"
+        );
+
+        // Registry is empty
+        let snapshot = service.snapshot().expect("snapshot");
+        assert!(snapshot.is_empty(), "registry should be empty after stop");
+
+        // Exited projection emitted
+        let emitted = emitter.emitted.lock().expect("lock");
+        let exited = emitted
+            .iter()
+            .filter(|(id, status)| id == "git-pane-1" && *status == RuntimeStatus::Exited)
+            .count();
+        assert_eq!(
+            exited, 1,
+            "Exited projection should be emitted for git runtime"
+        );
+    }
+
+    #[test]
+    fn restart_git_runtime_stops_then_starts() {
+        let (service, terminal, _browser, emitter) = build_service();
+        let prefs = default_preferences();
+        let spec = git_spec_for_test("/projects/tabby");
+
+        service
+            .start_runtime(&pid("git-pane-1"), &spec, &prefs, mock_receiver())
+            .expect("start");
+
+        service
+            .restart_runtime(&pid("git-pane-1"), &spec, &prefs, mock_receiver())
+            .expect("restart");
+
+        // No OS process interactions
+        let spawn_calls = terminal.spawn_calls.lock().expect("lock");
+        assert!(spawn_calls.is_empty(), "no terminal spawns for git runtime");
+        let kill_calls = terminal.kill_calls.lock().expect("lock");
+        assert!(kill_calls.is_empty(), "no terminal kills for git runtime");
+
+        // Registry has exactly one runtime, Running
+        let snapshot = service.snapshot().expect("snapshot");
+        assert_eq!(snapshot.len(), 1);
+        assert!(matches!(snapshot[0].kind, RuntimeKind::Git));
+        assert!(matches!(snapshot[0].status, RuntimeStatus::Running));
+
+        // Projections: Running, Exited, Running
+        let emitted = emitter.emitted.lock().expect("lock");
+        let statuses: Vec<_> = emitted
+            .iter()
+            .filter(|(id, _)| id == "git-pane-1")
+            .map(|(_, s)| *s)
+            .collect();
+        assert_eq!(
+            statuses,
+            vec![
+                RuntimeStatus::Running,
+                RuntimeStatus::Exited,
+                RuntimeStatus::Running,
+            ]
+        );
+    }
+
+    #[test]
+    fn stop_nonexistent_git_runtime_is_noop() {
+        let (service, _terminal, _browser, emitter) = build_service();
+
+        // Stopping a pane that was never started should not panic
+        service.stop_runtime(&pid("git-pane-nonexistent"));
+
+        // No projections emitted
+        let emitted = emitter.emitted.lock().expect("lock");
+        assert!(emitted.is_empty(), "no projection for nonexistent pane");
+    }
+
+    #[test]
+    fn git_runtime_coexists_with_terminal_and_browser() {
+        let (service, _terminal, _browser, _emitter) = build_service();
+        let prefs = default_preferences();
+
+        service
+            .start_runtime(
+                &pid("term-1"),
+                &terminal_spec_for_test("/tmp"),
+                &prefs,
+                mock_receiver(),
+            )
+            .expect("start terminal");
+
+        service
+            .start_runtime(
+                &pid("browser-1"),
+                &PaneSpec::Browser(BrowserPaneSpec {
+                    initial_url: BrowserUrl::new("https://example.com"),
+                }),
+                &prefs,
+                mock_receiver(),
+            )
+            .expect("start browser");
+
+        service
+            .start_runtime(
+                &pid("git-1"),
+                &git_spec_for_test("/repos/my-project"),
+                &prefs,
+                mock_receiver(),
+            )
+            .expect("start git");
+
+        let snapshot = service.snapshot().expect("snapshot");
+        assert_eq!(snapshot.len(), 3, "all three runtimes should coexist");
+
+        let kinds: Vec<_> = {
+            let mut k: Vec<_> = snapshot.iter().map(|r| r.kind).collect();
+            k.sort_by_key(|k| match k {
+                RuntimeKind::Terminal => 0,
+                RuntimeKind::Browser => 1,
+                RuntimeKind::Git => 2,
+            });
+            k
+        };
+        assert_eq!(
+            kinds,
+            vec![
+                RuntimeKind::Terminal,
+                RuntimeKind::Browser,
+                RuntimeKind::Git
+            ]
+        );
     }
 }

@@ -333,3 +333,57 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - Domain types use value objects (CommitHash, BranchName, WorkingDirectory) not raw strings
   - Use accessor methods (short_hash(), head_branch()) not field access in assertions
 ---
+
+## 2026-03-10 09:30 - GIT-011: Add GitCommand enum and DTO mappers
+Thread:
+Run: 20260310-012951-93839 (iteration 12)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-12.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-12.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 30d0512 feat: add GitCommand DTO mappers for transport boundary (GIT-011)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (463 tests, 0 failures)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/src/mapping/dto_mappers.rs
+- What was implemented:
+  - git_command_from_dto mapper (GitCommandDto → GitCommand) with repo_path injection
+  - git_result_to_dto mapper (GitResult → GitResultDto)
+  - 13 individual type mappers: file_status_to_dto, file_status_kind_to_dto, diff_content_to_dto, diff_hunk_to_dto, diff_line_to_dto, diff_line_kind_to_dto, commit_info_to_dto, branch_info_to_dto, blame_entry_to_dto, stash_entry_to_dto, git_repo_state_to_dto
+  - 3 internal helpers: parse_line_range, remote_name_or_default, branch_name_required
+  - 30+ unit tests covering round-trip mapping, validation errors, defaults, and edge cases
+  - GitCommand enum already existed from GIT-010 with all 22 variants matching GitCommandDto
+- **Learnings for future iterations:**
+  - GitCommandDto uses pane_id (String) while GitCommand uses repo_path (PathBuf); the mapper takes repo_path as a parameter since pane-to-repo resolution is the caller's responsibility
+  - DTO has extra fields (path, start_point, force, index) not in domain command; these are UI-level options handled separately
+  - StageLines line_ranges use String format "start-end" in DTO, parsed to (u32, u32) tuples in domain
+  - Added #[allow(dead_code)] to all git mappers since Tauri command handlers consuming them come in a later story
+---
+
+## 2026-03-10 09:10 - GIT-011: Add GitCommand enum and DTO mappers (verification only)
+Thread:
+Run: 20260310-012951-93839 (iteration 13)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-13.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-13.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: none — already committed as 30d0512 in iteration 12
+- Post-commit status: clean (only .ralph/ state files dirty, gitignored)
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (463 tests, 0 failures)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed: none (story already complete from iteration 12)
+- Re-verified all acceptance criteria met; all quality gates pass
+- **Learnings for future iterations:**
+  - When a story is already complete from a prior iteration, verify and signal completion rather than re-implementing
+---
