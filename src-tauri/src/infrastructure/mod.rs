@@ -1,4 +1,8 @@
+mod blame_parser;
 mod cli_git_adapter;
+mod diff_parser;
+mod porcelain_parser;
+mod stash_parser;
 mod tauri_browser_surface_adapter;
 mod tauri_projection_publisher;
 mod tauri_store_preferences_repository;
