@@ -1,5 +1,49 @@
 # Progress Log
 
+## 2026-03-10 11:35 - GIT-035: Create HistoryPanel component
+Thread:
+Run: 20260310-012951-93839 (iteration 37)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-37.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-37.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: bd5f1a1 feat: add HistoryPanel component with commit log and diff viewing (GIT-035)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (426 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (563 tests)
+- Files changed:
+  - src-tauri/crates/tabby-contracts/src/git_dtos.rs (add skip to Log, add ShowCommit command/result)
+  - src-tauri/src/application/ports.rs (add skip param to log, add show_commit)
+  - src-tauri/src/application/commands.rs (add skip to Log, add ShowCommit)
+  - src-tauri/src/application/git_service.rs (dispatch ShowCommit, update Log with skip)
+  - src-tauri/src/infrastructure/cli_git_adapter.rs (implement log skip, show_commit)
+  - src-tauri/src/mapping/dto_mappers.rs (map skip and ShowCommit DTOs)
+  - src/contracts/tauri-bindings.ts (add skip to log, add showCommit)
+  - src/app-shell/clients/mockGitClient.ts (add showCommit mock)
+  - src/app-shell/clients/mockGitClient.test.ts (add showCommit test case)
+  - src/features/git/application/useGitPaneStore.ts (add history state/actions)
+  - src/features/git/components/HistoryPanel.tsx (new component)
+  - src/features/git/components/HistoryPanel.test.tsx (11 tests)
+  - src/features/git/components/GitPane.tsx (wire history view)
+- What was implemented:
+  - Full-stack: skip/offset for git log pagination, showCommit command for commit diffs
+  - HistoryPanel component: scrollable commit list with short hash, author, relative date, message
+  - HEAD commit visual indicator (badge)
+  - Empty state for repos with no commits
+  - Infinite scroll: loads more commits when scrolling near bottom
+  - Click on commit loads diff in DiffViewer (reuses existing DiffViewer)
+  - History view accessible as tab in GitPane (Changes | History | Branches | Stash)
+- **Learnings for future iterations:**
+  - End-to-end changes across Rust port trait → adapter → service → DTO → mapper → TypeScript bindings → store → component are methodical but require touching many files
+  - The parse_unified_diff function already works for `git show` output, no new parser needed
+  - Mock client needs to handle all new command variants to avoid test failures
+---
+
 ## 2026-03-10 11:20 - GIT-034: Create BranchSelector component
 Thread:
 Run: 20260310-012951-93839 (iteration 36)
