@@ -22,13 +22,15 @@ export function SplitPopup({
   onConfirm,
   onCancel,
 }: SplitPopupProps) {
-  const initialMode = defaultSpec.kind === "browser" ? "browser" : "terminal";
-  const [mode, setMode] = useState<"terminal" | "browser">(initialMode);
+  const initialMode = defaultSpec.kind === "browser" ? "browser" : defaultSpec.kind === "git" ? "git" : "terminal";
+  const [mode, setMode] = useState<"terminal" | "browser" | "git">(initialMode);
   const [profileId, setProfileId] = useState(
     defaultSpec.kind === "terminal" ? defaultSpec.launchProfileId : "terminal",
   );
   const [cwd, setCwd] = useState(
-    defaultSpec.kind === "terminal" ? defaultSpec.workingDirectory : "~",
+    defaultSpec.kind === "terminal" ? defaultSpec.workingDirectory
+    : defaultSpec.kind === "git" ? defaultSpec.workingDirectory
+    : "~",
   );
   const [customCommand, setCustomCommand] = useState(
     defaultSpec.kind === "terminal" ? defaultSpec.commandOverride ?? "" : "",
@@ -37,10 +39,14 @@ export function SplitPopup({
     defaultSpec.kind === "browser" ? defaultSpec.initialUrl : "https://google.com",
   );
 
-  const stateRef = useRef({ mode, profileId, cwd, customCommand, url });
+  const [gitCwd, setGitCwd] = useState(
+    defaultSpec.kind === "git" ? defaultSpec.workingDirectory : cwd,
+  );
+
+  const stateRef = useRef({ mode, profileId, cwd, customCommand, url, gitCwd });
   useEffect(() => {
-    stateRef.current = { mode, profileId, cwd, customCommand, url };
-  }, [mode, profileId, cwd, customCommand, url]);
+    stateRef.current = { mode, profileId, cwd, customCommand, url, gitCwd };
+  }, [mode, profileId, cwd, customCommand, url, gitCwd]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -49,7 +55,7 @@ export function SplitPopup({
         onCancel();
       } else if (event.key === "Enter") {
         event.preventDefault();
-        const { mode: nextMode, profileId: nextProfileId, cwd: nextCwd, customCommand: nextCommand, url: nextUrl } = stateRef.current;
+        const { mode: nextMode, profileId: nextProfileId, cwd: nextCwd, customCommand: nextCommand, url: nextUrl, gitCwd: nextGitCwd } = stateRef.current;
         if (nextMode === "terminal" && nextProfileId === CUSTOM_PROFILE_ID && !nextCommand.trim()) {
           return;
         }
@@ -57,13 +63,15 @@ export function SplitPopup({
         onConfirm(
           nextMode === "browser"
             ? { kind: "browser", initialUrl: nextUrl.trim() || "https://google.com" }
-            : {
-                kind: "terminal",
-                launchProfileId: nextProfileId,
-                workingDirectory: nextCwd,
-                commandOverride:
-                  nextProfileId === CUSTOM_PROFILE_ID ? nextCommand.trim() || null : null,
-              },
+            : nextMode === "git"
+              ? { kind: "git", workingDirectory: nextGitCwd }
+              : {
+                  kind: "terminal",
+                  launchProfileId: nextProfileId,
+                  workingDirectory: nextCwd,
+                  commandOverride:
+                    nextProfileId === CUSTOM_PROFILE_ID ? nextCommand.trim() || null : null,
+                },
         );
       }
     }
@@ -79,6 +87,13 @@ export function SplitPopup({
     }
   }
 
+  async function handlePickGitDirectory() {
+    const selected = await pickDirectory(gitCwd);
+    if (selected) {
+      setGitCwd(selected);
+    }
+  }
+
   function handleConfirm() {
     if (mode === "terminal" && profileId === CUSTOM_PROFILE_ID && !customCommand.trim()) {
       return;
@@ -87,12 +102,14 @@ export function SplitPopup({
     onConfirm(
       mode === "browser"
         ? { kind: "browser", initialUrl: url.trim() || "https://google.com" }
-        : {
-            kind: "terminal",
-            launchProfileId: profileId,
-            workingDirectory: cwd,
-            commandOverride: profileId === CUSTOM_PROFILE_ID ? customCommand.trim() || null : null,
-          },
+        : mode === "git"
+          ? { kind: "git", workingDirectory: gitCwd }
+          : {
+              kind: "terminal",
+              launchProfileId: profileId,
+              workingDirectory: cwd,
+              commandOverride: profileId === CUSTOM_PROFILE_ID ? customCommand.trim() || null : null,
+            },
     );
   }
 
@@ -114,11 +131,12 @@ export function SplitPopup({
         <div className="space-y-3">
           <Select
             value={mode}
-            onChange={(event) => setMode(event.target.value as "terminal" | "browser")}
+            onChange={(event) => setMode(event.target.value as "terminal" | "browser" | "git")}
             className="text-sm"
           >
             <option value="terminal">Terminal</option>
             <option value="browser">Browser</option>
+            <option value="git">Git</option>
           </Select>
 
           {mode === "browser" ? (
@@ -129,6 +147,19 @@ export function SplitPopup({
               className="text-sm"
               autoFocus
             />
+          ) : mode === "git" ? (
+            <div className="flex gap-2">
+              <Input
+                value={gitCwd}
+                onChange={(event) => setGitCwd(event.target.value)}
+                placeholder="Working directory"
+                className="text-sm"
+                autoFocus
+              />
+              <Button variant="secondary" size="sm" onClick={() => void handlePickGitDirectory()}>
+                <FolderOpen size={14} />
+              </Button>
+            </div>
           ) : (
             <>
               <Select

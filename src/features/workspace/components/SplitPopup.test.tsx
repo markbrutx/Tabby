@@ -102,4 +102,116 @@ describe("SplitPopup", () => {
       commandOverride: "npm run dev",
     });
   });
+
+  it("shows Git option in mode selector", () => {
+    render(
+      <SplitPopup
+        direction="horizontal"
+        profiles={profiles}
+        defaultSpec={{
+          kind: "terminal",
+          launchProfileId: "terminal",
+          workingDirectory: "/tmp",
+          commandOverride: null,
+        }}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const modeSelect = screen.getAllByRole("combobox")[0];
+    const options = Array.from(modeSelect.querySelectorAll("option"));
+    const values = options.map((opt) => opt.getAttribute("value"));
+    expect(values).toContain("git");
+  });
+
+  it("shows working directory input when Git mode is selected", () => {
+    render(
+      <SplitPopup
+        direction="horizontal"
+        profiles={profiles}
+        defaultSpec={{
+          kind: "terminal",
+          launchProfileId: "terminal",
+          workingDirectory: "/projects/my-repo",
+          commandOverride: null,
+        }}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const modeSelect = screen.getAllByRole("combobox")[0];
+    fireEvent.change(modeSelect, { target: { value: "git" } });
+
+    expect(screen.getByPlaceholderText("Working directory")).toBeInTheDocument();
+  });
+
+  it("produces correct git PaneSpec on confirm", () => {
+    const onConfirm = vi.fn();
+    render(
+      <SplitPopup
+        direction="horizontal"
+        profiles={profiles}
+        defaultSpec={{
+          kind: "terminal",
+          launchProfileId: "terminal",
+          workingDirectory: "/projects/my-repo",
+          commandOverride: null,
+        }}
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const modeSelect = screen.getAllByRole("combobox")[0];
+    fireEvent.change(modeSelect, { target: { value: "git" } });
+    fireEvent.click(screen.getByRole("button", { name: "Split" }));
+
+    expect(onConfirm).toHaveBeenCalledWith({
+      kind: "git",
+      workingDirectory: "/projects/my-repo",
+    });
+  });
+
+  it("defaults to git mode when defaultSpec is git", () => {
+    render(
+      <SplitPopup
+        direction="horizontal"
+        profiles={profiles}
+        defaultSpec={{
+          kind: "git",
+          workingDirectory: "/projects/git-repo",
+        }}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const modeSelect = screen.getAllByRole("combobox")[0];
+    expect(modeSelect).toHaveValue("git");
+    expect(screen.getByDisplayValue("/projects/git-repo")).toBeInTheDocument();
+  });
+
+  it("cancels without changes from git mode", () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    render(
+      <SplitPopup
+        direction="horizontal"
+        profiles={profiles}
+        defaultSpec={{
+          kind: "git",
+          workingDirectory: "/projects/git-repo",
+        }}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });
