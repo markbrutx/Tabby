@@ -387,3 +387,32 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
 - **Learnings for future iterations:**
   - When a story is already complete from a prior iteration, verify and signal completion rather than re-implementing
 ---
+
+## 2026-03-10 09:15 - GIT-012: Handle PaneSpec::Git in RuntimeApplicationService
+Thread:
+Run: 20260310-012951-93839 (iteration 14)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-14.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-14.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 0a73137 feat: handle PaneSpec::Git in RuntimeApplicationService (GIT-012)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (468 tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/src/application/runtime_service.rs
+- What was implemented:
+  - Updated start_runtime to match PaneSpec::Git: generates synthetic session ID (git-<uuid>), validates working_directory as WorkingDirectory, calls register_git on RuntimeRegistry, publishes runtime status via emitter
+  - stop_runtime already handled RuntimeKind::Git correctly (no OS process to kill, just removes from registry)
+  - restart_runtime delegates to stop+start, works for Git panes
+  - Added 5 tests: start_git_runtime_registers_in_registry_without_spawning_process, stop_git_runtime_removes_from_registry_without_killing_process, restart_git_runtime_stops_then_starts, stop_nonexistent_git_runtime_is_noop, git_runtime_coexists_with_terminal_and_browser
+- **Learnings for future iterations:**
+  - The PaneSpec::Git arm was a stub returning early — only needed to add registration logic, not port infrastructure
+  - stop_runtime and restart_runtime already had Git support via RuntimeKind::Git match arm from prior work
+  - Mock test infrastructure (build_service pattern) made adding Git lifecycle tests straightforward
+---
