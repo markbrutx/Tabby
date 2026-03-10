@@ -1,5 +1,32 @@
 # Progress Log
 
+## 2026-03-10 09:25 - GIT-015: Implement git status parsing (porcelain v2)
+Thread:
+Run: 20260310-012951-93839 (iteration 17)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-17.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-17.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 3565ff8 feat: implement git status parsing with porcelain v2 format (GIT-015)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (251 Rust tests + domain crate tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/src/infrastructure/cli_git_adapter.rs
+- Implemented status() method in CliGitAdapter parsing git status --porcelain=v2 output
+- Added parse_porcelain_v2() and status_char_to_kind() helper functions
+- 15 new tests: clean repo, headers-only, modified, added, deleted, renamed, copied, untracked, ignored, conflicted, mixed output, empty repo (no commits), type-changed, staged deletion, status char mapping
+- **Learnings for future iterations:**
+  - Porcelain v2 format uses space-separated fields with tab separator only for rename/copy old_path
+  - Field counts differ per entry type: ordinary (9), rename/copy (10), unmerged (11)
+  - Header lines (# branch.*) should be silently skipped
+---
+
 ## 2026-03-10 09:20 - GIT-014: Create CliGitAdapter skeleton with command runner
 Thread:
 Run: 20260310-012951-93839 (iteration 16)
