@@ -85,9 +85,9 @@ export function PaneGroupRow({
   return (
     <div
       data-testid={`pane-group-${index}`}
-      className="flex items-center gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2 pl-3 shadow-sm transition hover:border-[var(--color-border-strong)]"
+      className="flex items-start gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2 pl-3 shadow-sm transition hover:border-[var(--color-border-strong)]"
     >
-      <div className="flex w-[100px] shrink-0 items-center gap-2.5">
+      <div className="flex w-[100px] shrink-0 items-center gap-2.5 pt-1">
         <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${dotColor} text-white shadow-sm`}>
           <Icon size={14} />
         </div>
@@ -104,7 +104,7 @@ export function PaneGroupRow({
         testIdPrefix={`group-${index}`}
       />
 
-      <div className="flex shrink-0 items-center gap-2 border-l border-[var(--color-border)] pl-4">
+      <div className="flex shrink-0 items-center gap-2 border-l border-[var(--color-border)] pl-4 pt-1">
         <div className="flex items-center gap-0.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-0.5 shadow-sm">
           <button
             data-testid={`group-decrement-${index}`}

@@ -212,9 +212,12 @@ impl AppShell {
     fn execute_workspace_command(&self, command: WorkspaceCommand) -> Result<(), ShellError> {
         match command {
             WorkspaceCommand::OpenTab(cmd) => {
-                let events =
-                    self.workspace_service
-                        .open_tab(cmd.layout, cmd.auto_layout, cmd.pane_specs)?;
+                let events = self.workspace_service.open_tab(
+                    cmd.layout,
+                    cmd.auto_layout,
+                    cmd.layout_tree,
+                    cmd.pane_specs,
+                )?;
                 self.apply_workspace_events(events)?;
             }
             WorkspaceCommand::CloseTab(cmd) => {
@@ -264,6 +267,9 @@ impl AppShell {
                     &preferences,
                     self.observation_receiver(),
                 )?;
+            }
+            WorkspaceCommand::RenameTab { tab_id, title } => {
+                self.workspace_service.rename_tab(&tab_id, title)?;
             }
         }
         Ok(())

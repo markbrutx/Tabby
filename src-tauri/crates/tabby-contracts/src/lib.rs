@@ -174,6 +174,7 @@ pub enum WorkspaceCommandDto {
     OpenTab {
         layout: Option<LayoutPresetDto>,
         auto_layout: bool,
+        layout_tree: Option<SplitNodeDto>,
         pane_specs: Vec<PaneSpecDto>,
     },
     CloseTab {
@@ -204,6 +205,10 @@ pub enum WorkspaceCommandDto {
     },
     RestartPaneRuntime {
         pane_id: String,
+    },
+    RenameTab {
+        tab_id: String,
+        title: String,
     },
 }
 

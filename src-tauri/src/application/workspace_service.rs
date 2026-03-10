@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use tabby_workspace::layout::{LayoutPreset, SplitDirection};
+use tabby_workspace::layout::{LayoutPreset, SplitDirection, SplitNode};
 use tabby_workspace::{
     PaneId, PaneSpec, TabId, TabLayoutStrategy, WorkspaceDomainEvent, WorkspaceError,
     WorkspaceSession,
@@ -48,9 +48,12 @@ impl WorkspaceApplicationService {
         &self,
         layout: LayoutPreset,
         auto_layout: bool,
+        layout_tree: Option<SplitNode>,
         pane_specs: Vec<PaneSpec>,
     ) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
-        let strategy = if auto_layout {
+        let strategy = if let Some(tree) = layout_tree {
+            TabLayoutStrategy::ExplicitTree(tree)
+        } else if auto_layout {
             TabLayoutStrategy::AutoCount
         } else {
             TabLayoutStrategy::Preset(layout)
@@ -109,6 +112,16 @@ impl WorkspaceApplicationService {
             .map_err(workspace_error_to_shell)
     }
 
+    pub fn rename_tab(
+        &self,
+        tab_id: &TabId,
+        title: String,
+    ) -> Result<Vec<WorkspaceDomainEvent>, ShellError> {
+        self.lock_workspace()?
+            .rename_tab(tab_id, title)
+            .map_err(workspace_error_to_shell)
+    }
+
     pub fn replace_pane_spec(
         &self,
         pane_id: &PaneId,
@@ -153,7 +166,7 @@ mod tests {
         let specs = vec![terminal_spec("default")];
 
         let events = service
-            .open_tab(LayoutPreset::OneByOne, false, specs)
+            .open_tab(LayoutPreset::OneByOne, false, None, specs)
             .expect("open_tab should succeed");
 
         assert!(
@@ -171,7 +184,7 @@ mod tests {
         let service = WorkspaceApplicationService::new();
         let specs = vec![terminal_spec("a"), terminal_spec("b")];
         service
-            .open_tab(LayoutPreset::OneByTwo, false, specs)
+            .open_tab(LayoutPreset::OneByTwo, false, None, specs)
             .expect("open_tab should succeed");
 
         let pane_id = service
@@ -194,7 +207,7 @@ mod tests {
         let service = WorkspaceApplicationService::new();
         let specs = vec![terminal_spec("default")];
         service
-            .open_tab(LayoutPreset::OneByOne, false, specs)
+            .open_tab(LayoutPreset::OneByOne, false, None, specs)
             .expect("open_tab should succeed");
 
         let pane_id = service
@@ -224,7 +237,7 @@ mod tests {
         let service = WorkspaceApplicationService::new();
         let specs = vec![terminal_spec("a"), terminal_spec("b")];
         service
-            .open_tab(LayoutPreset::OneByTwo, false, specs)
+            .open_tab(LayoutPreset::OneByTwo, false, None, specs)
             .expect("open_tab should succeed");
 
         let tab_id = service
@@ -260,7 +273,7 @@ mod tests {
         let service = WorkspaceApplicationService::new();
         let specs = vec![terminal_spec("default")];
         service
-            .open_tab(LayoutPreset::OneByOne, false, specs)
+            .open_tab(LayoutPreset::OneByOne, false, None, specs)
             .expect("open_tab should succeed");
 
         let pane_id = service
@@ -330,7 +343,7 @@ mod tests {
     #[test]
     fn open_tab_with_empty_specs_returns_validation_error() {
         let service = WorkspaceApplicationService::new();
-        let result = service.open_tab(LayoutPreset::OneByOne, false, vec![]);
+        let result = service.open_tab(LayoutPreset::OneByOne, false, None, vec![]);
         assert!(
             result.is_err(),
             "should return error when no pane specs provided"
@@ -342,7 +355,7 @@ mod tests {
         let service = WorkspaceApplicationService::new();
         let specs = vec![terminal_spec("default")];
         service
-            .open_tab(LayoutPreset::OneByOne, false, specs)
+            .open_tab(LayoutPreset::OneByOne, false, None, specs)
             .expect("open_tab should succeed");
 
         let pane_id = service
@@ -381,6 +394,114 @@ mod tests {
     }
 
     #[test]
+    fn rename_tab_updates_title() {
+        let service = WorkspaceApplicationService::new();
+        service
+            .open_tab(
+                LayoutPreset::OneByOne,
+                false,
+                None,
+                vec![terminal_spec("default")],
+            )
+            .expect("open_tab should succeed");
+
+        let tab_id = service
+            .with_session(|session| session.tab_summaries()[0].tab_id.clone())
+            .expect("with_session");
+
+        let events = service
+            .rename_tab(&tab_id, String::from("My Custom Tab"))
+            .expect("rename_tab should succeed");
+
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            &events[0],
+            WorkspaceDomainEvent::TabRenamed { new_title, .. } if new_title == "My Custom Tab"
+        ));
+
+        let title = service
+            .with_session(|session| session.tab_summaries()[0].title.clone())
+            .expect("with_session");
+        assert_eq!(title, "My Custom Tab");
+    }
+
+    #[test]
+    fn rename_tab_trims_whitespace() {
+        let service = WorkspaceApplicationService::new();
+        service
+            .open_tab(
+                LayoutPreset::OneByOne,
+                false,
+                None,
+                vec![terminal_spec("default")],
+            )
+            .expect("open_tab should succeed");
+
+        let tab_id = service
+            .with_session(|session| session.tab_summaries()[0].tab_id.clone())
+            .expect("with_session");
+
+        service
+            .rename_tab(&tab_id, String::from("  My Tab  "))
+            .expect("rename_tab should succeed");
+
+        let title = service
+            .with_session(|session| session.tab_summaries()[0].title.clone())
+            .expect("with_session");
+        assert_eq!(title, "My Tab");
+    }
+
+    #[test]
+    fn rename_tab_rejects_empty_title() {
+        let service = WorkspaceApplicationService::new();
+        service
+            .open_tab(
+                LayoutPreset::OneByOne,
+                false,
+                None,
+                vec![terminal_spec("default")],
+            )
+            .expect("open_tab should succeed");
+
+        let tab_id = service
+            .with_session(|session| session.tab_summaries()[0].tab_id.clone())
+            .expect("with_session");
+
+        let result = service.rename_tab(&tab_id, String::new());
+        assert!(result.is_err(), "should reject empty title");
+    }
+
+    #[test]
+    fn rename_tab_rejects_whitespace_only() {
+        let service = WorkspaceApplicationService::new();
+        service
+            .open_tab(
+                LayoutPreset::OneByOne,
+                false,
+                None,
+                vec![terminal_spec("default")],
+            )
+            .expect("open_tab should succeed");
+
+        let tab_id = service
+            .with_session(|session| session.tab_summaries()[0].tab_id.clone())
+            .expect("with_session");
+
+        let result = service.rename_tab(&tab_id, String::from("   "));
+        assert!(result.is_err(), "should reject whitespace-only title");
+    }
+
+    #[test]
+    fn rename_tab_unknown_id_returns_error() {
+        let service = WorkspaceApplicationService::new();
+        let result = service.rename_tab(
+            &TabId::from(String::from("nonexistent")),
+            String::from("New Title"),
+        );
+        assert!(result.is_err(), "should return error for nonexistent tab");
+    }
+
+    #[test]
     fn set_active_tab_not_found_returns_error() {
         let service = WorkspaceApplicationService::new();
         let result = service.set_active_tab(&TabId::from(String::from("nonexistent")));
@@ -392,7 +513,7 @@ mod tests {
         let service = WorkspaceApplicationService::new();
         let specs = vec![terminal_spec("default")];
         service
-            .open_tab(LayoutPreset::OneByOne, false, specs)
+            .open_tab(LayoutPreset::OneByOne, false, None, specs)
             .expect("open_tab should succeed");
 
         let tab_id = service

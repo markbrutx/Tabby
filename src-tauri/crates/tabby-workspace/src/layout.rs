@@ -281,6 +281,38 @@ fn collect_pane_ids_inner(node: &SplitNode, pane_ids: &mut Vec<PaneId>) {
     }
 }
 
+/// Replaces placeholder pane IDs in a template tree with real IDs,
+/// walking the tree in-order and substituting one-to-one.
+pub fn remap_pane_ids(template: &SplitNode, real_ids: &[PaneId]) -> SplitNode {
+    let mut index = 0;
+    remap_inner(template, real_ids, &mut index)
+}
+
+fn remap_inner(node: &SplitNode, real_ids: &[PaneId], index: &mut usize) -> SplitNode {
+    match node {
+        SplitNode::Pane { .. } => {
+            let pane_id = if *index < real_ids.len() {
+                real_ids[*index].clone()
+            } else {
+                PaneId::from(format!("__overflow_{index}__"))
+            };
+            *index += 1;
+            SplitNode::Pane { pane_id }
+        }
+        SplitNode::Split {
+            direction,
+            ratio,
+            first,
+            second,
+        } => SplitNode::Split {
+            direction: *direction,
+            ratio: *ratio,
+            first: Box::new(remap_inner(first, real_ids, index)),
+            second: Box::new(remap_inner(second, real_ids, index)),
+        },
+    }
+}
+
 fn leaf(id: &PaneId) -> SplitNode {
     SplitNode::Pane {
         pane_id: id.clone(),

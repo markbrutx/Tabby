@@ -236,6 +236,7 @@ describe("WorkspaceSetupWizard", () => {
           count: 1,
         },
       ],
+      layoutVariantId: null,
     });
   });
 

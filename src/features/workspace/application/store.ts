@@ -14,7 +14,8 @@ import type {
   SplitDirection,
   WorkspaceReadModel,
 } from "@/features/workspace/domain/models";
-import { mapPaneSpecToDto, mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
+import { mapPaneSpecToDto, mapSplitNodeToDto, mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
+import { getLayoutVariants } from "@/features/workspace/layoutVariants";
 import type { WorkspaceClient } from "@/app-shell/clients";
 import type { SetupWizardConfig, WizardTab } from "@/features/workspace/store/types";
 
@@ -42,6 +43,7 @@ export interface WorkspaceStore {
   ) => Promise<void>;
   closePane: (paneId: string) => Promise<void>;
   swapPaneSlots: (paneIdA: string, paneIdB: string) => Promise<void>;
+  renameTab: (tabId: string, title: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -147,17 +149,48 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
     },
 
     async createTabFromWizard(config) {
+      const { wizardTab: currentWizard } = get();
+      const customTitle = currentWizard?.title ?? null;
+
+      const paneSpecs = config.groups.flatMap(toPaneSpec);
+      const totalPanes = paneSpecs.length;
+      const variants = getLayoutVariants(totalPanes);
+      const selectedVariant = config.layoutVariantId
+        ? variants.find((v) => v.id === config.layoutVariantId)
+        : null;
+
+      let layoutTree = null;
+      let autoLayout = true;
+      if (selectedVariant) {
+        const dummyIds = Array.from({ length: totalPanes }, (_, i) => `p${i}`);
+        layoutTree = mapSplitNodeToDto(selectedVariant.build(dummyIds));
+        autoLayout = false;
+      }
+
       await runWorkspaceMutation(
         set,
         () =>
           deps.workspaceClient.dispatch({
             kind: "openTab",
             layout: null,
-            auto_layout: true,
-            pane_specs: config.groups.flatMap(toPaneSpec),
+            auto_layout: autoLayout,
+            layout_tree: layoutTree,
+            pane_specs: paneSpecs,
           } satisfies WorkspaceCommandDto),
-        () => {
+        (workspace) => {
           deps.onWizardComplete();
+
+          if (customTitle && workspace.activeTabId) {
+            const activeTab = workspace.tabs.find((t) => t.tabId === workspace.activeTabId);
+            if (activeTab && activeTab.title !== customTitle) {
+              void deps.workspaceClient.dispatch({
+                kind: "renameTab",
+                tab_id: workspace.activeTabId,
+                title: customTitle,
+              } satisfies WorkspaceCommandDto);
+            }
+          }
+
           return {};
         },
       );
@@ -252,6 +285,21 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
           kind: "swapPaneSlots",
           pane_id_a: paneIdA,
           pane_id_b: paneIdB,
+        } satisfies WorkspaceCommandDto),
+      );
+    },
+
+    async renameTab(tabId, title) {
+      const { wizardTab: currentWizard } = get();
+      if (currentWizard && tabId === currentWizard.id) {
+        set({ wizardTab: { ...currentWizard, title } });
+        return;
+      }
+      await runWorkspaceMutation(set, () =>
+        deps.workspaceClient.dispatch({
+          kind: "renameTab",
+          tab_id: tabId,
+          title,
         } satisfies WorkspaceCommandDto),
       );
     },

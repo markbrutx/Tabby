@@ -37,6 +37,24 @@ pub fn build_menu(handle: &AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .select_all()
         .build()?;
 
+    let view_submenu = SubmenuBuilder::new(handle, "View")
+        .item(
+            &MenuItemBuilder::with_id("menu-zoom-in", "Zoom In")
+                .accelerator("CmdOrCtrl+=")
+                .build(handle)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-zoom-out", "Zoom Out")
+                .accelerator("CmdOrCtrl+-")
+                .build(handle)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-zoom-reset", "Actual Size")
+                .accelerator("CmdOrCtrl+0")
+                .build(handle)?,
+        )
+        .build()?;
+
     let mut ws = SubmenuBuilder::new(handle, "Workspace")
         .item(
             &MenuItemBuilder::with_id("shortcut-new-tab", "New Tab")
@@ -101,6 +119,7 @@ pub fn build_menu(handle: &AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
     MenuBuilder::new(handle)
         .item(&app_submenu)
         .item(&edit_submenu)
+        .item(&view_submenu)
         .item(&workspace_submenu)
         .build()
 }
@@ -110,6 +129,12 @@ pub fn handle_menu_event(app_handle: &AppHandle, event: &tauri::menu::MenuEvent)
     if id == MENU_ITEM_SETTINGS {
         if let Err(emit_err) = app_handle.emit(EVENT_OPEN_SETTINGS, ()) {
             error!(?emit_err, "Failed to emit menu-open-settings event");
+        }
+        return;
+    }
+    if id.starts_with("menu-zoom") {
+        if let Err(emit_err) = app_handle.emit(id, ()) {
+            error!(?emit_err, "Failed to emit zoom event");
         }
         return;
     }

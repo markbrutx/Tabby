@@ -191,8 +191,9 @@ mod tests {
                     service.stop_runtime(pane_id.as_ref());
                 }
                 WorkspaceDomainEvent::ActivePaneChanged { .. }
-                | WorkspaceDomainEvent::ActiveTabChanged { .. } => {
-                    // Focus events have NO runtime side-effects
+                | WorkspaceDomainEvent::ActiveTabChanged { .. }
+                | WorkspaceDomainEvent::TabRenamed { .. } => {
+                    // Focus/metadata events have NO runtime side-effects
                 }
             }
         }

@@ -4,7 +4,6 @@ import { useTerminalSession } from "@/features/terminal/hooks/useTerminalSession
 
 interface TerminalPaneProps {
   pane: PaneSnapshotModel;
-  fontSize: number;
   theme: ResolvedTheme;
   active: boolean;
   visible: boolean;
@@ -12,14 +11,12 @@ interface TerminalPaneProps {
 
 export function TerminalPane({
   pane,
-  fontSize,
   theme,
   active,
   visible,
 }: TerminalPaneProps) {
   const { containerRef } = useTerminalSession({
     pane,
-    fontSize,
     theme,
     active,
     visible,

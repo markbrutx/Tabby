@@ -12,8 +12,9 @@ pub use ids::{BrowserUrl, PaneContentId, PaneId, TabId};
 pub use tabby_kernel::CommandTemplate;
 
 use crate::layout::{
-    close_pane as close_pane_layout, split_pane as split_pane_layout, swap_panes, tree_from_count,
-    tree_from_preset, validate_layout, LayoutError, LayoutPreset, SplitDirection, SplitNode,
+    close_pane as close_pane_layout, remap_pane_ids, split_pane as split_pane_layout, swap_panes,
+    tree_from_count, tree_from_preset, validate_layout, LayoutError, LayoutPreset, SplitDirection,
+    SplitNode,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +78,7 @@ pub struct WorkspaceSession {
 pub enum TabLayoutStrategy {
     Preset(LayoutPreset),
     AutoCount,
+    ExplicitTree(SplitNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +105,12 @@ pub enum WorkspaceDomainEvent {
         pane_id: PaneId,
         old_content: PaneContentDefinition,
         new_content: PaneContentDefinition,
+    },
+
+    // -- Metadata events: affect display properties only --
+    TabRenamed {
+        tab_id: TabId,
+        new_title: String,
     },
 }
 
@@ -314,6 +322,37 @@ impl WorkspaceSession {
         } else {
             Ok(vec![])
         }
+    }
+
+    pub fn rename_tab(
+        &mut self,
+        tab_id: &TabId,
+        new_title: String,
+    ) -> Result<Vec<WorkspaceDomainEvent>, WorkspaceError> {
+        let trimmed = new_title.trim().to_string();
+        if trimmed.is_empty() {
+            return Err(WorkspaceError::Validation(String::from(
+                "tab title must not be empty",
+            )));
+        }
+        if trimmed.len() > 64 {
+            return Err(WorkspaceError::Validation(String::from(
+                "tab title must not exceed 64 characters",
+            )));
+        }
+
+        let tab = self
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.tab_id == *tab_id)
+            .ok_or_else(|| WorkspaceError::NotFound(format!("tab {tab_id}")))?;
+
+        tab.title = trimmed.clone();
+
+        Ok(vec![WorkspaceDomainEvent::TabRenamed {
+            tab_id: tab_id.clone(),
+            new_title: trimmed,
+        }])
     }
 
     pub fn split_pane(
@@ -611,6 +650,11 @@ fn resolve_layout(
             Ok(tree_from_preset(*preset, pane_ids))
         }
         TabLayoutStrategy::AutoCount => Ok(tree_from_count(pane_ids)?),
+        TabLayoutStrategy::ExplicitTree(template) => {
+            let remapped = remap_pane_ids(template, pane_ids);
+            validate_layout(&remapped, pane_ids)?;
+            Ok(remapped)
+        }
     }
 }
 

@@ -1,21 +1,10 @@
-import { FolderOpen, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { CUSTOM_PROFILE_ID } from "@/features/workspace/domain/models";
-import type { LayoutPreset } from "@/features/settings/domain/models";
 import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
-import { pickDirectory } from "@/lib/pickDirectory";
-
-const LAYOUT_OPTIONS: { value: LayoutPreset; label: string }[] = [
-  { value: "1x1", label: "1x1 (single)" },
-  { value: "1x2", label: "1x2 (side-by-side)" },
-  { value: "2x2", label: "2x2 (quad)" },
-  { value: "2x3", label: "2x3 (six)" },
-  { value: "3x3", label: "3x3 (nine)" },
-];
 
 const THEME_OPTIONS = [
   { value: "system", label: "System" },
@@ -46,16 +35,6 @@ export function SettingsModal({
   }, [settings]);
 
   useEscapeKey(onClose);
-
-  async function handlePickDirectory() {
-    const selected = await pickDirectory(draft.defaultWorkingDirectory);
-    if (selected) {
-      setDraft((current) => ({
-        ...current,
-        defaultWorkingDirectory: selected,
-      }));
-    }
-  }
 
   async function handleSave() {
     setIsSaving(true);
@@ -96,92 +75,7 @@ export function SettingsModal({
         <div className="mt-5 space-y-4">
           <label className="block">
             <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
-              Default layout
-            </span>
-            <Select
-              data-testid="settings-layout"
-              value={draft.defaultLayout}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  defaultLayout: event.target.value as LayoutPreset,
-                }))
-              }
-            >
-              {LAYOUT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
-          </label>
-
-          <label className="block">
-            <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
-              Default profile
-            </span>
-            <Select
-              data-testid="settings-profile"
-              value={draft.defaultTerminalProfileId}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  defaultTerminalProfileId: event.target.value,
-                }))
-              }
-            >
-              {profiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.label}
-                </option>
-              ))}
-            </Select>
-          </label>
-
-          {draft.defaultTerminalProfileId === CUSTOM_PROFILE_ID ? (
-            <label className="block">
-              <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
-                Default custom command
-              </span>
-              <Input
-                data-testid="settings-custom-command"
-                value={draft.defaultCustomCommand}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    defaultCustomCommand: event.target.value,
-                  }))
-                }
-                placeholder="npm run dev"
-              />
-            </label>
-          ) : null}
-
-          <div className="block">
-            <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
-              Working directory
-            </span>
-            <div className="flex gap-2">
-              <Input
-                data-testid="settings-working-directory"
-                value={draft.defaultWorkingDirectory}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    defaultWorkingDirectory: event.target.value,
-                  }))
-                }
-                placeholder="Not set — you'll choose each time"
-              />
-              <Button variant="secondary" onClick={() => void handlePickDirectory()}>
-                <FolderOpen size={14} />
-              </Button>
-            </div>
-          </div>
-
-          <label className="block">
-            <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
-              Font size
+              Interface font size
             </span>
             <div className="flex items-center gap-3">
               <Input

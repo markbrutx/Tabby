@@ -71,7 +71,7 @@ describe("SplitTreeRenderer", () => {
     render(
       <SplitTreeRenderer
         tab={tab}
-        fontSize={14}
+
         theme="midnight"
         visible={true}
         gitClient={gitClient}
@@ -136,7 +136,7 @@ describe("SplitTreeRenderer", () => {
     render(
       <SplitTreeRenderer
         tab={tab}
-        fontSize={14}
+
         theme="midnight"
         visible={true}
         gitClient={gitClient}

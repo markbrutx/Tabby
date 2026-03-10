@@ -386,6 +386,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByOne,
                 false,
+                None,
                 vec![terminal_spec("/projects")],
             )
             .expect("open_tab should succeed");
@@ -433,6 +434,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByTwo,
                 false,
+                None,
                 vec![terminal_spec("/a"), terminal_spec("/b")],
             )
             .expect("open_tab should succeed");
@@ -459,6 +461,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByOne,
                 false,
+                None,
                 vec![browser_spec("https://example.com")],
             )
             .expect("open_tab should succeed");
@@ -491,6 +494,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByTwo,
                 false,
+                None,
                 vec![terminal_spec("/home"), browser_spec("https://docs.rs")],
             )
             .expect("open_tab should succeed");
@@ -533,6 +537,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByTwo,
                 false,
+                None,
                 vec![terminal_spec("/a"), terminal_spec("/b")],
             )
             .expect("open_tab should succeed");
@@ -599,6 +604,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByTwo,
                 false,
+                None,
                 vec![terminal_spec("/a"), terminal_spec("/b")],
             )
             .expect("open_tab should succeed");
@@ -652,6 +658,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByOne,
                 false,
+                None,
                 vec![browser_spec("https://example.com")],
             )
             .expect("open_tab should succeed");
@@ -701,6 +708,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByTwo,
                 false,
+                None,
                 vec![terminal_spec("/workspace-a"), terminal_spec("/workspace-b")],
             )
             .expect("open_tab should succeed");
@@ -739,6 +747,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByOne,
                 false,
+                None,
                 vec![browser_spec("https://example.com")],
             )
             .expect("open second tab");
@@ -831,7 +840,7 @@ mod tests {
         // Open a terminal pane
         let open_events = h
             .workspace_service
-            .open_tab(LayoutPreset::OneByOne, false, vec![terminal_spec("/tmp")])
+            .open_tab(LayoutPreset::OneByOne, false, None, vec![terminal_spec("/tmp")])
             .expect("open_tab should succeed");
         h.coordinate(open_events)
             .expect("coordinate should succeed");
@@ -890,6 +899,7 @@ mod tests {
             .open_tab(
                 LayoutPreset::OneByOne,
                 false,
+                None,
                 vec![terminal_spec("/initial")],
             )
             .expect("open_tab should succeed");

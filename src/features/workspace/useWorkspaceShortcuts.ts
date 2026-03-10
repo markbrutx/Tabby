@@ -21,6 +21,9 @@ interface WorkspaceShortcutsProps {
   onSplitDown: (paneId: string) => void;
   onOpenSettings: () => void;
   onOpenShortcuts: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onZoomReset: () => void;
 }
 
 export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
@@ -43,6 +46,9 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
         onSplitDown,
         onOpenSettings,
         onOpenShortcuts,
+        onZoomIn,
+        onZoomOut,
+        onZoomReset,
       } = propsRef.current;
 
       if (!workspace || !event.metaKey) {
@@ -67,6 +73,27 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
       if (event.key === "/") {
         event.preventDefault();
         onOpenShortcuts();
+        return;
+      }
+
+      // Cmd+= or Cmd++ — Zoom in
+      if (event.key === "=" || event.key === "+") {
+        event.preventDefault();
+        onZoomIn();
+        return;
+      }
+
+      // Cmd+- — Zoom out
+      if (event.key === "-") {
+        event.preventDefault();
+        onZoomOut();
+        return;
+      }
+
+      // Cmd+0 — Reset zoom
+      if (event.key === "0") {
+        event.preventDefault();
+        onZoomReset();
         return;
       }
 
@@ -257,6 +284,18 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
 
     reg("shortcut-shortcuts-help", () => {
       propsRef.current.onOpenShortcuts();
+    });
+
+    reg("menu-zoom-in", () => {
+      propsRef.current.onZoomIn();
+    });
+
+    reg("menu-zoom-out", () => {
+      propsRef.current.onZoomOut();
+    });
+
+    reg("menu-zoom-reset", () => {
+      propsRef.current.onZoomReset();
     });
 
     for (let i = 1; i <= 9; i++) {

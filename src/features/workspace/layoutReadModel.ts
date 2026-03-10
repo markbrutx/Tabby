@@ -1,18 +1,30 @@
 import type { SplitNode } from "@/features/workspace/domain/models";
 
-function leaf(id: string): SplitNode {
+export function leaf(id: string): SplitNode {
   return { type: "pane", paneId: id };
 }
 
-function hsplit(a: string, b: string): SplitNode {
+export function hsplit(a: string, b: string): SplitNode {
   return { type: "split", direction: "horizontal", ratio: 500, first: leaf(a), second: leaf(b) };
 }
 
-function hsplit3(a: string, b: string, c: string): SplitNode {
+export function vsplit(a: string, b: string): SplitNode {
+  return { type: "split", direction: "vertical", ratio: 500, first: leaf(a), second: leaf(b) };
+}
+
+export function hsplit3(a: string, b: string, c: string): SplitNode {
   return {
     type: "split", direction: "horizontal", ratio: 333,
     first: leaf(a),
     second: { type: "split", direction: "horizontal", ratio: 500, first: leaf(b), second: leaf(c) },
+  };
+}
+
+export function vsplit3(a: string, b: string, c: string): SplitNode {
+  return {
+    type: "split", direction: "vertical", ratio: 333,
+    first: leaf(a),
+    second: { type: "split", direction: "vertical", ratio: 500, first: leaf(b), second: leaf(c) },
   };
 }
 

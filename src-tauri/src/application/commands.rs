@@ -5,7 +5,7 @@ use tabby_git::{
     BlameEntry, BranchInfo, CommitInfo, DiffContent, FileStatus, GitRepositoryState, StashEntry,
 };
 use tabby_settings::UserPreferences;
-use tabby_workspace::layout::{LayoutPreset, SplitDirection};
+use tabby_workspace::layout::{LayoutPreset, SplitDirection, SplitNode};
 use tabby_workspace::{PaneId, PaneSpec, TabId};
 
 // ---------------------------------------------------------------------------
@@ -17,6 +17,7 @@ use tabby_workspace::{PaneId, PaneSpec, TabId};
 pub struct OpenTabCommand {
     pub layout: LayoutPreset,
     pub auto_layout: bool,
+    pub layout_tree: Option<SplitNode>,
     pub pane_specs: Vec<PaneSpec>,
 }
 
@@ -64,6 +65,10 @@ pub enum WorkspaceCommand {
     ReplacePaneSpec(ReplacePaneSpecCommand),
     RestartPaneRuntime {
         pane_id: PaneId,
+    },
+    RenameTab {
+        tab_id: TabId,
+        title: String,
     },
 }
 

@@ -67,6 +67,20 @@ export function mapPaneSpecToDto(spec: PaneSpec): PaneSpecDto {
   };
 }
 
+export function mapSplitNodeToDto(node: SplitNode): SplitNodeDto {
+  if (node.type === "pane") {
+    return { type: "pane", paneId: node.paneId };
+  }
+
+  return {
+    type: "split",
+    direction: node.direction,
+    ratio: node.ratio,
+    first: mapSplitNodeToDto(node.first),
+    second: mapSplitNodeToDto(node.second),
+  };
+}
+
 export function mapSplitNodeFromDto(dto: SplitNodeDto): SplitNode {
   if (dto.type === "pane") {
     return { type: "pane", paneId: dto.paneId };

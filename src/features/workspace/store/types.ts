@@ -5,6 +5,7 @@ export type PaneGroupConfig =
 
 export interface SetupWizardConfig {
   groups: PaneGroupConfig[];
+  layoutVariantId: string | null;
 }
 
 export interface WizardTab {

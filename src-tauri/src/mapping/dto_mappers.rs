@@ -242,6 +242,25 @@ pub fn split_direction_from_dto(value: SplitDirectionDto) -> SplitDirection {
     }
 }
 
+pub fn split_node_from_dto(dto: SplitNodeDto) -> SplitNode {
+    match dto {
+        SplitNodeDto::Pane { pane_id } => SplitNode::Pane {
+            pane_id: PaneId::from(pane_id),
+        },
+        SplitNodeDto::Split {
+            direction,
+            ratio,
+            first,
+            second,
+        } => SplitNode::Split {
+            direction: split_direction_from_dto(direction),
+            ratio,
+            first: Box::new(split_node_from_dto(*first)),
+            second: Box::new(split_node_from_dto(*second)),
+        },
+    }
+}
+
 pub fn workspace_command_from_dto(
     dto: WorkspaceCommandDto,
     default_layout: LayoutPreset,
@@ -250,12 +269,14 @@ pub fn workspace_command_from_dto(
         WorkspaceCommandDto::OpenTab {
             layout,
             auto_layout,
+            layout_tree,
             pane_specs,
         } => {
             let layout = layout.map(layout_preset_from_dto).unwrap_or(default_layout);
             WorkspaceCommand::OpenTab(OpenTabCommand {
                 layout,
                 auto_layout,
+                layout_tree: layout_tree.map(split_node_from_dto),
                 pane_specs: pane_specs.into_iter().map(pane_spec_from_dto).collect(),
             })
         }
@@ -299,6 +320,10 @@ pub fn workspace_command_from_dto(
                 pane_id: PaneId::from(pane_id),
             }
         }
+        WorkspaceCommandDto::RenameTab { tab_id, title } => WorkspaceCommand::RenameTab {
+            tab_id: TabId::from(tab_id),
+            title,
+        },
     }
 }
 
@@ -1053,6 +1078,7 @@ mod tests {
         let dto = WorkspaceCommandDto::OpenTab {
             layout: Some(LayoutPresetDto::TwoByTwo),
             auto_layout: false,
+            layout_tree: None,
             pane_specs: vec![PaneSpecDto::Terminal {
                 launch_profile_id: String::from("terminal"),
                 working_directory: String::from("/tmp"),
@@ -1077,6 +1103,7 @@ mod tests {
         let dto = WorkspaceCommandDto::OpenTab {
             layout: None,
             auto_layout: false,
+            layout_tree: None,
             pane_specs: vec![],
         };
 

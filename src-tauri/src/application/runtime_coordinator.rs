@@ -66,8 +66,9 @@ impl RuntimeCoordinator {
                     runtime_service.stop_runtime(&pane_id);
                 }
                 WorkspaceDomainEvent::ActivePaneChanged { .. }
-                | WorkspaceDomainEvent::ActiveTabChanged { .. } => {
-                    // Focus events don't require runtime side-effects
+                | WorkspaceDomainEvent::ActiveTabChanged { .. }
+                | WorkspaceDomainEvent::TabRenamed { .. } => {
+                    // Focus/metadata events don't require runtime side-effects
                 }
             }
         }

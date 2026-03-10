@@ -34,6 +34,14 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
+    title: "View",
+    shortcuts: [
+      { keys: ["\u2318", "+"], description: "Zoom in" },
+      { keys: ["\u2318", "\u2212"], description: "Zoom out" },
+      { keys: ["\u2318", "0"], description: "Reset zoom" },
+    ],
+  },
+  {
     title: "Application",
     shortcuts: [
       { keys: ["\u2318", ","], description: "Open settings" },

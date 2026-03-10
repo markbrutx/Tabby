@@ -8,9 +8,10 @@ import { getTerminalTheme, type ResolvedTheme } from "@/features/workspace/theme
 import { registerPtyOutput } from "@/features/terminal/ptyOutputDispatcher";
 import { isTauriRuntime } from "@/lib/runtime";
 
+const TERMINAL_FONT_SIZE = 14;
+
 interface UseTerminalSessionOptions {
   pane: PaneSnapshotModel;
-  fontSize: number;
   theme: ResolvedTheme;
   active: boolean;
   visible: boolean;
@@ -34,7 +35,6 @@ function safeFit(fitAddon: FitAddon, container: HTMLElement) {
 
 export function useTerminalSession({
   pane,
-  fontSize,
   theme,
   active,
   visible,
@@ -88,7 +88,7 @@ export function useTerminalSession({
       cursorBlink: true,
       fontFamily:
         '"IBM Plex Mono", "SFMono-Regular", "JetBrains Mono", "Menlo", monospace',
-      fontSize,
+      fontSize: TERMINAL_FONT_SIZE,
       lineHeight: 1.2,
       letterSpacing: 0,
       theme: getTerminalTheme(theme),
@@ -155,7 +155,7 @@ export function useTerminalSession({
       fitAddonRef.current = null;
       pendingDataRef.current = [];
     };
-  }, [fontSize, pane.id, pane.sessionId, writeTerminalInput, observeTerminalCwd, resizeTerminal, theme]);
+  }, [pane.id, pane.sessionId, writeTerminalInput, observeTerminalCwd, resizeTerminal, theme]);
 
   useEffect(() => {
     const container = containerRef.current;

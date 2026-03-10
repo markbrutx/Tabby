@@ -1,5 +1,5 @@
 import { GitBranch, Globe, Terminal } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain/models";
@@ -35,7 +35,7 @@ function makeDefaultGroup(
       return {
         mode: "terminal",
         profileId: resolveDefaultProfileId(settings, profiles),
-        workingDirectory: settings.defaultWorkingDirectory ?? "",
+        workingDirectory: settings.defaultWorkingDirectory || settings.lastWorkingDirectory || "",
         customCommand: settings.defaultCustomCommand ?? "",
         count: 1,
       };
@@ -64,10 +64,19 @@ export function WorkspaceSetupWizard({
   const [groups, setGroups] = useState<PaneGroupConfig[]>([
     makeDefaultGroup("terminal", settings, profiles),
   ]);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const prevTotalRef = useRef(0);
 
   useEscapeKey(onCancel);
 
   const totalPanes = groups.reduce((sum, group) => sum + group.count, 0);
+
+  useEffect(() => {
+    if (totalPanes !== prevTotalRef.current) {
+      prevTotalRef.current = totalPanes;
+      setSelectedVariantId(null);
+    }
+  }, [totalPanes]);
   const hasInvalidGroup = groups.some(
     (group) => !isFieldValuesValid(groupToFieldValues(group)),
   );
@@ -88,11 +97,16 @@ export function WorkspaceSetupWizard({
     setGroups((prev) => [...prev, makeDefaultGroup(mode, settings, profiles)]);
   }
 
+  function handleReset() {
+    setGroups([makeDefaultGroup("terminal", settings, profiles)]);
+    setSelectedVariantId(null);
+  }
+
   function handleSubmit() {
     if (hasInvalidGroup || totalPanes === 0) {
       return;
     }
-    onComplete({ groups });
+    onComplete({ groups, layoutVariantId: selectedVariantId });
   }
 
   const canAddMore = totalPanes < MAX_PANES;
@@ -108,7 +122,7 @@ export function WorkspaceSetupWizard({
             {isFirstLaunch ? "Welcome to Tabby" : "New Workspace"}
           </h1>
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-            Configure your panes and layout will be derived automatically.
+            Configure your panes and choose a layout.
           </p>
         </div>
 
@@ -161,14 +175,27 @@ export function WorkspaceSetupWizard({
           </div>
 
           <div className="w-[300px] shrink-0">
-            <LayoutPreview groups={groups} />
+            <LayoutPreview
+              groups={groups}
+              selectedVariantId={selectedVariantId}
+              onSelectVariant={setSelectedVariantId}
+            />
           </div>
         </div>
 
         <div className="mt-6 flex items-center justify-between border-t border-[var(--color-border)] pt-4">
-          <span className="text-xs text-[var(--color-text-muted)]">
-            {totalPanes} of {MAX_PANES} panes
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[var(--color-text-muted)]">
+              {totalPanes} of {MAX_PANES} panes
+            </span>
+            <button
+              data-testid="wizard-reset"
+              className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition"
+              onClick={handleReset}
+            >
+              Reset
+            </button>
+          </div>
           <div className="flex items-center gap-3">
             {onCancel ? (
               <Button

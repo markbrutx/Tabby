@@ -95,7 +95,7 @@ impl BootstrapService {
                 .map(tabby_kernel::CommandTemplate::new),
         });
         let pane_specs = vec![pane_spec; layout.pane_count()];
-        let events = workspace_service.open_tab(layout, false, pane_specs)?;
+        let events = workspace_service.open_tab(layout, false, None, pane_specs)?;
         RuntimeCoordinator::handle_workspace_events(
             events,
             settings_service,
@@ -104,7 +104,6 @@ impl BootstrapService {
         )?;
         Ok(())
     }
-
 }
 
 #[cfg(test)]

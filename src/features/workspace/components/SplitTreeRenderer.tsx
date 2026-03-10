@@ -28,7 +28,6 @@ import type { GitClient } from "@/app-shell/clients";
 
 interface SplitTreeCtx {
   tab: TabSnapshotModel;
-  fontSize: number;
   theme: ResolvedTheme;
   visible: boolean;
   modalOpen: boolean;
@@ -57,7 +56,6 @@ function useTreeContext(): SplitTreeCtx {
 
 interface SplitTreeRendererProps {
   tab: TabSnapshotModel;
-  fontSize: number;
   theme: ResolvedTheme;
   visible: boolean;
   modalOpen?: boolean;
@@ -84,7 +82,7 @@ function findPaneById(tab: TabSnapshotModel, paneId: string): PaneSnapshotModel 
 function PaneLeaf({ paneId }: { paneId: string }) {
   const ctx = useTreeContext();
   const {
-    tab, fontSize, theme, visible, modalOpen,
+    tab, theme, visible, modalOpen,
     onFocus, onRestart, onClosePane, onSwapPaneSlots,
     dragSourceRef, dragOverPaneId, onDragOverChange,
   } = ctx;
@@ -211,7 +209,6 @@ function PaneLeaf({ paneId }: { paneId: string }) {
           ) : (
             <TerminalPane
               pane={pane}
-              fontSize={fontSize}
               theme={theme}
               active={isActive}
               visible={visible}
@@ -259,7 +256,6 @@ function NodeRenderer({ node }: { node: SplitNode }) {
 
 export function SplitTreeRenderer({
   tab,
-  fontSize,
   theme,
   visible,
   modalOpen = false,
@@ -279,7 +275,6 @@ export function SplitTreeRenderer({
 
   const ctx: SplitTreeCtx = useMemo(() => ({
     tab,
-    fontSize,
     theme,
     visible,
     modalOpen,
@@ -293,7 +288,7 @@ export function SplitTreeRenderer({
     dragOverPaneId,
     onDragOverChange: handleDragOverChange,
   }), [
-    tab, fontSize, theme, visible, modalOpen, gitClient,
+    tab, theme, visible, modalOpen, gitClient,
     onFocus, onRestart, onClosePane, onSwapPaneSlots, onOpenGitView,
     dragSourceRef, dragOverPaneId, handleDragOverChange,
   ]);

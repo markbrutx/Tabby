@@ -88,13 +88,61 @@ export function PaneConfigurator({
     );
   }
 
+  if (layout === "inline") {
+    return (
+      <div className="flex flex-1 min-w-0 flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <Select
+            data-testid={`${testIdPrefix}-profile`}
+            value={values.profileId}
+            onChange={(event) => onChange({ ...values, profileId: event.target.value })}
+            className="min-w-0 flex-1 text-sm"
+          >
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.label}
+              </option>
+            ))}
+          </Select>
+          {values.profileId === CUSTOM_PROFILE_ID ? (
+            <Input
+              data-testid={`${testIdPrefix}-command`}
+              value={values.customCommand}
+              onChange={(event) => onChange({ ...values, customCommand: event.target.value })}
+              placeholder="Custom command"
+              className="min-w-0 flex-1 text-sm"
+              autoFocus={autoFocus}
+            />
+          ) : null}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Input
+            data-testid={`${testIdPrefix}-dir`}
+            value={values.workingDirectory}
+            onChange={(event) => onChange({ ...values, workingDirectory: event.target.value })}
+            placeholder="Working directory"
+            className="min-w-0 flex-1 text-sm"
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0 px-2"
+            onClick={() => void handlePickDirectory(values.workingDirectory)}
+          >
+            <FolderOpen size={14} />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={containerClass}>
       <Select
         data-testid={`${testIdPrefix}-profile`}
         value={values.profileId}
         onChange={(event) => onChange({ ...values, profileId: event.target.value })}
-        className={layout === "inline" ? "w-[130px] shrink-0 text-sm" : "w-full text-sm"}
+        className="w-full text-sm"
       >
         {profiles.map((profile) => (
           <option key={profile.id} value={profile.id}>
@@ -114,25 +162,23 @@ export function PaneConfigurator({
         />
       ) : null}
 
-      {layout === "stacked" ? (
-        <div className="flex w-full flex-1 min-w-0 gap-1.5">
-          <Input
-            data-testid={`${testIdPrefix}-dir`}
-            value={values.workingDirectory}
-            onChange={(event) => onChange({ ...values, workingDirectory: event.target.value })}
-            placeholder="Working directory"
-            className="w-full min-w-0 text-sm"
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            className="shrink-0 px-2"
-            onClick={() => void handlePickDirectory(values.workingDirectory)}
-          >
-            <FolderOpen size={14} />
-          </Button>
-        </div>
-      ) : null}
+      <div className="flex w-full flex-1 min-w-0 gap-1.5">
+        <Input
+          data-testid={`${testIdPrefix}-dir`}
+          value={values.workingDirectory}
+          onChange={(event) => onChange({ ...values, workingDirectory: event.target.value })}
+          placeholder="Working directory"
+          className="w-full min-w-0 text-sm"
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          className="shrink-0 px-2"
+          onClick={() => void handlePickDirectory(values.workingDirectory)}
+        >
+          <FolderOpen size={14} />
+        </Button>
+      </div>
     </div>
   );
 }

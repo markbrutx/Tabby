@@ -34,6 +34,7 @@ function App() {
     splitPane,
     closePane,
     swapPaneSlots,
+    renameTab,
     clearError,
   } = useWorkspaceStore(
     useShallow((state) => ({
@@ -51,6 +52,7 @@ function App() {
       splitPane: state.splitPane,
       closePane: state.closePane,
       swapPaneSlots: state.swapPaneSlots,
+      renameTab: state.renameTab,
       clearError: state.clearError,
     })),
   );
@@ -99,6 +101,15 @@ function App() {
     applyResolvedTheme(resolvedTheme);
   }, [resolvedTheme]);
 
+  useEffect(() => {
+    if (settings?.fontSize) {
+      document.documentElement.style.setProperty(
+        "--ui-font-size",
+        `${settings.fontSize}px`,
+      );
+    }
+  }, [settings?.fontSize]);
+
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
   const handleOpenShortcuts = useCallback(() => setShortcutsOpen(true), []);
   const handleCloseShortcuts = useCallback(() => setShortcutsOpen(false), []);
@@ -132,6 +143,23 @@ function App() {
     [splitPane],
   );
 
+  const handleZoomIn = useCallback(() => {
+    if (!settings) return;
+    const next = Math.min(settings.fontSize + 1, 20);
+    void updateSettings({ ...settings, fontSize: next });
+  }, [settings, updateSettings]);
+
+  const handleZoomOut = useCallback(() => {
+    if (!settings) return;
+    const next = Math.max(settings.fontSize - 1, 11);
+    void updateSettings({ ...settings, fontSize: next });
+  }, [settings, updateSettings]);
+
+  const handleZoomReset = useCallback(() => {
+    if (!settings) return;
+    void updateSettings({ ...settings, fontSize: 14 });
+  }, [settings, updateSettings]);
+
   useWorkspaceShortcuts({
     workspace: workspaceModel,
     onCreateTab: openSetupWizard,
@@ -144,6 +172,9 @@ function App() {
     onSplitDown: handleSplitDown,
     onOpenSettings: handleOpenSettings,
     onOpenShortcuts: handleOpenShortcuts,
+    onZoomIn: handleZoomIn,
+    onZoomOut: handleZoomOut,
+    onZoomReset: handleZoomReset,
   });
 
   if (isHydrating) {
@@ -213,7 +244,9 @@ function App() {
             confirmDialog.requestCloseTab(tabId);
           }
         }}
+        onRename={(tabId, title) => void renameTab(tabId, title)}
         onNewTab={openSetupWizard}
+        showNewTab={!isWizardActive}
         onOpenSettings={handleOpenSettings}
         onOpenShortcuts={handleOpenShortcuts}
       />
@@ -238,7 +271,6 @@ function App() {
             <div key={tab.id} className={`h-full ${isActive ? "block" : "hidden"}`}>
               <SplitTreeRenderer
                 tab={tab}
-                fontSize={settings.fontSize}
                 theme={resolvedTheme}
                 visible={isActive}
                 modalOpen={modalOpen}

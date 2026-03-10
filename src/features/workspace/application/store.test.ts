@@ -349,6 +349,7 @@ describe("createWorkspaceStore", () => {
           count: 1,
         },
       ],
+      layoutVariantId: null,
     });
 
     expect(deps.workspaceClient.dispatch).toHaveBeenCalledWith(
