@@ -1891,6 +1891,147 @@ mod tests {
         }
     }
 
+    // -- Git PaneSpec round-trip tests ---------------------------------------
+
+    #[test]
+    fn git_pane_spec_round_trips_through_dto() {
+        let spec = PaneSpec::Git(tabby_workspace::GitPaneSpec {
+            working_directory: String::from("/home/user/project"),
+        });
+
+        let dto = pane_spec_to_dto(&spec);
+        let restored = pane_spec_from_dto(dto);
+
+        match restored {
+            PaneSpec::Git(g) => {
+                assert_eq!(g.working_directory, "/home/user/project");
+            }
+            other => panic!("Expected Git spec, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pane_spec_from_dto_git_maps_working_directory() {
+        let dto = PaneSpecDto::Git {
+            working_directory: String::from("/repos/my-project"),
+        };
+        let spec = pane_spec_from_dto(dto);
+        match spec {
+            PaneSpec::Git(g) => assert_eq!(g.working_directory, "/repos/my-project"),
+            other => panic!("Expected Git spec, got {other:?}"),
+        }
+    }
+
+    // -- Git PaneContentDefinition → PaneSpecDto ----------------------------
+
+    #[test]
+    fn pane_content_to_spec_dto_maps_git_content() {
+        use tabby_workspace::{PaneContentDefinition, PaneContentId};
+
+        let content = PaneContentDefinition::git(
+            PaneContentId::from(String::from("cid-1")),
+            "/home/user/repo",
+        );
+        let dto = pane_content_to_spec_dto(&content);
+        match dto {
+            PaneSpecDto::Git { working_directory } => {
+                assert_eq!(working_directory, "/home/user/repo");
+            }
+            other => panic!("Expected Git PaneSpecDto, got {other:?}"),
+        }
+    }
+
+    // -- Git PaneRuntime → PaneRuntimeView ----------------------------------
+
+    #[test]
+    fn pane_runtime_to_view_maps_git_with_repo_path() {
+        let runtime = PaneRuntime {
+            pane_id: PaneId::from(String::from("pane-git-1")),
+            runtime_session_id: Some(RuntimeSessionId::from(String::from("git-session-abc"))),
+            kind: RuntimeKind::Git,
+            status: RuntimeStatus::Running,
+            last_error: None,
+            browser_location: None,
+            terminal_cwd: None,
+            git_repo_path: Some(WorkingDirectory::new("/home/user/project").expect("valid path")),
+        };
+
+        let view = pane_runtime_to_view(&runtime);
+
+        assert_eq!(view.pane_id, "pane-git-1");
+        assert_eq!(view.runtime_session_id.as_deref(), Some("git-session-abc"));
+        assert!(matches!(view.kind, RuntimeKindDto::Git));
+        assert!(matches!(view.status, RuntimeStatusDto::Running));
+        assert_eq!(view.git_repo_path.as_deref(), Some("/home/user/project"));
+        assert!(view.browser_location.is_none());
+        assert!(view.terminal_cwd.is_none());
+    }
+
+    #[test]
+    fn pane_runtime_to_view_maps_git_without_repo_path() {
+        let runtime = PaneRuntime {
+            pane_id: PaneId::from(String::from("pane-git-2")),
+            runtime_session_id: None,
+            kind: RuntimeKind::Git,
+            status: RuntimeStatus::Starting,
+            last_error: None,
+            browser_location: None,
+            terminal_cwd: None,
+            git_repo_path: None,
+        };
+
+        let view = pane_runtime_to_view(&runtime);
+
+        assert!(matches!(view.kind, RuntimeKindDto::Git));
+        assert!(matches!(view.status, RuntimeStatusDto::Starting));
+        assert!(view.git_repo_path.is_none());
+        assert!(view.runtime_session_id.is_none());
+    }
+
+    // -- RuntimeKind::Git → RuntimeKindDto::Git -----------------------------
+
+    #[test]
+    fn runtime_kind_to_dto_maps_git() {
+        assert!(matches!(
+            runtime_kind_to_dto(RuntimeKind::Git),
+            RuntimeKindDto::Git
+        ));
+    }
+
+    // -- Bootstrap view with Git pane data ----------------------------------
+
+    #[test]
+    fn bootstrap_view_includes_git_runtime_projections() {
+        let session = WorkspaceSession::default();
+        let preferences = default_preferences();
+        let catalog = ProfileCatalog {
+            terminal_profiles: vec![TerminalProfile {
+                id: ProfileId::new("terminal"),
+                label: String::from("Terminal"),
+                description: String::from("Default"),
+                startup_command_template: None,
+            }],
+        };
+        let runtimes = vec![PaneRuntime {
+            pane_id: PaneId::from(String::from("pane-git-boot")),
+            runtime_session_id: Some(RuntimeSessionId::from(String::from("git-boot-1"))),
+            kind: RuntimeKind::Git,
+            status: RuntimeStatus::Running,
+            last_error: None,
+            browser_location: None,
+            terminal_cwd: None,
+            git_repo_path: Some(WorkingDirectory::new("/home/user/repo").expect("valid path")),
+        }];
+
+        let view = bootstrap_view(&session, &preferences, &catalog, &runtimes);
+
+        assert_eq!(view.runtime_projections.len(), 1);
+        let git_proj = &view.runtime_projections[0];
+        assert_eq!(git_proj.pane_id, "pane-git-boot");
+        assert!(matches!(git_proj.kind, RuntimeKindDto::Git));
+        assert_eq!(git_proj.git_repo_path.as_deref(), Some("/home/user/repo"));
+    }
+
     // -- parse_line_range helper tests --------------------------------------
 
     #[test]
