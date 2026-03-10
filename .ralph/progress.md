@@ -1,5 +1,43 @@
 # Progress Log
 
+## 2026-03-10 10:35 - GIT-028: Create FileTreePanel component with status view
+Thread:
+Run: 20260310-012951-93839 (iteration 30)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-30.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-30.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 1c6ee0b feat: add FileTreePanel component with status view (GIT-028)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (273 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS
+- Files changed:
+  - src/features/git/components/FileTreePanel.tsx (new)
+  - src/features/git/components/FileTreePanel.test.tsx (new - 22 tests)
+  - src/features/git/application/useGitPaneStore.ts (added stageFiles, unstageFiles, discardChanges actions)
+  - src/features/git/components/GitPane.tsx (integrated FileTreePanel, replaced inline file list)
+  - src/features/git/components/GitPane.test.tsx (fixed text ambiguity with "Changes" section header)
+- What was implemented:
+  - FileTreePanel component with two collapsible sections: "Staged Changes" and "Changes" (unstaged)
+  - Status badges (M/A/D/R/C/?/!/U) with color-coded display per FileStatusKind
+  - File click triggers onSelectFile callback for diff viewing
+  - Stage (+) button on unstaged files, Unstage (-) button on staged files
+  - Discard (trash) button on unstaged files with confirmation dialog
+  - Stage All / Unstage All batch action buttons in section headers
+  - Empty state message when no changes
+  - Store actions: stageFiles, unstageFiles, discardChanges (dispatch to GitClient then refresh status)
+  - 22 component tests covering: rendering, badges, click callbacks, stage/unstage/discard, confirmation flow, collapse/expand, mixed status files, selected highlight
+- **Learnings for future iterations:**
+  - Files with both indexStatus and worktreeStatus set to a change kind appear in both sections (mixed status)
+  - The project uses fireEvent from @testing-library/react, NOT @testing-library/user-event (not installed)
+  - Section header text like "Changes" can conflict with view tab button labels; use getAllByText or data-testid for disambiguation
+---
+
 ## 2026-03-10 10:23 - GIT-027: Create GitPane shell component with local Zustand store
 Thread:
 Run: 20260310-012951-93839 (iteration 29)
