@@ -7,6 +7,10 @@
 //
 // Dependencies: tabby-kernel only. No serde, specta, or tauri.
 
+pub mod diff;
+pub mod file_status;
 pub mod value_objects;
 
+pub use diff::{DiffContent, DiffHunk, DiffLine, DiffLineKind};
+pub use file_status::{FileStatus, FileStatusKind};
 pub use value_objects::{BranchName, CommitHash, RemoteName, StashId};
