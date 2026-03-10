@@ -1,136 +1,165 @@
 # Tabby
 
-Tabby is a macOS-first terminal workspace app built with Tauri, Rust, React, and xterm.js. It gives you browser-style tabs, split-pane layouts, live terminal sessions, and per-pane launch profiles for Terminal, Claude Code, Codex, or custom commands.
+[![CI](https://github.com/markbrutx/Tabby/actions/workflows/ci.yml/badge.svg)](https://github.com/markbrutx/Tabby/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)]()
 
-## Status
+**A free, open-source terminal workspace for macOS.**
 
-Tabby is an active local-first prototype. The repository already contains the core workspace shell, split layouts, settings, runtime tracking, and browser/terminal pane support, but the architecture is still evolving.
+Tabby gives you browser-style tabs, split-pane layouts, live terminal sessions, and per-pane launch profiles — all in one native app. Press `Cmd+T`, pick a layout, and start working across multiple terminals without losing context.
 
-## What It Does
+## Why Tabby?
 
-- Browser-style workspace tabs
-- Split layouts from `1x1` up to `3x3`
-- Independent pane runtime and working directory per pane
-- Built-in pane profiles: Terminal, Claude Code, Codex, Custom
-- Browser panes alongside terminal panes
-- Settings for layout, theme, font size, fullscreen, and startup defaults
-- Typed Tauri IPC contracts shared between Rust and TypeScript
-- Single-instance CLI routing for opening/focusing the existing app
+- **One window, many terminals** — tabs hold independent workspace layouts, each with its own split configuration
+- **No session loss** — switching tabs or resizing panes never kills your running processes
+- **Per-pane identity** — each pane has its own working directory, profile, and runtime
+- **Built-in profiles** — launch Terminal, Claude Code, Codex, or any custom command per pane
+- **Scriptable** — CLI flags let you automate workspace creation from scripts or hotkey daemons
 
-## Stack
+## How It Works
 
-- Tauri v2 desktop shell
-- Rust workspace under [`src-tauri/`](src-tauri)
-- React 18 + TypeScript frontend under [`src/`](src)
-- Bun + Vite toolchain
-- xterm.js for terminal rendering
-- Zustand for frontend state
-- specta / tauri-specta for typed IPC bindings
-- Tailwind CSS v4 for styling
-- Vitest + Playwright for verification
-
-## Prerequisites
-
-- macOS
-- [Bun](https://bun.sh/)
-- [Rust](https://rustup.rs/)
-- Xcode Command Line Tools
+1. **Open a tab** — `Cmd+T` creates a new workspace tab
+2. **Pick a layout** — choose from `1x1` up to `3x3` grid presets
+3. **Work** — each pane runs an independent PTY session that survives tab switches
+4. **Customize** — set profiles, working directories, and themes per pane
 
 ## Quick Start
 
+### Prerequisites
+
+- macOS (Apple Silicon or Intel)
+- [Bun](https://bun.sh/)
+- [Rust](https://rustup.rs/)
+- Xcode Command Line Tools (`xcode-select --install`)
+
+### Install & Run
+
 ```bash
+git clone https://github.com/markbrutx/Tabby.git
+cd Tabby
 bun install
 
-# Full desktop app (Tauri + frontend)
+# Full desktop app with real terminal sessions
 bun run tauri dev
 ```
 
-Frontend-only mode is also available and uses the web app without real PTY integration:
+Frontend-only mode (no Rust, mock transport for UI development):
 
 ```bash
 bun run dev
 ```
 
-## Build
+### Build
 
 ```bash
-# Frontend bundle only
-bun run build
-
-# Desktop bundle via Tauri
-bun run tauri build
+bun run build        # Frontend bundle
+bun run tauri build  # macOS .app + .dmg
 ```
 
-## Single-Instance Safety
+## Features
 
-Tabby is designed around a single running app instance. Do not start multiple copies of `bun run tauri dev` or `bun run dev` from the same checkout at the same time.
+| Feature | Description |
+|---------|-------------|
+| **Workspace tabs** | `Cmd+T` / `Cmd+W` / `Cmd+1-9` — each tab is an independent workspace |
+| **Split layouts** | Grid presets from 1x1 to 3x3, fully resizable after creation |
+| **Persistent sessions** | PTY processes survive tab switches, focus changes, and layout resizing |
+| **CLI profiles** | Terminal, Claude Code, Codex, or custom commands per pane |
+| **Per-pane cwd** | Each pane tracks its own working directory |
+| **Browser panes** | Embed web views alongside terminal panes |
+| **Git integration** | Status, branches, commits, diffs, blame, and stash management |
+| **Theme system** | Light/dark modes, custom themes, live editor |
+| **Keyboard-first** | Full shortcut coverage for tabs, panes, and workspace actions |
+| **CLI automation** | `tabby --new-tab --layout 2x2 --profile codex --cwd ~/project` |
 
-For long-running local sessions, prefer `tmux` so logs stay attached and cleanup is explicit:
+## CLI Usage
 
 ```bash
-tmux new-session -d -s tabby-dev 'cd /Users/markbrutx/pet/Tabby && bun run tauri dev'
-tmux attach -t tabby-dev
-tmux kill-session -t tabby-dev
+# Open a new tab with a 2x2 grid in a specific directory
+tabby --new-tab --layout 2x2 --cwd ~/projects/my-app
+
+# Open a tab with Codex profile
+tabby --new-tab --profile codex
+
+# Custom command in a new tab
+tabby --new-tab --profile custom --command "docker compose up"
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--new-tab` | Opens a new tab in the running instance |
+| `--layout` | Layout preset: `1x1`, `1x2`, `2x2`, `2x3`, `3x3` |
+| `--profile` | Pane profile: `terminal`, `claude-code`, `codex`, `custom` |
+| `--cwd` | Working directory for panes |
+| `--command` | Custom command (with `--profile custom`) |
+
+## Architecture
+
+Tabby follows a layered architecture with five bounded contexts:
+
+```
+Presentation  →  React 18 + TypeScript + Zustand + Tailwind CSS v4
+Transport     →  specta + tauri-specta (typed IPC bindings)
+Application   →  Rust services with port-adapter pattern
+Infrastructure→  Tauri v2 + portable-pty + plugin ecosystem
+Domain        →  Pure Rust crates (kernel, workspace, runtime, settings, git)
+```
+
+| Crate | Purpose |
+|-------|---------|
+| `tabby-kernel` | Shared value objects and ID types |
+| `tabby-workspace` | Tabs, panes, split layouts, domain events |
+| `tabby-runtime` | Pane runtime lifecycle and status tracking |
+| `tabby-settings` | User preferences and terminal profiles |
+| `tabby-git` | Git operations domain model |
+| `tabby-contracts` | Transport DTOs and IPC event structs |
+
+For full architecture docs, see the [documentation site](https://markbrutx.github.io/Tabby/architecture/).
 
 ## Verification
 
-Frontend:
-
 ```bash
-bun run lint
-bun run typecheck
-bun run test
-bun run test:e2e
-```
+# Frontend
+bun run lint          # ESLint + DTO boundary check
+bun run typecheck     # TypeScript strict mode
+bun run test          # Vitest (500+ tests)
+bun run test:e2e      # Playwright E2E
 
-Rust:
-
-```bash
+# Rust
 cd src-tauri
-cargo check --workspace
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace
+cargo test --workspace   # 500+ tests
+
+# Everything at once
+bun run verify:all
 ```
-
-## CLI Launch Overrides
-
-When the `tabby` binary is installed or built, it supports launch overrides for the running app:
-
-```bash
-tabby --new-tab --layout 2x2 --profile codex --cwd /path/to/project
-tabby --new-tab --profile custom --command "npm run dev"
-```
-
-Supported flags today are `--new-tab`, `--layout`, `--profile`, `--cwd`, and `--command`.
 
 ## Project Layout
 
-- [`src/`](src) - React app shell, stores, and feature UI
-- [`src-tauri/src/`](src-tauri/src) - Tauri bootstrap, shell integration, CLI, menu
-- [`src-tauri/crates/tabby-workspace/`](src-tauri/crates/tabby-workspace) - workspace and split-layout domain
-- [`src-tauri/crates/tabby-runtime/`](src-tauri/crates/tabby-runtime) - pane runtime registry and status
-- [`src-tauri/crates/tabby-settings/`](src-tauri/crates/tabby-settings) - preferences and launch profiles
-- [`src-tauri/crates/tabby-contracts/`](src-tauri/crates/tabby-contracts) - shared DTOs and IPC contracts
-- [`tests/e2e/`](tests/e2e) - Playwright smoke coverage
-- [`workbench/`](workbench) - scratch research and reference material, not production source
+```
+src/                          React frontend
+  features/                   Feature modules (workspace, terminal, browser, git, settings, theme)
+  app-shell/                  Transport clients and bootstrap
+  components/                 Shared UI components
+src-tauri/                    Rust backend
+  src/                        Tauri bootstrap, services, commands, infrastructure
+  crates/                     Domain crates (kernel, workspace, runtime, settings, git, contracts)
+tests/e2e/                    Playwright E2E tests
+docs/                         VitePress documentation site
+```
 
 ## Contributing
 
-Before opening a PR or asking an agent to make changes:
+Tabby is **macOS-first**. The architecture is portable — if you're interested in bringing Tabby to Linux or Windows, contributions are welcome.
 
-- keep diffs minimal and targeted
-- run the relevant verification commands for the files you touched
-- avoid adding references to private material under `workbench/` in user-facing docs or specs
-- preserve the invariant that pane runtimes survive tab switches and layout changes
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, or visit the [docs site](https://markbrutx.github.io/Tabby/contributing/).
 
-## Agent Docs
+## Acknowledgments
 
-- [`AGENTS.md`](AGENTS.md) - operational instructions for coding agents
-- [`CLAUDE.md`](CLAUDE.md) - Claude Code memory and project-specific guidance
-- [`spec.md`](spec.md) - product scope and intent
+- [Tauri](https://tauri.app/) for the Rust-based desktop framework
+- [xterm.js](https://xtermjs.org/) for terminal rendering
+- [portable-pty](https://docs.rs/portable-pty) for cross-platform PTY management
 
 ## License
 
-MIT
+[MIT](LICENSE)
