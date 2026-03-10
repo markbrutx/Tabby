@@ -1,5 +1,41 @@
 # Progress Log
 
+## 2026-03-10 11:38 - GIT-036: Create BlameView component
+Thread:
+Run: 20260310-012951-93839 (iteration 38)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-38.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-38.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: f90b081 feat: add BlameView component with annotations and context menu (GIT-036)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (435 tests, 29 files)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (312 tests)
+- Files changed:
+  - src/features/git/components/BlameView.tsx (new)
+  - src/features/git/components/BlameView.test.tsx (new, 9 tests)
+  - src/features/git/components/FileTreePanel.tsx (added context menu with Blame option)
+  - src/features/git/components/GitPane.tsx (wired BlameView into view routing)
+  - src/features/git/application/useGitPaneStore.ts (added blame state + fetchBlame action)
+- Implemented BlameView component with:
+  - Displays file content with blame annotations in left gutter
+  - Each blame block shows short commit hash, author name, relative date
+  - Alternating background colors for different blame blocks
+  - Click on commit hash navigates to HistoryPanel and selects that commit
+  - Monospace font for content, proportional for annotations
+  - Right-click context menu on files in FileTreePanel with "Blame" option
+  - 9 component tests covering annotations, click navigation, alternating colors, empty state
+- **Learnings for future iterations:**
+  - BlameEntry domain model was already defined; mock client already had blame data
+  - Context menu pattern: fixed positioned div + mousedown listener for closing
+  - Blame view added as new GitActiveView variant "blame" (not in tab bar, accessed via context menu)
+---
+
 ## 2026-03-10 11:35 - GIT-035: Create HistoryPanel component
 Thread:
 Run: 20260310-012951-93839 (iteration 37)
