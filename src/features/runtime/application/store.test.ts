@@ -31,6 +31,7 @@ function makeRuntimeReadModel(overrides?: Partial<RuntimeReadModel>): RuntimeRea
     lastError: null,
     browserLocation: null,
     terminalCwd: "/home/user",
+    gitRepoPath: null,
     ...overrides,
   };
 }
@@ -44,6 +45,7 @@ function makeRuntimeDto(overrides?: Partial<PaneRuntimeView>): PaneRuntimeView {
     lastError: null,
     browserLocation: null,
     terminalCwd: "/home/user",
+    gitRepoPath: null,
     ...overrides,
   };
 }
@@ -79,6 +81,7 @@ describe("createRuntimeStore", () => {
         lastError: null,
         browserLocation: null,
         terminalCwd: "/home/user",
+        gitRepoPath: null,
       });
 
       const p2 = runtimes["p2"];
@@ -90,6 +93,7 @@ describe("createRuntimeStore", () => {
         lastError: null,
         browserLocation: "https://example.com",
         terminalCwd: null,
+        gitRepoPath: null,
       });
     });
 

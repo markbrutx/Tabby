@@ -166,6 +166,10 @@ pub fn pane_runtime_to_view(runtime: &PaneRuntime) -> PaneRuntimeView {
             .terminal_cwd
             .as_ref()
             .map(|w| w.as_str().to_string()),
+        git_repo_path: runtime
+            .git_repo_path
+            .as_ref()
+            .map(|w| w.as_str().to_string()),
     }
 }
 
@@ -394,6 +398,7 @@ fn runtime_kind_to_dto(value: RuntimeKind) -> RuntimeKindDto {
     match value {
         RuntimeKind::Terminal => RuntimeKindDto::Terminal,
         RuntimeKind::Browser => RuntimeKindDto::Browser,
+        RuntimeKind::Git => RuntimeKindDto::Git,
     }
 }
 
@@ -583,6 +588,7 @@ mod tests {
             last_error: None,
             browser_location: None,
             terminal_cwd: None,
+            git_repo_path: None,
         };
 
         let view = pane_runtime_to_view(&runtime);
@@ -604,6 +610,7 @@ mod tests {
             last_error: None,
             browser_location: Some(BrowserUrl::new("https://example.com")),
             terminal_cwd: None,
+            git_repo_path: None,
         };
 
         let view = pane_runtime_to_view(&runtime);
@@ -625,6 +632,7 @@ mod tests {
             last_error: Some(String::from("spawn failed")),
             browser_location: None,
             terminal_cwd: None,
+            git_repo_path: None,
         };
 
         let view = pane_runtime_to_view(&runtime);
@@ -1013,6 +1021,7 @@ mod tests {
             last_error: None,
             browser_location: None,
             terminal_cwd: None,
+            git_repo_path: None,
         };
         let view = pane_runtime_to_view(&runtime);
         assert_eq!(

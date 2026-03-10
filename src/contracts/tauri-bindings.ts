@@ -60,13 +60,13 @@ async dispatchBrowserSurfaceCommand(command: BrowserSurfaceCommandDto) : Promise
 export type BrowserSurfaceBoundsDto = { x: number; y: number; width: number; height: number }
 export type BrowserSurfaceCommandDto = { kind: "ensure"; pane_id: string; url: string; bounds: BrowserSurfaceBoundsDto } | { kind: "setBounds"; pane_id: string; bounds: BrowserSurfaceBoundsDto } | { kind: "setVisible"; pane_id: string; visible: boolean } | { kind: "close"; pane_id: string }
 export type LayoutPresetDto = "1x1" | "1x2" | "2x2" | "2x3" | "3x3"
-export type PaneRuntimeView = { paneId: string; runtimeSessionId: string | null; kind: RuntimeKindDto; status: RuntimeStatusDto; lastError: string | null; browserLocation: string | null; terminalCwd: string | null }
+export type PaneRuntimeView = { paneId: string; runtimeSessionId: string | null; kind: RuntimeKindDto; status: RuntimeStatusDto; lastError: string | null; browserLocation: string | null; terminalCwd: string | null; gitRepoPath: string | null }
 export type PaneSpecDto = { kind: "terminal"; launch_profile_id: string; working_directory: string; command_override: string | null } | { kind: "browser"; initial_url: string } | { kind: "git"; working_directory: string }
 export type PaneView = { paneId: string; title: string; spec: PaneSpecDto }
 export type ProfileCatalogView = { terminalProfiles: ProfileView[] }
 export type ProfileView = { id: string; label: string; description: string; startupCommandTemplate: string | null }
 export type RuntimeCommandDto = { kind: "writeTerminalInput"; pane_id: string; input: string } | { kind: "resizeTerminal"; pane_id: string; cols: number; rows: number } | { kind: "navigateBrowser"; pane_id: string; url: string } | { kind: "observeTerminalCwd"; pane_id: string; working_directory: string } | { kind: "observeBrowserLocation"; pane_id: string; url: string }
-export type RuntimeKindDto = "terminal" | "browser"
+export type RuntimeKindDto = "terminal" | "browser" | "git"
 export type RuntimeStatusChangedEvent = { runtime: PaneRuntimeView }
 export type RuntimeStatusDto = "starting" | "running" | "exited" | "failed"
 export type SettingsCommandDto = { kind: "update"; settings: SettingsView } | { kind: "reset" }

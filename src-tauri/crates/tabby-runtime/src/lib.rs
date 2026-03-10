@@ -11,6 +11,7 @@ pub use ids::RuntimeSessionId;
 pub enum RuntimeKind {
     Terminal,
     Browser,
+    Git,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +31,7 @@ pub struct PaneRuntime {
     pub last_error: Option<String>,
     pub browser_location: Option<BrowserUrl>,
     pub terminal_cwd: Option<WorkingDirectory>,
+    pub git_repo_path: Option<WorkingDirectory>,
 }
 
 #[derive(Debug, Default)]
@@ -57,6 +59,7 @@ impl RuntimeRegistry {
             last_error: None,
             browser_location: None,
             terminal_cwd: None,
+            git_repo_path: None,
         };
         self.runtimes.insert(pane_id.clone(), runtime.clone());
         runtime
@@ -76,6 +79,27 @@ impl RuntimeRegistry {
             last_error: None,
             browser_location: Some(initial_url),
             terminal_cwd: None,
+            git_repo_path: None,
+        };
+        self.runtimes.insert(pane_id.clone(), runtime.clone());
+        runtime
+    }
+
+    pub fn register_git(
+        &mut self,
+        pane_id: &PaneId,
+        runtime_session_id: RuntimeSessionId,
+        repo_path: WorkingDirectory,
+    ) -> PaneRuntime {
+        let runtime = PaneRuntime {
+            pane_id: pane_id.clone(),
+            runtime_session_id: Some(runtime_session_id),
+            kind: RuntimeKind::Git,
+            status: RuntimeStatus::Running,
+            last_error: None,
+            browser_location: None,
+            terminal_cwd: None,
+            git_repo_path: Some(repo_path),
         };
         self.runtimes.insert(pane_id.clone(), runtime.clone());
         runtime
@@ -230,5 +254,78 @@ mod tests {
             registry.register_terminal(&pane_id, RuntimeSessionId::from(String::from("session-1")));
         assert_eq!(runtime.pane_id, pane_id);
         assert_eq!(runtime.pane_id.as_ref(), "pane-typed");
+    }
+
+    #[test]
+    fn registers_git_runtime() {
+        use super::RuntimeKind;
+
+        let mut registry = RuntimeRegistry::default();
+        let pane_id = pid("git-pane-1");
+        let session_id = RuntimeSessionId::from(String::from("git-session-1"));
+        let repo_path = WorkingDirectory::new("/projects/tabby").expect("valid path");
+
+        let runtime = registry.register_git(&pane_id, session_id, repo_path);
+
+        assert_eq!(runtime.kind, RuntimeKind::Git);
+        assert_eq!(runtime.status, RuntimeStatus::Running);
+        assert_eq!(
+            runtime.git_repo_path.as_ref().map(|p| p.as_str()),
+            Some("/projects/tabby")
+        );
+        assert!(runtime.browser_location.is_none());
+        assert!(runtime.terminal_cwd.is_none());
+    }
+
+    #[test]
+    fn git_runtime_snapshot_includes_git_entries() {
+        let mut registry = RuntimeRegistry::default();
+        let pane_id = pid("git-pane-2");
+        let repo_path = WorkingDirectory::new("/repos/my-repo").expect("valid path");
+        registry.register_git(
+            &pane_id,
+            RuntimeSessionId::from(String::from("git-session-2")),
+            repo_path,
+        );
+
+        let snapshot = registry.snapshot();
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].kind, super::RuntimeKind::Git);
+    }
+
+    #[test]
+    fn git_runtime_remove() {
+        let mut registry = RuntimeRegistry::default();
+        let pane_id = pid("git-pane-3");
+        let repo_path = WorkingDirectory::new("/repos/another").expect("valid path");
+        registry.register_git(
+            &pane_id,
+            RuntimeSessionId::from(String::from("git-session-3")),
+            repo_path,
+        );
+
+        let removed = registry.remove(&pane_id);
+        assert!(removed.is_some());
+        assert_eq!(
+            removed.as_ref().map(|r| r.kind),
+            Some(super::RuntimeKind::Git)
+        );
+        assert!(registry.get(&pane_id).is_none());
+    }
+
+    #[test]
+    fn git_runtime_lookup() {
+        let mut registry = RuntimeRegistry::default();
+        let pane_id = pid("git-pane-4");
+        let repo_path = WorkingDirectory::new("/repos/lookup").expect("valid path");
+        registry.register_git(
+            &pane_id,
+            RuntimeSessionId::from(String::from("git-session-4")),
+            repo_path,
+        );
+
+        let found = registry.get(&pane_id);
+        assert!(found.is_some());
+        assert_eq!(found.map(|r| r.kind), Some(super::RuntimeKind::Git));
     }
 }

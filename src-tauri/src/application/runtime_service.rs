@@ -116,6 +116,9 @@ impl RuntimeApplicationService {
                         );
                     }
                 }
+                tabby_runtime::RuntimeKind::Git => {
+                    // Git runtimes have no external process to kill
+                }
             }
         }
 
@@ -1231,6 +1234,7 @@ mod tests {
             browser_location: None,
             last_error: None,
             terminal_cwd: None,
+            git_repo_path: None,
         };
         publisher.publish_runtime_status(&runtime);
         let emitted = publisher.emitted.lock().expect("lock");
@@ -1257,6 +1261,7 @@ mod tests {
             browser_location: Some(BrowserUrl::new("https://example.com")),
             last_error: None,
             terminal_cwd: None,
+            git_repo_path: None,
         };
         publisher.publish_runtime_status(&runtime);
     }

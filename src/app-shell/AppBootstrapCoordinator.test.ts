@@ -68,6 +68,7 @@ function makeBootstrapPayload(): WorkspaceBootstrapView {
         lastError: null,
         browserLocation: null,
         terminalCwd: null,
+        gitRepoPath: null,
       },
     ],
   };

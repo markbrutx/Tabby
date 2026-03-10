@@ -128,6 +128,7 @@ pub struct SettingsView {
 pub enum RuntimeKindDto {
     Terminal,
     Browser,
+    Git,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -149,6 +150,7 @@ pub struct PaneRuntimeView {
     pub last_error: Option<String>,
     pub browser_location: Option<String>,
     pub terminal_cwd: Option<String>,
+    pub git_repo_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]

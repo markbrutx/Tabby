@@ -93,6 +93,7 @@ function makePaneSnapshot(id = "pane-1"): PaneSnapshotModel {
       lastError: null,
       browserLocation: "https://example.com",
       terminalCwd: null,
+      gitRepoPath: null,
     },
   };
 }

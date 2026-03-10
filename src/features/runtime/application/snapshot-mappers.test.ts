@@ -11,6 +11,7 @@ function makeDto(overrides?: Partial<PaneRuntimeView>): PaneRuntimeView {
     lastError: null,
     browserLocation: null,
     terminalCwd: "/Users/dev/project",
+    gitRepoPath: null,
     ...overrides,
   };
 }
@@ -28,6 +29,7 @@ describe("mapRuntimeFromDto", () => {
       lastError: null,
       browserLocation: null,
       terminalCwd: "/Users/dev/project",
+      gitRepoPath: null,
     });
   });
 

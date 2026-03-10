@@ -6,7 +6,7 @@
  * convert between these models and the wire-format DTOs.
  */
 
-export type RuntimeKind = "terminal" | "browser";
+export type RuntimeKind = "terminal" | "browser" | "git";
 
 export type RuntimeStatus = "starting" | "running" | "exited" | "failed";
 
@@ -18,6 +18,7 @@ export interface RuntimeReadModel {
   readonly lastError: string | null;
   readonly browserLocation: string | null;
   readonly terminalCwd: string | null;
+  readonly gitRepoPath: string | null;
 }
 
 // ---------------------------------------------------------------------------

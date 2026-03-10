@@ -18,5 +18,6 @@ export function mapRuntimeFromDto(dto: PaneRuntimeView): RuntimeReadModel {
     lastError: dto.lastError,
     browserLocation: dto.browserLocation,
     terminalCwd: dto.terminalCwd,
+    gitRepoPath: dto.gitRepoPath,
   };
 }
