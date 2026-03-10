@@ -19,6 +19,7 @@ export interface PaneSnapshotModel {
   status: RuntimeStatus | null;
   paneKind: "terminal" | "browser" | "git";
   url: string | null;
+  gitRepoPath?: string;
   spec: PaneSpec;
   runtime: RuntimeReadModel | null;
 }
@@ -91,6 +92,7 @@ export function buildWorkspaceSnapshotModel(
             status: runtime?.status ?? null,
             paneKind: "git" as const,
             url: null,
+            gitRepoPath: runtime?.gitRepoPath ?? pane.spec.workingDirectory,
             spec: pane.spec,
             runtime,
           };

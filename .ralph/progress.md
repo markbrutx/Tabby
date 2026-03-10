@@ -1,5 +1,36 @@
 # Progress Log
 
+## 2026-03-10 10:15 - GIT-025: Create GitClient transport and mock for browser dev
+Thread:
+Run: 20260310-012951-93839 (iteration 27)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-27.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-27.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 1400bc0 feat: add GitClient transport and mock for browser dev (GIT-025)
+- Post-commit status: clean (source files)
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (239 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (563 tests)
+- Files changed:
+  - src/app-shell/clients/shared.ts (GitClient interface + Tauri impl in createTauriShellClients)
+  - src/app-shell/clients/index.ts (export GitClient type)
+  - src/app-shell/clients/mockGitClient.ts (mock impl with realistic stub data)
+  - src/app-shell/clients/mockGitClient.test.ts (32 tests covering all 22 command kinds)
+- Added GitClient interface with dispatch method accepting GitCommandDto and returning GitResultDto
+- Added Tauri implementation in createTauriShellClients calling dispatchGitCommand via generated bindings
+- Added git: GitClient to AppShellClients interface (accessible via AppShellContext)
+- Created mock implementation returning realistic data for all 22 git operations (status, diff, stage, unstage, stageLines, commit, push, pull, fetch, branches, checkoutBranch, createBranch, deleteBranch, mergeBranch, log, blame, stashPush, stashPop, stashList, stashDrop, discardChanges, repoState)
+- **Learnings for future iterations:**
+  - GitClient follows the same single-dispatch pattern as other clients (dispatch method with discriminated union command)
+  - Mock client uses exhaustive switch on command.kind for type safety
+  - .ralph/ files are gitignored — stage source files only
+---
+
 ## 2026-03-10 10:05 - GIT-022: Update DTO mappers for Git pane spec and runtime
 Thread:
 Run: 20260310-012951-93839 (iteration 24)
