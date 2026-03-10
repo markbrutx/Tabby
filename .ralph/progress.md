@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-03-10 09:20 - GIT-014: Create CliGitAdapter skeleton with command runner
+Thread:
+Run: 20260310-012951-93839 (iteration 16)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-16.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-16.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: eaff80b feat: add CliGitAdapter skeleton with command runner (GIT-014)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (236 tests, including 3 new cli_git_adapter tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/src/infrastructure/cli_git_adapter.rs (new)
+  - src-tauri/src/infrastructure/mod.rs
+- What was implemented:
+  - Created CliGitAdapter struct implementing GitOperationsPort trait
+  - Private run_git(repo_path, args) helper that spawns git via std::process::Command
+  - Helper sets working directory to repo_path
+  - Helper returns ShellError::Io on non-zero exit with stderr content
+  - All trait methods return todo!() except run_git helper (as specified)
+  - 3 unit tests: git --version succeeds, invalid subcommand fails, nonexistent dir fails
+  - Module registered in infrastructure/mod.rs with pub use
+  - #[allow(dead_code)] added since adapter not yet wired into AppShell
+- **Learnings for future iterations:**
+  - cargo clippy -D warnings flags dead_code for structs/methods only used in tests; use #[allow(dead_code)] on the impl block
+  - .ralph/ is gitignored so cannot be staged with git add
+---
+
 ## 2026-03-10 09:17 - GIT-013: Update RuntimeCoordinator for Git pane events
 Thread:
 Run: 20260310-012951-93839 (iteration 15)
