@@ -6,3 +6,7 @@
 // - events: Domain events for the Git context
 //
 // Dependencies: tabby-kernel only. No serde, specta, or tauri.
+
+pub mod value_objects;
+
+pub use value_objects::{BranchName, CommitHash, RemoteName, StashId};
