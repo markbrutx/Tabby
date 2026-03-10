@@ -1,11 +1,7 @@
-export interface PaneGroupConfig {
-  mode: "terminal" | "browser";
-  profileId: string;
-  workingDirectory: string;
-  customCommand?: string;
-  url?: string;
-  count: number;
-}
+export type PaneGroupConfig =
+  | { mode: "terminal"; profileId: string; workingDirectory: string; customCommand: string; count: number }
+  | { mode: "browser"; url: string; count: number }
+  | { mode: "git"; workingDirectory: string; count: number };
 
 export interface SetupWizardConfig {
   groups: PaneGroupConfig[];

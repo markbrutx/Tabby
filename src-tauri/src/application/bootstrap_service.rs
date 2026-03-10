@@ -45,26 +45,14 @@ impl BootstrapService {
             .take()
             .unwrap_or_default();
 
-        if workspace_service.is_empty()? {
-            if cli_args.has_launch_overrides() {
-                self.apply_cli_launch_request(
-                    cli_args,
-                    workspace_service,
-                    settings_service,
-                    runtime_service,
-                    Arc::clone(&observation_receiver),
-                )?;
-            } else {
-                let preferences = settings_service.preferences()?;
-                if preferences.has_completed_onboarding {
-                    self.open_default_tab(
-                        workspace_service,
-                        settings_service,
-                        runtime_service,
-                        observation_receiver,
-                    )?;
-                }
-            }
+        if workspace_service.is_empty()? && cli_args.has_launch_overrides() {
+            self.apply_cli_launch_request(
+                cli_args,
+                workspace_service,
+                settings_service,
+                runtime_service,
+                Arc::clone(&observation_receiver),
+            )?;
         }
 
         Ok(BootstrapSnapshot {
@@ -117,30 +105,6 @@ impl BootstrapService {
         Ok(())
     }
 
-    fn open_default_tab(
-        &self,
-        workspace_service: &WorkspaceApplicationService,
-        settings_service: &SettingsApplicationService,
-        runtime_service: &RuntimeApplicationService,
-        observation_receiver: Arc<dyn RuntimeObservationReceiver>,
-    ) -> Result<(), ShellError> {
-        let preferences = settings_service.preferences()?;
-        let layout = preferences.default_layout;
-        let pane_spec = PaneSpec::Terminal(tabby_workspace::TerminalPaneSpec {
-            launch_profile_id: preferences.default_terminal_profile_id.as_str().to_string(),
-            working_directory: resolve_default_working_directory(None, &preferences),
-            command_override: None,
-        });
-        let pane_specs = vec![pane_spec; layout.pane_count()];
-        let events = workspace_service.open_tab(layout, false, pane_specs)?;
-        RuntimeCoordinator::handle_workspace_events(
-            events,
-            settings_service,
-            runtime_service,
-            observation_receiver,
-        )?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]

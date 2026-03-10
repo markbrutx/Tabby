@@ -7,6 +7,7 @@ import type {
 } from "@/contracts/tauri-bindings";
 import {
   CUSTOM_PROFILE_ID,
+  DEFAULT_BROWSER_URL,
 } from "@/features/workspace/domain/models";
 import type {
   PaneSpec,
@@ -80,21 +81,22 @@ async function runWorkspaceMutation(
 }
 
 function toPaneSpec(group: SetupWizardConfig["groups"][number]): PaneSpecDto[] {
-  const isBrowser = group.mode === "browser";
-  return Array.from({ length: group.count }, () =>
-    isBrowser
-      ? {
-          kind: "browser",
-          initial_url: group.url || "https://google.com",
-        }
-      : {
+  return Array.from({ length: group.count }, (): PaneSpecDto => {
+    switch (group.mode) {
+      case "browser":
+        return { kind: "browser", initial_url: group.url || DEFAULT_BROWSER_URL };
+      case "git":
+        return { kind: "git", working_directory: group.workingDirectory || "~" };
+      case "terminal":
+        return {
           kind: "terminal",
           launch_profile_id: group.profileId || "terminal",
           working_directory: group.workingDirectory || "~",
           command_override:
-            group.profileId === CUSTOM_PROFILE_ID ? group.customCommand?.trim() || null : null,
-        },
-  );
+            group.profileId === CUSTOM_PROFILE_ID ? group.customCommand.trim() || null : null,
+        };
+    }
+  });
 }
 
 export interface WorkspaceStoreDeps {

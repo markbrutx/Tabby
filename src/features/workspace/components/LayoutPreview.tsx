@@ -13,6 +13,7 @@ const GROUP_COLORS = [
 const GROUP_LABELS: Record<string, string> = {
   terminal: "T",
   browser: "B",
+  git: "G",
   claude: "C",
   codex: "X",
   custom: "\u2699",
@@ -34,11 +35,10 @@ export function LayoutPreview({ groups }: LayoutPreviewProps) {
 
     const assignments: Array<{ groupIndex: number; profileId: string }> = [];
     for (let gi = 0; gi < groups.length; gi++) {
-      for (let c = 0; c < groups[gi].count; c++) {
-        assignments.push({
-          groupIndex: gi,
-          profileId: groups[gi].mode === "browser" ? "browser" : groups[gi].profileId,
-        });
+      const group = groups[gi];
+      const label = group.mode === "terminal" ? group.profileId : group.mode;
+      for (let c = 0; c < group.count; c++) {
+        assignments.push({ groupIndex: gi, profileId: label });
       }
     }
 

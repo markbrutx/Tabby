@@ -59,8 +59,8 @@ describe("WorkspaceSetupWizard", () => {
         onComplete={vi.fn()}
       />,
     );
-    expect(screen.getByTestId("group-profile-0")).toHaveValue("terminal");
-    expect(screen.getByTestId("group-dir-0")).toHaveValue("/Users/test");
+    expect(screen.getByTestId("group-0-profile")).toHaveValue("terminal");
+    expect(screen.getByTestId("group-0-dir")).toHaveValue("/Users/test");
     expect(screen.getByTestId("group-count-0")).toHaveTextContent("1");
   });
 
@@ -74,10 +74,10 @@ describe("WorkspaceSetupWizard", () => {
       />,
     );
 
-    expect(screen.getByTestId("group-profile-0")).toHaveValue("terminal");
+    expect(screen.getByTestId("group-0-profile")).toHaveValue("terminal");
   });
 
-  it("add group button adds a new group", () => {
+  it("add terminal group button adds a new terminal group", () => {
     render(
       <WorkspaceSetupWizard
         profiles={profiles}
@@ -86,8 +86,22 @@ describe("WorkspaceSetupWizard", () => {
         onComplete={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByTestId("add-group"));
+    fireEvent.click(screen.getByTestId("add-terminal-group"));
     expect(screen.getByTestId("pane-group-1")).toBeInTheDocument();
+  });
+
+  it("add git group button adds a new git group", () => {
+    render(
+      <WorkspaceSetupWizard
+        profiles={profiles}
+        settings={settings}
+        isFirstLaunch={true}
+        onComplete={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("add-git-group"));
+    expect(screen.getByTestId("pane-group-1")).toBeInTheDocument();
+    expect(screen.getByTestId("group-1-dir")).toBeInTheDocument();
   });
 
   it("remove group removes it", () => {
@@ -99,7 +113,7 @@ describe("WorkspaceSetupWizard", () => {
         onComplete={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByTestId("add-group"));
+    fireEvent.click(screen.getByTestId("add-terminal-group"));
     expect(screen.getByTestId("pane-group-1")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("group-remove-1"));
     expect(screen.queryByTestId("pane-group-1")).not.toBeInTheDocument();
@@ -159,10 +173,10 @@ describe("WorkspaceSetupWizard", () => {
         onComplete={vi.fn()}
       />,
     );
-    fireEvent.change(screen.getByTestId("group-profile-0"), {
+    fireEvent.change(screen.getByTestId("group-0-profile"), {
       target: { value: "custom" },
     });
-    expect(screen.getByTestId("group-command-0")).toBeInTheDocument();
+    expect(screen.getByTestId("group-0-command")).toBeInTheDocument();
   });
 
   it("disables create when custom profile has no command", () => {
@@ -175,7 +189,7 @@ describe("WorkspaceSetupWizard", () => {
       />,
     );
 
-    fireEvent.change(screen.getByTestId("group-profile-0"), {
+    fireEvent.change(screen.getByTestId("group-0-profile"), {
       target: { value: "custom" },
     });
 
@@ -192,10 +206,10 @@ describe("WorkspaceSetupWizard", () => {
       />,
     );
 
-    fireEvent.change(screen.getByTestId("group-profile-0"), {
+    fireEvent.change(screen.getByTestId("group-0-profile"), {
       target: { value: "custom" },
     });
-    fireEvent.change(screen.getByTestId("group-command-0"), {
+    fireEvent.change(screen.getByTestId("group-0-command"), {
       target: { value: "npm run dev" },
     });
 
@@ -221,10 +235,23 @@ describe("WorkspaceSetupWizard", () => {
           workingDirectory: "/Users/test",
           customCommand: "",
           count: 1,
-          url: "https://google.com",
         },
       ],
     });
+  });
+
+  it("git group does not block create button", () => {
+    const onComplete = vi.fn();
+    render(
+      <WorkspaceSetupWizard
+        profiles={profiles}
+        settings={settings}
+        isFirstLaunch={true}
+        onComplete={onComplete}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("add-git-group"));
+    expect(screen.getByTestId("wizard-create")).not.toBeDisabled();
   });
 
   it("cancel button calls onCancel", () => {

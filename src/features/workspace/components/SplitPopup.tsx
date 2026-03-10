@@ -1,11 +1,56 @@
-import { FolderOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { CUSTOM_PROFILE_ID, type PaneSpec, type SplitDirection } from "@/features/workspace/domain/models";
+import { CUSTOM_PROFILE_ID, DEFAULT_BROWSER_URL, type PaneSpec, type SplitDirection } from "@/features/workspace/domain/models";
 import type { ProfileReadModel } from "@/features/settings/domain/models";
-import { pickDirectory } from "@/lib/pickDirectory";
+import { PaneConfigurator, isFieldValuesValid, type PaneFieldValues } from "./PaneConfigurator";
+
+function defaultSpecToFieldValues(spec: PaneSpec): PaneFieldValues {
+  switch (spec.kind) {
+    case "browser":
+      return { mode: "browser", url: spec.initialUrl };
+    case "git":
+      return { mode: "git", workingDirectory: spec.workingDirectory };
+    case "terminal":
+      return {
+        mode: "terminal",
+        profileId: spec.launchProfileId,
+        workingDirectory: spec.workingDirectory,
+        customCommand: spec.commandOverride ?? "",
+      };
+  }
+}
+
+function makeFieldValues(mode: PaneFieldValues["mode"], previousCwd: string): PaneFieldValues {
+  switch (mode) {
+    case "browser":
+      return { mode: "browser", url: DEFAULT_BROWSER_URL };
+    case "git":
+      return { mode: "git", workingDirectory: previousCwd };
+    case "terminal":
+      return { mode: "terminal", profileId: "terminal", workingDirectory: previousCwd, customCommand: "" };
+  }
+}
+
+function fieldValuesToPaneSpec(values: PaneFieldValues): PaneSpec {
+  switch (values.mode) {
+    case "browser":
+      return { kind: "browser", initialUrl: values.url.trim() || DEFAULT_BROWSER_URL };
+    case "git":
+      return { kind: "git", workingDirectory: values.workingDirectory };
+    case "terminal":
+      return {
+        kind: "terminal",
+        launchProfileId: values.profileId,
+        workingDirectory: values.workingDirectory,
+        commandOverride: values.profileId === CUSTOM_PROFILE_ID ? values.customCommand.trim() || null : null,
+      };
+  }
+}
+
+function extractCwd(values: PaneFieldValues): string {
+  return values.mode === "browser" ? "~" : values.workingDirectory;
+}
 
 interface SplitPopupProps {
   direction: SplitDirection;
@@ -22,31 +67,14 @@ export function SplitPopup({
   onConfirm,
   onCancel,
 }: SplitPopupProps) {
-  const initialMode = defaultSpec.kind === "browser" ? "browser" : defaultSpec.kind === "git" ? "git" : "terminal";
-  const [mode, setMode] = useState<"terminal" | "browser" | "git">(initialMode);
-  const [profileId, setProfileId] = useState(
-    defaultSpec.kind === "terminal" ? defaultSpec.launchProfileId : "terminal",
-  );
-  const [cwd, setCwd] = useState(
-    defaultSpec.kind === "terminal" ? defaultSpec.workingDirectory
-    : defaultSpec.kind === "git" ? defaultSpec.workingDirectory
-    : "~",
-  );
-  const [customCommand, setCustomCommand] = useState(
-    defaultSpec.kind === "terminal" ? defaultSpec.commandOverride ?? "" : "",
-  );
-  const [url, setUrl] = useState(
-    defaultSpec.kind === "browser" ? defaultSpec.initialUrl : "https://google.com",
+  const [fieldValues, setFieldValues] = useState<PaneFieldValues>(
+    () => defaultSpecToFieldValues(defaultSpec),
   );
 
-  const [gitCwd, setGitCwd] = useState(
-    defaultSpec.kind === "git" ? defaultSpec.workingDirectory : cwd,
-  );
-
-  const stateRef = useRef({ mode, profileId, cwd, customCommand, url, gitCwd });
+  const stateRef = useRef(fieldValues);
   useEffect(() => {
-    stateRef.current = { mode, profileId, cwd, customCommand, url, gitCwd };
-  }, [mode, profileId, cwd, customCommand, url, gitCwd]);
+    stateRef.current = fieldValues;
+  }, [fieldValues]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -55,24 +83,8 @@ export function SplitPopup({
         onCancel();
       } else if (event.key === "Enter") {
         event.preventDefault();
-        const { mode: nextMode, profileId: nextProfileId, cwd: nextCwd, customCommand: nextCommand, url: nextUrl, gitCwd: nextGitCwd } = stateRef.current;
-        if (nextMode === "terminal" && nextProfileId === CUSTOM_PROFILE_ID && !nextCommand.trim()) {
-          return;
-        }
-
-        onConfirm(
-          nextMode === "browser"
-            ? { kind: "browser", initialUrl: nextUrl.trim() || "https://google.com" }
-            : nextMode === "git"
-              ? { kind: "git", workingDirectory: nextGitCwd }
-              : {
-                  kind: "terminal",
-                  launchProfileId: nextProfileId,
-                  workingDirectory: nextCwd,
-                  commandOverride:
-                    nextProfileId === CUSTOM_PROFILE_ID ? nextCommand.trim() || null : null,
-                },
-        );
+        if (!isFieldValuesValid(stateRef.current)) return;
+        onConfirm(fieldValuesToPaneSpec(stateRef.current));
       }
     }
 
@@ -80,37 +92,14 @@ export function SplitPopup({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onCancel, onConfirm]);
 
-  async function handlePickDirectory() {
-    const selected = await pickDirectory(cwd);
-    if (selected) {
-      setCwd(selected);
-    }
-  }
-
-  async function handlePickGitDirectory() {
-    const selected = await pickDirectory(gitCwd);
-    if (selected) {
-      setGitCwd(selected);
-    }
+  function handleModeChange(nextMode: PaneFieldValues["mode"]) {
+    const currentCwd = extractCwd(fieldValues);
+    setFieldValues(makeFieldValues(nextMode, currentCwd));
   }
 
   function handleConfirm() {
-    if (mode === "terminal" && profileId === CUSTOM_PROFILE_ID && !customCommand.trim()) {
-      return;
-    }
-
-    onConfirm(
-      mode === "browser"
-        ? { kind: "browser", initialUrl: url.trim() || "https://google.com" }
-        : mode === "git"
-          ? { kind: "git", workingDirectory: gitCwd }
-          : {
-              kind: "terminal",
-              launchProfileId: profileId,
-              workingDirectory: cwd,
-              commandOverride: profileId === CUSTOM_PROFILE_ID ? customCommand.trim() || null : null,
-            },
-    );
+    if (!isFieldValuesValid(fieldValues)) return;
+    onConfirm(fieldValuesToPaneSpec(fieldValues));
   }
 
   const dirLabel = direction === "horizontal" ? "right" : "below";
@@ -130,8 +119,8 @@ export function SplitPopup({
 
         <div className="space-y-3">
           <Select
-            value={mode}
-            onChange={(event) => setMode(event.target.value as "terminal" | "browser" | "git")}
+            value={fieldValues.mode}
+            onChange={(event) => handleModeChange(event.target.value as PaneFieldValues["mode"])}
             className="text-sm"
           >
             <option value="terminal">Terminal</option>
@@ -139,64 +128,13 @@ export function SplitPopup({
             <option value="git">Git</option>
           </Select>
 
-          {mode === "browser" ? (
-            <Input
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="https://google.com"
-              className="text-sm"
-              autoFocus
-            />
-          ) : mode === "git" ? (
-            <div className="flex gap-2">
-              <Input
-                value={gitCwd}
-                onChange={(event) => setGitCwd(event.target.value)}
-                placeholder="Working directory"
-                className="text-sm"
-                autoFocus
-              />
-              <Button variant="secondary" size="sm" onClick={() => void handlePickGitDirectory()}>
-                <FolderOpen size={14} />
-              </Button>
-            </div>
-          ) : (
-            <>
-              <Select
-                value={profileId}
-                onChange={(event) => setProfileId(event.target.value)}
-                className="text-sm"
-              >
-                {profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.label}
-                  </option>
-                ))}
-              </Select>
-
-              {profileId === CUSTOM_PROFILE_ID ? (
-                <Input
-                  value={customCommand}
-                  onChange={(event) => setCustomCommand(event.target.value)}
-                  placeholder="Custom command"
-                  className="text-sm"
-                  autoFocus
-                />
-              ) : null}
-
-              <div className="flex gap-2">
-                <Input
-                  value={cwd}
-                  onChange={(event) => setCwd(event.target.value)}
-                  placeholder="Working directory"
-                  className="text-sm"
-                />
-                <Button variant="secondary" size="sm" onClick={() => void handlePickDirectory()}>
-                  <FolderOpen size={14} />
-                </Button>
-              </div>
-            </>
-          )}
+          <PaneConfigurator
+            values={fieldValues}
+            profiles={profiles}
+            onChange={setFieldValues}
+            autoFocus
+            testIdPrefix="split"
+          />
         </div>
 
         <div className="mt-3 flex justify-end gap-2">
@@ -205,7 +143,7 @@ export function SplitPopup({
           </Button>
           <Button
             size="sm"
-            disabled={mode === "terminal" && profileId === CUSTOM_PROFILE_ID && !customCommand.trim()}
+            disabled={!isFieldValuesValid(fieldValues)}
             onClick={handleConfirm}
           >
             Split

@@ -345,6 +345,7 @@ describe("createWorkspaceStore", () => {
           mode: "terminal",
           profileId: "terminal",
           workingDirectory: "~",
+          customCommand: "",
           count: 1,
         },
       ],

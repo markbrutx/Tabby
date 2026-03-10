@@ -1,12 +1,13 @@
-import { Plus } from "lucide-react";
+import { GitBranch, Globe, Terminal } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
-import { CUSTOM_PROFILE_ID } from "@/features/workspace/domain/models";
+import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain/models";
 import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
 import type { PaneGroupConfig, SetupWizardConfig } from "@/features/workspace/store/types";
+import { isFieldValuesValid } from "./PaneConfigurator";
 import { LayoutPreview } from "./LayoutPreview";
-import { PaneGroupRow } from "./PaneGroupRow";
+import { PaneGroupRow, groupToFieldValues } from "./PaneGroupRow";
 
 const MAX_PANES = 9;
 
@@ -25,17 +26,24 @@ function resolveDefaultProfileId(
 }
 
 function makeDefaultGroup(
+  mode: PaneGroupConfig["mode"],
   settings: SettingsReadModel,
   profiles: ProfileReadModel[],
 ): PaneGroupConfig {
-  return {
-    mode: "terminal",
-    profileId: resolveDefaultProfileId(settings, profiles),
-    workingDirectory: settings.defaultWorkingDirectory ?? "",
-    customCommand: settings.defaultCustomCommand ?? "",
-    url: "https://google.com",
-    count: 1,
-  };
+  switch (mode) {
+    case "terminal":
+      return {
+        mode: "terminal",
+        profileId: resolveDefaultProfileId(settings, profiles),
+        workingDirectory: settings.defaultWorkingDirectory ?? "",
+        customCommand: settings.defaultCustomCommand ?? "",
+        count: 1,
+      };
+    case "browser":
+      return { mode: "browser", url: DEFAULT_BROWSER_URL, count: 1 };
+    case "git":
+      return { mode: "git", workingDirectory: settings.defaultWorkingDirectory ?? "", count: 1 };
+  }
 }
 
 interface WorkspaceSetupWizardProps {
@@ -54,24 +62,20 @@ export function WorkspaceSetupWizard({
   onCancel,
 }: WorkspaceSetupWizardProps) {
   const [groups, setGroups] = useState<PaneGroupConfig[]>([
-    makeDefaultGroup(settings, profiles),
+    makeDefaultGroup("terminal", settings, profiles),
   ]);
 
   useEscapeKey(onCancel);
 
   const totalPanes = groups.reduce((sum, group) => sum + group.count, 0);
-  const hasInvalidGroup = groups.some((group) =>
-    group.mode === "terminal"
-      ? !group.profileId || (
-        group.profileId === CUSTOM_PROFILE_ID && !(group.customCommand?.trim())
-      )
-      : !(group.url?.trim())
+  const hasInvalidGroup = groups.some(
+    (group) => !isFieldValuesValid(groupToFieldValues(group)),
   );
 
-  function handleUpdateGroup(index: number, update: Partial<PaneGroupConfig>) {
+  function handleUpdateGroup(index: number, updated: PaneGroupConfig) {
     setGroups((prev) =>
       prev.map((group, groupIndex) =>
-        groupIndex === index ? { ...group, ...update } : group,
+        groupIndex === index ? updated : group,
       ),
     );
   }
@@ -80,8 +84,8 @@ export function WorkspaceSetupWizard({
     setGroups((prev) => prev.filter((_, groupIndex) => groupIndex !== index));
   }
 
-  function handleAddGroup() {
-    setGroups((prev) => [...prev, makeDefaultGroup(settings, profiles)]);
+  function handleAddGroup(mode: PaneGroupConfig["mode"]) {
+    setGroups((prev) => [...prev, makeDefaultGroup(mode, settings, profiles)]);
   }
 
   function handleSubmit() {
@@ -90,6 +94,8 @@ export function WorkspaceSetupWizard({
     }
     onComplete({ groups });
   }
+
+  const canAddMore = totalPanes < MAX_PANES;
 
   return (
     <div className="flex h-screen items-center justify-center bg-[var(--color-bg)] p-8">
@@ -102,7 +108,7 @@ export function WorkspaceSetupWizard({
             {isFirstLaunch ? "Welcome to Tabby" : "New Workspace"}
           </h1>
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-            Compose explicit terminal and browser pane groups. Layout is derived from pane count.
+            Configure your panes and layout will be derived automatically.
           </p>
         </div>
 
@@ -119,20 +125,38 @@ export function WorkspaceSetupWizard({
                 profiles={profiles}
                 maxCount={MAX_PANES - totalPanes + group.count}
                 canRemove={groups.length > 1}
-                onChange={(update) => handleUpdateGroup(index, update)}
+                onChange={(updated) => handleUpdateGroup(index, updated)}
                 onRemove={() => handleRemoveGroup(index)}
               />
             ))}
 
-            {totalPanes < MAX_PANES ? (
-              <button
-                data-testid="add-group"
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                onClick={handleAddGroup}
-              >
-                <Plus size={14} />
-                Add group
-              </button>
+            {canAddMore ? (
+              <div className="flex gap-2">
+                <button
+                  data-testid="add-terminal-group"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  onClick={() => handleAddGroup("terminal")}
+                >
+                  <Terminal size={14} />
+                  Terminal
+                </button>
+                <button
+                  data-testid="add-browser-group"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  onClick={() => handleAddGroup("browser")}
+                >
+                  <Globe size={14} />
+                  Browser
+                </button>
+                <button
+                  data-testid="add-git-group"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  onClick={() => handleAddGroup("git")}
+                >
+                  <GitBranch size={14} />
+                  Git
+                </button>
+              </div>
             ) : null}
           </div>
 

@@ -1,11 +1,7 @@
-import { FolderOpen, Minus, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
-import { CUSTOM_PROFILE_ID } from "@/features/workspace/domain/models";
+import { Minus, Plus, X } from "lucide-react";
 import type { ProfileReadModel } from "@/features/settings/domain/models";
 import type { PaneGroupConfig } from "@/features/workspace/store/types";
-import { pickDirectory } from "@/lib/pickDirectory";
+import { PaneConfigurator, type PaneFieldValues } from "./PaneConfigurator";
 
 const GROUP_DOT_COLORS = [
   "bg-[var(--color-accent)]",
@@ -15,14 +11,57 @@ const GROUP_DOT_COLORS = [
   "bg-rose-500",
 ];
 
+const MODE_LABELS: Record<PaneGroupConfig["mode"], string> = {
+  terminal: "Terminal",
+  browser: "Browser",
+  git: "Git",
+};
+
 interface PaneGroupRowProps {
   index: number;
   group: PaneGroupConfig;
   profiles: ProfileReadModel[];
   maxCount: number;
   canRemove: boolean;
-  onChange: (update: Partial<PaneGroupConfig>) => void;
+  onChange: (updated: PaneGroupConfig) => void;
   onRemove: () => void;
+}
+
+export function groupToFieldValues(group: PaneGroupConfig): PaneFieldValues {
+  switch (group.mode) {
+    case "browser":
+      return { mode: "browser", url: group.url };
+    case "git":
+      return { mode: "git", workingDirectory: group.workingDirectory };
+    case "terminal":
+      return {
+        mode: "terminal",
+        profileId: group.profileId,
+        workingDirectory: group.workingDirectory,
+        customCommand: group.customCommand,
+      };
+  }
+}
+
+function fieldValuesToGroup(values: PaneFieldValues, count: number): PaneGroupConfig {
+  switch (values.mode) {
+    case "browser":
+      return { mode: "browser", url: values.url, count };
+    case "git":
+      return { mode: "git", workingDirectory: values.workingDirectory, count };
+    case "terminal":
+      return {
+        mode: "terminal",
+        profileId: values.profileId,
+        workingDirectory: values.workingDirectory,
+        customCommand: values.customCommand,
+        count,
+      };
+  }
+}
+
+function withCount(group: PaneGroupConfig, count: number): PaneGroupConfig {
+  return { ...group, count };
 }
 
 export function PaneGroupRow({
@@ -34,15 +73,7 @@ export function PaneGroupRow({
   onChange,
   onRemove,
 }: PaneGroupRowProps) {
-  async function handlePickDirectory() {
-    const selected = await pickDirectory(group.workingDirectory || undefined);
-    if (selected) {
-      onChange({ workingDirectory: selected });
-    }
-  }
-
   const dotColor = GROUP_DOT_COLORS[index % GROUP_DOT_COLORS.length];
-  const isBrowser = group.mode === "browser";
 
   return (
     <div
@@ -53,118 +84,52 @@ export function PaneGroupRow({
         <div className="flex items-center gap-2">
           <div className={`h-2 w-2 rounded-full ${dotColor}`} />
           <span className="text-xs font-medium text-[var(--color-text-muted)]">
-            Group {index + 1}
+            Group {index + 1} — {MODE_LABELS[group.mode]}
           </span>
         </div>
-        {canRemove ? (
-          <button
-            data-testid={`group-remove-${index}`}
-            className="rounded p-1 text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
-            onClick={onRemove}
-          >
-            <X size={14} />
-          </button>
-        ) : null}
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-[140px_minmax(0,1fr)_auto]">
-        <Select
-          value={group.mode}
-          onChange={(event) =>
-            onChange({
-              mode: event.target.value as PaneGroupConfig["mode"],
-            })
-          }
-          className="text-sm"
-        >
-          <option value="terminal">Terminal</option>
-          <option value="browser">Browser</option>
-        </Select>
-
-        {isBrowser ? (
-          <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
-            Embedded browser pane
-          </div>
-        ) : (
-          <Select
-            data-testid={`group-profile-${index}`}
-            value={group.profileId}
-            onChange={(event) => onChange({ profileId: event.target.value })}
-            className="text-sm"
-          >
-            {profiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.label}
-              </option>
-            ))}
-          </Select>
-        )}
-
-        <div className="flex items-center gap-0.5 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-overlay)] px-1">
-          <button
-            data-testid={`group-decrement-${index}`}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text)] transition hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
-            disabled={group.count <= 1}
-            onClick={() => onChange({ count: group.count - 1 })}
-          >
-            <Minus size={14} />
-          </button>
-          <span
-            data-testid={`group-count-${index}`}
-            className="w-6 text-center text-sm font-medium text-[var(--color-text)]"
-          >
-            {group.count}
-          </span>
-          <button
-            data-testid={`group-increment-${index}`}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text)] transition hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
-            disabled={group.count >= maxCount}
-            onClick={() => onChange({ count: group.count + 1 })}
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-      </div>
-
-      {isBrowser ? (
-        <Input
-          data-testid={`group-url-${index}`}
-          value={group.url ?? ""}
-          onChange={(event) => onChange({ url: event.target.value })}
-          placeholder="https://google.com"
-          className="text-sm"
-        />
-      ) : (
-        <>
-          <div className="flex gap-2">
-            <Input
-              data-testid={`group-dir-${index}`}
-              value={group.workingDirectory}
-              onChange={(event) => onChange({ workingDirectory: event.target.value })}
-              placeholder="Working directory"
-              className="text-sm"
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              className="shrink-0"
-              onClick={() => void handlePickDirectory()}
+        <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-overlay)] px-1">
+            <button
+              data-testid={`group-decrement-${index}`}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text)] transition hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
+              disabled={group.count <= 1}
+              onClick={() => onChange(withCount(group, group.count - 1))}
             >
-              <FolderOpen size={14} />
-            </Button>
+              <Minus size={14} />
+            </button>
+            <span
+              data-testid={`group-count-${index}`}
+              className="w-6 text-center text-sm font-medium text-[var(--color-text)]"
+            >
+              {group.count}
+            </span>
+            <button
+              data-testid={`group-increment-${index}`}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text)] transition hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
+              disabled={group.count >= maxCount}
+              onClick={() => onChange(withCount(group, group.count + 1))}
+            >
+              <Plus size={14} />
+            </button>
           </div>
-
-          {group.profileId === CUSTOM_PROFILE_ID ? (
-            <Input
-              data-testid={`group-command-${index}`}
-              value={group.customCommand ?? ""}
-              onChange={(event) => onChange({ customCommand: event.target.value })}
-              placeholder="Custom command (e.g. npm run dev)"
-              className="text-sm"
-            />
+          {canRemove ? (
+            <button
+              data-testid={`group-remove-${index}`}
+              className="rounded p-1 text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
+              onClick={onRemove}
+            >
+              <X size={14} />
+            </button>
           ) : null}
-        </>
-      )}
+        </div>
+      </div>
+
+      <PaneConfigurator
+        values={groupToFieldValues(group)}
+        profiles={profiles}
+        onChange={(values) => onChange(fieldValuesToGroup(values, group.count))}
+        testIdPrefix={`group-${index}`}
+      />
     </div>
   );
 }
