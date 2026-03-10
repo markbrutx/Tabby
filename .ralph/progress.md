@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-03-10 09:35 - GIT-017: Implement stage, unstage, commit, discard operations
+Thread:
+Run: 20260310-012951-93839 (iteration 19)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-19.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-19.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 7fc9152 feat: implement stage, unstage, commit, discard operations (GIT-017)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (528 tests, 0 failures)
+- Files changed:
+  - src-tauri/src/infrastructure/cli_git_adapter.rs
+- Implemented stage, unstage, stage_lines, commit, discard_changes in CliGitAdapter:
+  - stage: calls `git add --` with paths, validates non-empty
+  - unstage: calls `git restore --staged --` with paths, validates non-empty
+  - stage_lines: gets diff, filters to line ranges, applies filtered patch via `git apply --cached`
+  - commit: validates non-empty message, calls `git commit -m`, parses CommitInfo via `git show`
+  - discard_changes: separates tracked (git restore) from untracked (git clean -f) using status
+  - Added helper functions: filter_diff_to_line_ranges, parse_commit_show_output
+  - 13 new unit tests covering validation edge cases and helper function parsing
+- **Learnings for future iterations:**
+  - Clippy enforces `strip_prefix` instead of manual `starts_with` + slice indexing
+  - `git show -s --format=%H%n%h%n%an%n%ae%n%aI%n%P%n%s HEAD` is a reliable way to extract commit metadata after committing
+  - For partial staging, filtering a unified diff and piping through `git apply --cached` works well
+  - .ralph/ paths need `git add -f` since they're gitignored
+---
+
 ## 2026-03-10 09:30 - GIT-016: Implement diff parsing (unified format)
 Thread:
 Run: 20260310-012951-93839 (iteration 18)
