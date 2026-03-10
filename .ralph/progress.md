@@ -90,3 +90,41 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - Separate modules per concern (file_status.rs, diff.rs) keeps files small and focused
   - Copy derive only for small enums; structs with String fields use Clone only
 ---
+
+## 2026-03-10 01:39 - GIT-004: Commit, branch, blame, and repo state types in tabby-git
+Thread:
+Run: 20260310-012951-93839 (iteration 4)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-4.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-4.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: cf37f44 feat: add commit, branch, blame, stash, and repo state types for tabby-git (GIT-004)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test -p tabby-git -> PASS (80 tests)
+  - Command: cargo test --workspace -> PASS
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/crates/tabby-git/src/lib.rs (added 5 new modules + re-exports)
+  - src-tauri/crates/tabby-git/src/commit.rs (new: CommitInfo struct + 6 tests)
+  - src-tauri/crates/tabby-git/src/branch.rs (new: BranchInfo struct + 6 tests)
+  - src-tauri/crates/tabby-git/src/blame.rs (new: BlameEntry struct + 4 tests)
+  - src-tauri/crates/tabby-git/src/stash.rs (new: StashEntry struct + 4 tests)
+  - src-tauri/crates/tabby-git/src/repository_state.rs (new: GitRepositoryState struct + 5 tests)
+- Implemented all acceptance criteria:
+  - CommitInfo: hash, short_hash, author_name, author_email, date, message, parent_hashes
+  - BranchInfo: name, is_current, upstream, ahead, behind
+  - BlameEntry: hash, author, date, line_start, line_count, content
+  - StashEntry: index (StashId), message, date
+  - GitRepositoryState: repo_path (WorkingDirectory), head_branch (Option<BranchName>), is_detached, status_clean
+  - All types Debug + Clone + PartialEq with unit tests
+  - 25 new tests (80 total in tabby-git)
+- **Learnings for future iterations:**
+  - One module per domain type keeps files small and focused (~100 lines each)
+  - Reuse value objects from value_objects.rs and tabby-kernel (WorkingDirectory) as field types
+  - No validation needed in struct constructors when fields use already-validated value objects
+---
