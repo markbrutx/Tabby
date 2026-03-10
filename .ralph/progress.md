@@ -1,5 +1,30 @@
 # Progress Log
 
+## [2026-03-10 01:01] - DDD-017: Clean tabby-contracts value_objects.rs to re-exports only
+Thread:
+Run: 20260310-000917-71928 (iteration 11)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-11.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-000917-71928-iter-11.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 7dc8fee refactor: clean tabby-contracts value_objects.rs to re-exports only (DDD-017)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS
+- Files changed:
+  - src-tauri/crates/tabby-contracts/src/value_objects.rs
+  - src-tauri/crates/tabby-contracts/src/lib.rs
+- Added missing CommandTemplate and LayoutPreset re-exports from tabby-kernel to tabby-contracts value_objects.rs. File now contains only re-exports with no original type definitions or tests.
+- **Learnings for future iterations:**
+  - The value_objects.rs was already mostly clean from DDD-002; just needed two missing re-exports added after DDD-014 and DDD-015 introduced new VOs
+  - Simple story — minimal diff, maximum impact on boundary cleanliness
+---
+
 ## [2026-03-10 01:00] - DDD-016: Comprehensive arch tests for all 7 violations
 Thread:
 Run: 20260310-000917-71928 (iteration 10)

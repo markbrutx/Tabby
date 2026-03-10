@@ -280,3 +280,4 @@
 [2026-03-10 00:59:15] ITERATION 10 end (duration=132s)
 [2026-03-10 00:59:18] ITERATION 11 start (mode=build story=DDD-017)
 [2026-03-10 00:59:33] DDD-017: Starting work — clean tabby-contracts value_objects.rs to re-exports only
+[2026-03-10 01:01:07] DDD-017: Complete — value_objects.rs cleaned to re-exports only, committed 7dc8fee
