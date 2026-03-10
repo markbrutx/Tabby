@@ -11,6 +11,7 @@ import { WorkspaceSetupWizard } from "@/features/workspace/components/WorkspaceS
 import { useConfirmAction } from "@/features/workspace/hooks/useConfirmAction";
 import { useTauriMenuEvents } from "@/features/workspace/hooks/useTauriMenuEvents";
 import { selectActivePane, selectActiveTab } from "@/features/workspace/selectors";
+import { shellClients } from "@/app-shell/clients";
 import { useWorkspaceStore, useSettingsStore, useRuntimeStore, bootstrapCoordinator } from "@/contexts/stores";
 import type { SetupWizardConfig } from "@/features/workspace/store/types";
 import { applyResolvedTheme, useResolvedTheme } from "@/features/workspace/theme";
@@ -231,6 +232,7 @@ function App() {
                 theme={resolvedTheme}
                 visible={isActive}
                 modalOpen={modalOpen}
+                gitClient={shellClients.git}
                 onFocus={focusPane}
                 onRestart={restartPaneRuntime}
                 onClosePane={confirmDialog.requestClosePane}

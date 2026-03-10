@@ -16,8 +16,11 @@ import type { SplitNode } from "@/features/workspace/domain/models";
 import type { ResolvedTheme } from "@/features/workspace/theme";
 import { BrowserPane, type BrowserPaneHandle } from "@/features/browser/components/BrowserPane";
 import { BrowserToolbar } from "@/features/browser/components/BrowserToolbar";
+import { GitPane } from "@/features/git/components/GitPane";
+import { GitPaneHeader } from "@/features/git/components/GitPaneHeader";
 import { PaneHeader } from "@/features/terminal/components/PaneHeader";
 import { TerminalPane } from "@/features/terminal/components/TerminalPane";
+import type { GitClient } from "@/app-shell/clients";
 
 // ---------------------------------------------------------------------------
 // Context — holds cross-cutting state shared by all nodes in the tree
@@ -29,6 +32,7 @@ interface SplitTreeCtx {
   theme: ResolvedTheme;
   visible: boolean;
   modalOpen: boolean;
+  gitClient: GitClient;
   onFocus: (tabId: string, paneId: string) => Promise<void>;
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
@@ -56,6 +60,7 @@ interface SplitTreeRendererProps {
   theme: ResolvedTheme;
   visible: boolean;
   modalOpen?: boolean;
+  gitClient: GitClient;
   onFocus: (tabId: string, paneId: string) => Promise<void>;
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
@@ -85,6 +90,7 @@ function PaneLeaf({ paneId }: { paneId: string }) {
   const pane = findPaneById(tab, paneId);
   const browserPaneRef = useRef<BrowserPaneHandle | null>(null);
   const isBrowser = pane?.paneKind === "browser";
+  const isGit = pane?.paneKind === "git";
 
   if (!pane) return null;
 
@@ -166,6 +172,15 @@ function PaneLeaf({ paneId }: { paneId: string }) {
             onClose={() => onClosePane(pane.id)}
             {...dragProps}
           />
+        ) : isGit ? (
+          <GitPaneHeader
+            repoPath={pane.gitRepoPath ?? pane.cwd}
+            branch={null}
+            isActive={isActive}
+            paneCount={tab.panes.length}
+            onClose={() => onClosePane(pane.id)}
+            {...dragProps}
+          />
         ) : (
           <PaneHeader
             profileLabel={pane.profileLabel}
@@ -188,6 +203,8 @@ function PaneLeaf({ paneId }: { paneId: string }) {
               visible={visible}
               modalOpen={modalOpen}
             />
+          ) : isGit ? (
+            <GitPane pane={pane} gitClient={ctx.gitClient} />
           ) : (
             <TerminalPane
               pane={pane}
@@ -243,6 +260,7 @@ export function SplitTreeRenderer({
   theme,
   visible,
   modalOpen = false,
+  gitClient,
   onFocus,
   onRestart,
   onClosePane,
@@ -261,6 +279,7 @@ export function SplitTreeRenderer({
     theme,
     visible,
     modalOpen,
+    gitClient,
     onFocus,
     onRestart,
     onClosePane,
@@ -269,7 +288,7 @@ export function SplitTreeRenderer({
     dragOverPaneId,
     onDragOverChange: handleDragOverChange,
   }), [
-    tab, fontSize, theme, visible, modalOpen,
+    tab, fontSize, theme, visible, modalOpen, gitClient,
     onFocus, onRestart, onClosePane, onSwapPaneSlots,
     dragSourceRef, dragOverPaneId, handleDragOverChange,
   ]);
