@@ -1,5 +1,37 @@
 # Progress Log
 
+## 2026-03-10 09:17 - GIT-013: Update RuntimeCoordinator for Git pane events
+Thread:
+Run: 20260310-012951-93839 (iteration 15)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-15.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-15.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: c66a0a4 feat: add Git pane integration tests to RuntimeCoordinator (GIT-013)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (484 tests)
+- Files changed:
+  - src-tauri/src/application/runtime_coordinator.rs
+  - src-tauri/src/application/runtime_lifecycle_tests.rs
+- What was implemented:
+  - Added `git_content()` helper and 10 Git-specific tests to RuntimeCoordinator test module
+  - Added `git_spec()` helper and 7 Git lifecycle tests to runtime_lifecycle_tests module
+  - Updated `TestRuntimeService::start_runtime` to register Git runtimes via `register_git` (was previously a no-op)
+  - Updated `multiple_events_processed_sequentially` test to properly handle Git panes
+  - Verified spec_from_content converts PaneContentDefinition::Git to PaneSpec::Git
+  - Verified PaneAdded/PaneRemoved/PaneContentChanged all work correctly for Git panes
+  - All existing coordinator and lifecycle tests continue to pass
+- **Learnings for future iterations:**
+  - The coordinator already handles Git events generically through spec_from_content; the main work was adding comprehensive integration tests
+  - TestRuntimeService needed WorkingDirectory::new() for Git registration, which requires tabby_kernel import
+---
+
 ## 2026-03-10 01:30 - GIT-001: Create tabby-git domain crate skeleton
 Thread:
 Run: 20260310-012951-93839 (iteration 1)
