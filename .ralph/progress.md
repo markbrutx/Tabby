@@ -271,3 +271,31 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - Existing codebase pattern (WorkspaceCommandDto, RuntimeCommandDto) uses the same approach — tag values are camelCase, fields are snake_case in JSON.
   - `cargo fmt` must be run from `src-tauri/` directory (needs Cargo.toml in CWD).
 ---
+
+## 2026-03-10 02:05 - GIT-009: Define GitOperationsPort trait
+Thread:
+Run: 20260310-012951-93839 (iteration 9)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-9.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-9.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 7da547f feat: define GitOperationsPort trait in application/ports.rs (GIT-009)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (423 tests, 0 failures)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests, 0 failures)
+  - Command: cargo check --workspace -> PASS
+- Files changed:
+  - src-tauri/Cargo.toml (added tabby-git dependency)
+  - src-tauri/Cargo.lock (updated lockfile)
+  - src-tauri/src/application/ports.rs (added GitOperationsPort trait)
+- Added GitOperationsPort trait to application/ports.rs with 22 methods covering all git operations: status, diff, stage, unstage, stage_lines, commit, push, pull, fetch, branches, checkout_branch, create_branch, delete_branch, merge_branch, log, blame, stash_push, stash_pop, stash_list, stash_drop, discard_changes, repo_state. All methods use domain types from tabby-git crate and return Result<T, ShellError>. Trait is Send + Sync + Debug.
+- **Learnings for future iterations:**
+  - The main tabby crate did not previously depend on tabby-git; added it to Cargo.toml
+  - cargo fmt reorders imports and collapses short method signatures to single lines
+  - .ralph/ directory is gitignored; don't try to git add files from it
+---

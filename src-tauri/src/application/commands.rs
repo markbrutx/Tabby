@@ -1,3 +1,9 @@
+use std::path::PathBuf;
+
+use tabby_git::value_objects::{BranchName, RemoteName, StashId};
+use tabby_git::{
+    BlameEntry, BranchInfo, CommitInfo, DiffContent, FileStatus, GitRepositoryState, StashEntry,
+};
 use tabby_settings::UserPreferences;
 use tabby_workspace::layout::{LayoutPreset, SplitDirection};
 use tabby_workspace::{PaneId, PaneSpec, TabId};
@@ -106,4 +112,131 @@ pub enum RuntimeCommand {
         pane_id: PaneId,
         url: String,
     },
+}
+
+// ---------------------------------------------------------------------------
+// Git commands
+// ---------------------------------------------------------------------------
+
+/// All Git commands accepted by the application layer.
+///
+/// Each variant carries the resolved `repo_path` (not the pane ID) so that
+/// the application service is decoupled from pane-to-repo resolution logic.
+#[derive(Debug, Clone)]
+pub enum GitCommand {
+    Status {
+        repo_path: PathBuf,
+    },
+    Diff {
+        repo_path: PathBuf,
+        staged: bool,
+    },
+    Stage {
+        repo_path: PathBuf,
+        paths: Vec<String>,
+    },
+    Unstage {
+        repo_path: PathBuf,
+        paths: Vec<String>,
+    },
+    StageLines {
+        repo_path: PathBuf,
+        file_path: String,
+        line_ranges: Vec<(u32, u32)>,
+    },
+    Commit {
+        repo_path: PathBuf,
+        message: String,
+    },
+    Push {
+        repo_path: PathBuf,
+        remote: RemoteName,
+        branch: BranchName,
+    },
+    Pull {
+        repo_path: PathBuf,
+        remote: RemoteName,
+        branch: BranchName,
+    },
+    Fetch {
+        repo_path: PathBuf,
+        remote: RemoteName,
+    },
+    Branches {
+        repo_path: PathBuf,
+    },
+    CheckoutBranch {
+        repo_path: PathBuf,
+        branch: BranchName,
+    },
+    CreateBranch {
+        repo_path: PathBuf,
+        branch: BranchName,
+    },
+    DeleteBranch {
+        repo_path: PathBuf,
+        branch: BranchName,
+    },
+    MergeBranch {
+        repo_path: PathBuf,
+        branch: BranchName,
+    },
+    Log {
+        repo_path: PathBuf,
+        max_count: u32,
+    },
+    Blame {
+        repo_path: PathBuf,
+        file_path: String,
+    },
+    StashPush {
+        repo_path: PathBuf,
+        message: Option<String>,
+    },
+    StashPop {
+        repo_path: PathBuf,
+    },
+    StashList {
+        repo_path: PathBuf,
+    },
+    StashDrop {
+        repo_path: PathBuf,
+        stash_id: StashId,
+    },
+    DiscardChanges {
+        repo_path: PathBuf,
+        paths: Vec<String>,
+    },
+    RepoState {
+        repo_path: PathBuf,
+    },
+}
+
+/// Result variants returned by `GitApplicationService::dispatch_command`.
+///
+/// Each variant wraps the domain types returned by `GitOperationsPort` methods.
+#[derive(Debug)]
+pub enum GitResult {
+    Status(Vec<FileStatus>),
+    Diff(Vec<DiffContent>),
+    Stage,
+    Unstage,
+    StageLines,
+    Commit(CommitInfo),
+    Push,
+    Pull,
+    Fetch,
+    Branches(Vec<BranchInfo>),
+    CheckoutBranch,
+    CreateBranch,
+    DeleteBranch,
+    MergeBranch,
+    Log(Vec<CommitInfo>),
+    Blame(Vec<BlameEntry>),
+    StashPush,
+    StashPop,
+    StashList(Vec<StashEntry>),
+    StashDrop,
+    DiscardChanges,
+    RepoState(GitRepositoryState),
 }

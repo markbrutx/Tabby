@@ -2,6 +2,7 @@ mod bootstrap_service;
 #[cfg(test)]
 mod command_dispatch_integration_tests;
 pub mod commands;
+mod git_service;
 pub mod ports;
 mod runtime_coordinator;
 #[cfg(test)]
@@ -14,6 +15,7 @@ mod settings_service;
 mod workspace_service;
 
 pub use bootstrap_service::BootstrapService;
+pub use git_service::GitApplicationService;
 pub use runtime_coordinator::RuntimeCoordinator;
 pub use runtime_service::RuntimeApplicationService;
 pub use settings_service::SettingsApplicationService;
