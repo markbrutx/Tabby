@@ -1,5 +1,36 @@
 # Progress Log
 
+## 2026-03-10 10:01 - GIT-021: Add dispatch_git_command IPC handler and regenerate bindings
+Thread:
+Run: 20260310-012951-93839 (iteration 23)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-23.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-23.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: feb236a feat: add dispatch_git_command IPC handler and regenerate bindings (GIT-021)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (305 tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/src/commands/shell.rs (added dispatch_git_command IPC handler)
+  - src-tauri/src/lib.rs (registered command and GitCommandDto/GitResultDto types)
+  - src-tauri/crates/tabby-contracts/src/git_dtos.rs (usize -> u32 for specta compat)
+  - src-tauri/src/mapping/dto_mappers.rs (u32 cast for stash index)
+  - src/contracts/tauri-bindings.ts (auto-regenerated with git types)
+- Added #[tauri::command] #[specta::specta] dispatch_git_command to commands/shell.rs
+- Registered in lib.rs invoke_handler and specta type collection
+- Fixed BigIntForbidden specta error by changing usize to u32 in StashEntryDto.index, GitCommandDto::StashPop.index, and GitCommandDto::StashDrop.index
+- tauri-bindings.ts auto-regenerated with dispatchGitCommand, GitCommandDto, GitResultDto
+- **Learnings for future iterations:**
+  - specta forbids `usize` in DTOs (BigIntForbidden) — always use fixed-width integers (u32) for IPC types
+  - The `exports_typescript_bindings` test catches specta export issues early
+---
+
 ## 2026-03-10 09:57 - GIT-020: Wire CliGitAdapter and GitApplicationService into AppShell
 Thread:
 Run: 20260310-012951-93839 (iteration 22)
