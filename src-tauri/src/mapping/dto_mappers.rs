@@ -374,6 +374,7 @@ pub fn extract_git_pane_id(dto: &GitCommandDto) -> String {
         | GitCommandDto::DeleteBranch { pane_id, .. }
         | GitCommandDto::MergeBranch { pane_id, .. }
         | GitCommandDto::Log { pane_id, .. }
+        | GitCommandDto::ShowCommit { pane_id, .. }
         | GitCommandDto::Blame { pane_id, .. }
         | GitCommandDto::StashPush { pane_id, .. }
         | GitCommandDto::StashPop { pane_id, .. }
@@ -473,10 +474,14 @@ pub fn git_command_from_dto(
                 BranchName::try_new(&name).map_err(|e| ShellError::Validation(e.to_string()))?;
             GitCommand::MergeBranch { repo_path, branch }
         }
-        GitCommandDto::Log { max_count, .. } => GitCommand::Log {
+        GitCommandDto::Log {
+            max_count, skip, ..
+        } => GitCommand::Log {
             repo_path,
             max_count: max_count.unwrap_or(50),
+            skip: skip.unwrap_or(0),
         },
+        GitCommandDto::ShowCommit { hash, .. } => GitCommand::ShowCommit { repo_path, hash },
         GitCommandDto::Blame { path, .. } => GitCommand::Blame {
             repo_path,
             file_path: path,
@@ -529,6 +534,9 @@ pub fn git_result_to_dto(result: GitResult) -> GitResultDto {
         },
         GitResult::Log(commits) => GitResultDto::Log {
             commits: commits.iter().map(commit_info_to_dto).collect(),
+        },
+        GitResult::ShowCommit(diffs) => GitResultDto::ShowCommit {
+            diffs: diffs.iter().map(diff_content_to_dto).collect(),
         },
         GitResult::Blame(entries) => GitResultDto::Blame {
             entries: entries.iter().map(blame_entry_to_dto).collect(),
@@ -1593,11 +1601,17 @@ mod tests {
         let dto = GitCommandDto::Log {
             pane_id: "p1".to_string(),
             max_count: None,
+            skip: None,
             path: None,
         };
         let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
         match cmd {
-            GitCommand::Log { max_count, .. } => assert_eq!(max_count, 50),
+            GitCommand::Log {
+                max_count, skip, ..
+            } => {
+                assert_eq!(max_count, 50);
+                assert_eq!(skip, 0);
+            }
             other => panic!("Expected Log, got {other:?}"),
         }
     }

@@ -187,7 +187,12 @@ pub enum GitCommandDto {
     Log {
         pane_id: String,
         max_count: Option<u32>,
+        skip: Option<u32>,
         path: Option<String>,
+    },
+    ShowCommit {
+        pane_id: String,
+        hash: String,
     },
     Blame {
         pane_id: String,
@@ -239,6 +244,7 @@ pub enum GitResultDto {
     DeleteBranch,
     MergeBranch { message: String },
     Log { commits: Vec<CommitInfoDto> },
+    ShowCommit { diffs: Vec<DiffContentDto> },
     Blame { entries: Vec<BlameEntryDto> },
     StashPush,
     StashPop,
@@ -570,7 +576,12 @@ mod tests {
             GitCommandDto::Log {
                 pane_id: "p".to_string(),
                 max_count: None,
+                skip: None,
                 path: None,
+            },
+            GitCommandDto::ShowCommit {
+                pane_id: "p".to_string(),
+                hash: "abc".to_string(),
             },
             GitCommandDto::Blame {
                 pane_id: "p".to_string(),

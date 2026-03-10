@@ -22,7 +22,8 @@ describe("createMockGitClient", () => {
     { command: { kind: "createBranch", pane_id: PANE_ID, name: "feat", start_point: null }, expectedKind: "createBranch" },
     { command: { kind: "deleteBranch", pane_id: PANE_ID, name: "old", force: false }, expectedKind: "deleteBranch" },
     { command: { kind: "mergeBranch", pane_id: PANE_ID, name: "feature" }, expectedKind: "mergeBranch" },
-    { command: { kind: "log", pane_id: PANE_ID, max_count: null, path: null }, expectedKind: "log" },
+    { command: { kind: "log", pane_id: PANE_ID, max_count: null, skip: null, path: null }, expectedKind: "log" },
+    { command: { kind: "showCommit", pane_id: PANE_ID, hash: "abc123" }, expectedKind: "showCommit" },
     { command: { kind: "blame", pane_id: PANE_ID, path: "file.ts" }, expectedKind: "blame" },
     { command: { kind: "stashPush", pane_id: PANE_ID, message: null }, expectedKind: "stashPush" },
     { command: { kind: "stashPop", pane_id: PANE_ID, index: null }, expectedKind: "stashPop" },
@@ -66,7 +67,7 @@ describe("createMockGitClient", () => {
   });
 
   it("returns commit log entries for log command", async () => {
-    const result = await client.dispatch({ kind: "log", pane_id: PANE_ID, max_count: null, path: null });
+    const result = await client.dispatch({ kind: "log", pane_id: PANE_ID, max_count: null, skip: null, path: null });
     if (result.kind !== "log") throw new Error("unexpected kind");
     expect(result.commits.length).toBeGreaterThan(0);
     expect(result.commits[0]).toHaveProperty("hash");

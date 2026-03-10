@@ -101,9 +101,14 @@ impl GitApplicationService {
             GitCommand::Log {
                 repo_path,
                 max_count,
+                skip,
             } => {
-                let commits = self.git_port.log(&repo_path, max_count)?;
+                let commits = self.git_port.log(&repo_path, max_count, skip)?;
                 Ok(GitResult::Log(commits))
+            }
+            GitCommand::ShowCommit { repo_path, hash } => {
+                let diffs = self.git_port.show_commit(&repo_path, &hash)?;
+                Ok(GitResult::ShowCommit(diffs))
             }
             GitCommand::Blame {
                 repo_path,
@@ -175,7 +180,8 @@ mod tests {
         CreateBranch(PathBuf, String, Option<String>),
         DeleteBranch(PathBuf, String, bool),
         MergeBranch(PathBuf, String),
-        Log(PathBuf, u32),
+        Log(PathBuf, u32, u32),
+        ShowCommit(PathBuf, String),
         Blame(PathBuf, String),
         StashPush(PathBuf, Option<String>),
         StashPop(PathBuf),
@@ -401,11 +407,31 @@ mod tests {
             Ok(())
         }
 
-        fn log(&self, repo_path: &Path, max_count: u32) -> Result<Vec<CommitInfo>, ShellError> {
+        fn log(
+            &self,
+            repo_path: &Path,
+            max_count: u32,
+            skip: u32,
+        ) -> Result<Vec<CommitInfo>, ShellError> {
             self.calls
                 .lock()
                 .map_err(|e| ShellError::State(e.to_string()))?
-                .push(PortCall::Log(repo_path.to_path_buf(), max_count));
+                .push(PortCall::Log(repo_path.to_path_buf(), max_count, skip));
+            Ok(vec![])
+        }
+
+        fn show_commit(
+            &self,
+            repo_path: &Path,
+            hash: &str,
+        ) -> Result<Vec<DiffContent>, ShellError> {
+            self.calls
+                .lock()
+                .map_err(|e| ShellError::State(e.to_string()))?
+                .push(PortCall::ShowCommit(
+                    repo_path.to_path_buf(),
+                    hash.to_string(),
+                ));
             Ok(vec![])
         }
 
@@ -554,8 +580,11 @@ mod tests {
             fn merge_branch(&self, p: &Path, b: &BranchName) -> Result<(), ShellError> {
                 self.0.merge_branch(p, b)
             }
-            fn log(&self, p: &Path, mc: u32) -> Result<Vec<CommitInfo>, ShellError> {
-                self.0.log(p, mc)
+            fn log(&self, p: &Path, mc: u32, skip: u32) -> Result<Vec<CommitInfo>, ShellError> {
+                self.0.log(p, mc, skip)
+            }
+            fn show_commit(&self, p: &Path, hash: &str) -> Result<Vec<DiffContent>, ShellError> {
+                self.0.show_commit(p, hash)
             }
             fn blame(&self, p: &Path, fp: &str) -> Result<Vec<BlameEntry>, ShellError> {
                 self.0.blame(p, fp)
@@ -710,11 +739,12 @@ mod tests {
             .dispatch_command(GitCommand::Log {
                 repo_path: repo(),
                 max_count: 50,
+                skip: 0,
             })
             .expect("should succeed");
 
         assert!(matches!(result, GitResult::Log(_)));
-        assert_eq!(mock.recorded_calls(), vec![PortCall::Log(repo(), 50)]);
+        assert_eq!(mock.recorded_calls(), vec![PortCall::Log(repo(), 50, 0)]);
     }
 
     #[test]

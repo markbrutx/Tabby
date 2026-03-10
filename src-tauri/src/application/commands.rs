@@ -187,6 +187,11 @@ pub enum GitCommand {
     Log {
         repo_path: PathBuf,
         max_count: u32,
+        skip: u32,
+    },
+    ShowCommit {
+        repo_path: PathBuf,
+        hash: String,
     },
     Blame {
         repo_path: PathBuf,
@@ -235,6 +240,7 @@ pub enum GitResult {
     DeleteBranch,
     MergeBranch,
     Log(Vec<CommitInfo>),
+    ShowCommit(Vec<DiffContent>),
     Blame(Vec<BlameEntry>),
     StashPush,
     StashPop,

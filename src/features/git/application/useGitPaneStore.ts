@@ -26,6 +26,11 @@ export interface GitPaneState {
   readonly stagedLines: ReadonlySet<string>;
   readonly branches: readonly BranchInfo[];
   readonly branchesLoading: boolean;
+  readonly commitLog: readonly CommitInfo[];
+  readonly commitLogLoading: boolean;
+  readonly hasMoreCommits: boolean;
+  readonly selectedCommitHash: string | null;
+  readonly commitDiffContent: DiffContent | null;
 
   refreshStatus: () => Promise<void>;
   selectFile: (filePath: string | null) => Promise<void>;
@@ -43,6 +48,9 @@ export interface GitPaneState {
   checkoutBranch: (name: string) => Promise<void>;
   createBranch: (name: string, startPoint: string | null) => Promise<void>;
   deleteBranch: (name: string, force: boolean) => Promise<void>;
+  fetchCommitLog: () => Promise<void>;
+  fetchMoreCommits: () => Promise<void>;
+  selectCommit: (hash: string | null) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +76,11 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
     stagedLines: new Set<string>(),
     branches: [],
     branchesLoading: false,
+    commitLog: [],
+    commitLogLoading: false,
+    hasMoreCommits: true,
+    selectedCommitHash: null,
+    commitDiffContent: null,
 
     async refreshStatus() {
       set({ loading: true, error: null });
@@ -272,6 +285,7 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
         kind: "log",
         pane_id: paneId,
         max_count: 1,
+        skip: null,
         path: null,
       });
       if (result.kind === "log" && result.commits.length > 0) {
@@ -354,6 +368,124 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
       } catch (err: unknown) {
         const message =
           err instanceof Error ? err.message : "Failed to delete branch";
+        set({ error: message });
+      }
+    },
+
+    async fetchCommitLog() {
+      set({ commitLogLoading: true });
+      try {
+        const result = await gitClient.dispatch({
+          kind: "log",
+          pane_id: paneId,
+          max_count: 50,
+          skip: null,
+          path: null,
+        });
+        if (result.kind === "log") {
+          set({
+            commitLog: result.commits.map((c) => ({
+              hash: c.hash,
+              shortHash: c.shortHash,
+              authorName: c.authorName,
+              authorEmail: c.authorEmail,
+              date: c.date,
+              message: c.message,
+              parentHashes: [...c.parentHashes],
+            })),
+            commitLogLoading: false,
+            hasMoreCommits: result.commits.length >= 50,
+          });
+        } else {
+          set({ commitLogLoading: false });
+        }
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to fetch commit log";
+        set({ error: message, commitLogLoading: false });
+      }
+    },
+
+    async fetchMoreCommits() {
+      const currentState = get();
+      if (currentState.commitLogLoading || !currentState.hasMoreCommits) return;
+
+      set({ commitLogLoading: true });
+      try {
+        const result = await gitClient.dispatch({
+          kind: "log",
+          pane_id: paneId,
+          max_count: 50,
+          skip: currentState.commitLog.length,
+          path: null,
+        });
+        if (result.kind === "log") {
+          const newCommits: readonly CommitInfo[] = result.commits.map((c) => ({
+            hash: c.hash,
+            shortHash: c.shortHash,
+            authorName: c.authorName,
+            authorEmail: c.authorEmail,
+            date: c.date,
+            message: c.message,
+            parentHashes: [...c.parentHashes],
+          }));
+          set({
+            commitLog: [...currentState.commitLog, ...newCommits],
+            commitLogLoading: false,
+            hasMoreCommits: result.commits.length >= 50,
+          });
+        } else {
+          set({ commitLogLoading: false });
+        }
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to fetch more commits";
+        set({ error: message, commitLogLoading: false });
+      }
+    },
+
+    async selectCommit(hash: string | null) {
+      if (hash === null) {
+        set({ selectedCommitHash: null, commitDiffContent: null });
+        return;
+      }
+
+      set({ selectedCommitHash: hash });
+      try {
+        const result = await gitClient.dispatch({
+          kind: "showCommit",
+          pane_id: paneId,
+          hash,
+        });
+        if (result.kind === "showCommit" && result.diffs.length > 0) {
+          const d = result.diffs[0];
+          set({
+            commitDiffContent: {
+              filePath: d.filePath,
+              oldPath: d.oldPath,
+              hunks: d.hunks.map((h) => ({
+                oldStart: h.oldStart,
+                oldCount: h.oldCount,
+                newStart: h.newStart,
+                newCount: h.newCount,
+                header: h.header,
+                lines: h.lines.map((l) => ({
+                  kind: l.kind,
+                  oldLineNo: l.oldLineNo,
+                  newLineNo: l.newLineNo,
+                  content: l.content,
+                })),
+              })),
+              isBinary: d.isBinary,
+              fileModeChange: d.fileModeChange,
+            },
+          });
+        } else {
+          set({ commitDiffContent: null });
+        }
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to load commit diff";
         set({ error: message });
       }
     },

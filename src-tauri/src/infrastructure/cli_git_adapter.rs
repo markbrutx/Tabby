@@ -866,18 +866,30 @@ impl GitOperationsPort for CliGitAdapter {
         Ok(())
     }
 
-    fn log(&self, repo_path: &Path, max_count: u32) -> Result<Vec<CommitInfo>, ShellError> {
+    fn log(
+        &self,
+        repo_path: &Path,
+        max_count: u32,
+        skip: u32,
+    ) -> Result<Vec<CommitInfo>, ShellError> {
         // Custom format: fields separated by record-separator (0x1e), commits by group-separator (0x1d)
         let format = "%H%x1e%h%x1e%an%x1e%ae%x1e%aI%x1e%s%x1e%P%x1d";
-        let output = self.run_git(
-            repo_path,
-            &[
-                "log",
-                &format!("--format={format}"),
-                &format!("-n{max_count}"),
-            ],
-        )?;
+        let mut args = vec![
+            "log".to_string(),
+            format!("--format={format}"),
+            format!("-n{max_count}"),
+        ];
+        if skip > 0 {
+            args.push(format!("--skip={skip}"));
+        }
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let output = self.run_git(repo_path, &arg_refs)?;
         parse_log_output(&output)
+    }
+
+    fn show_commit(&self, repo_path: &Path, hash: &str) -> Result<Vec<DiffContent>, ShellError> {
+        let output = self.run_git(repo_path, &["show", "--format=", "--find-renames", hash])?;
+        Ok(parse_unified_diff(&output))
     }
 
     fn blame(&self, repo_path: &Path, file_path: &str) -> Result<Vec<BlameEntry>, ShellError> {

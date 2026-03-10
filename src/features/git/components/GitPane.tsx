@@ -11,6 +11,7 @@ import { FileTreePanel } from "./FileTreePanel";
 import { DiffViewer, type StagingCallbacks } from "./DiffViewer";
 import { CommitPanel } from "./CommitPanel";
 import { BranchSelector } from "./BranchSelector";
+import { HistoryPanel } from "./HistoryPanel";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -106,6 +107,14 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
   const checkoutBranch = store((s) => s.checkoutBranch);
   const createBranch = store((s) => s.createBranch);
   const deleteBranch = store((s) => s.deleteBranch);
+  const commitLog = store((s) => s.commitLog);
+  const commitLogLoading = store((s) => s.commitLogLoading);
+  const hasMoreCommits = store((s) => s.hasMoreCommits);
+  const selectedCommitHash = store((s) => s.selectedCommitHash);
+  const commitDiffContent = store((s) => s.commitDiffContent);
+  const fetchCommitLog = store((s) => s.fetchCommitLog);
+  const fetchMoreCommits = store((s) => s.fetchMoreCommits);
+  const selectCommit = store((s) => s.selectCommit);
 
   const stagingCallbacks: StagingCallbacks = useMemo(() => ({
     onStageLines: (filePath: string, lineRanges: string[]) => void stageLines(filePath, lineRanges),
@@ -122,7 +131,10 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
     if (activeView === "branches") {
       void listBranches();
     }
-  }, [activeView, listBranches]);
+    if (activeView === "history") {
+      void fetchCommitLog();
+    }
+  }, [activeView, listBranches, fetchCommitLog]);
 
   if (loading) {
     return (
@@ -183,6 +195,32 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
               onRefresh={listBranches}
             />
           </div>
+        ) : activeView === "history" ? (
+          <>
+            {/* Left panel — commit list */}
+            <div
+              className="flex w-72 flex-col border-r border-[var(--color-border)]"
+              data-testid="git-history-view"
+            >
+              <HistoryPanel
+                commits={commitLog}
+                loading={commitLogLoading}
+                hasMore={hasMoreCommits}
+                selectedCommitHash={selectedCommitHash}
+                headCommitHash={commitLog.length > 0 ? commitLog[0].hash : null}
+                commitDiffContent={commitDiffContent}
+                onSelectCommit={(hash) => void selectCommit(hash)}
+                onLoadMore={fetchMoreCommits}
+              />
+            </div>
+
+            {/* Right panel — diff viewer for selected commit */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1" data-testid="git-history-diff-area">
+                <DiffViewer diffContent={commitDiffContent} />
+              </div>
+            </div>
+          </>
         ) : (
           <>
             {/* Left panel — file tree */}

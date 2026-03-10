@@ -110,6 +110,32 @@ function buildMockResult(command: GitCommandDto): GitResultDto {
           },
         ],
       };
+    case "showCommit":
+      return {
+        kind: "showCommit",
+        diffs: [
+          {
+            filePath: "src/main.ts",
+            oldPath: null,
+            hunks: [
+              {
+                oldStart: 1,
+                oldCount: 2,
+                newStart: 1,
+                newCount: 3,
+                header: "@@ -1,2 +1,3 @@",
+                lines: [
+                  { kind: "context", oldLineNo: 1, newLineNo: 1, content: "import { app } from './app';" },
+                  { kind: "addition", oldLineNo: null, newLineNo: 2, content: "import { config } from './config';" },
+                  { kind: "context", oldLineNo: 2, newLineNo: 3, content: "app.start();" },
+                ],
+              },
+            ],
+            isBinary: false,
+            fileModeChange: null,
+          },
+        ],
+      };
     case "blame":
       return {
         kind: "blame",

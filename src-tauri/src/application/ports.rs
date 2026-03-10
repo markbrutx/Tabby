@@ -177,8 +177,16 @@ pub trait GitOperationsPort: Send + Sync + std::fmt::Debug {
     /// Merge another branch into the current branch.
     fn merge_branch(&self, repo_path: &Path, branch: &BranchName) -> Result<(), ShellError>;
 
-    /// Return the commit log, limited to `max_count` entries.
-    fn log(&self, repo_path: &Path, max_count: u32) -> Result<Vec<CommitInfo>, ShellError>;
+    /// Return the commit log, limited to `max_count` entries, optionally skipping `skip` entries.
+    fn log(
+        &self,
+        repo_path: &Path,
+        max_count: u32,
+        skip: u32,
+    ) -> Result<Vec<CommitInfo>, ShellError>;
+
+    /// Return the diff for a specific commit by hash.
+    fn show_commit(&self, repo_path: &Path, hash: &str) -> Result<Vec<DiffContent>, ShellError>;
 
     /// Return blame information for a file.
     fn blame(&self, repo_path: &Path, file_path: &str) -> Result<Vec<BlameEntry>, ShellError>;
