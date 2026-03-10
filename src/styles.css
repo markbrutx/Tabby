@@ -25,6 +25,12 @@
   --color-scrollbar: rgba(255, 240, 232, 0.18);
   --color-bg: #120b08;
   --color-surface: #1b120d;
+  --color-token-keyword: #c792ea;
+  --color-token-string: #c3e88d;
+  --color-token-comment: #637777;
+  --color-token-number: #f78c6c;
+  --color-token-type: #ffcb6b;
+  --color-token-punctuation: #89ddff;
   color: var(--color-text);
   background: var(--color-bg);
   font-family: var(--font-sans);
@@ -54,6 +60,12 @@
   --color-scrollbar: rgba(120, 84, 64, 0.26);
   --color-bg: #ead4c3;
   --color-surface: #f6e8dc;
+  --color-token-keyword: #7c4dff;
+  --color-token-string: #558b2f;
+  --color-token-comment: #90a4ae;
+  --color-token-number: #e65100;
+  --color-token-type: #bf360c;
+  --color-token-punctuation: #0277bd;
 }
 
 html,

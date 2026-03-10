@@ -793,4 +793,81 @@ describe("DiffViewer", () => {
     // Split mode: left panel header has the button
     expect(hunkBtns.length).toBeGreaterThanOrEqual(1);
   });
+
+  // -------------------------------------------------------------------------
+  // Syntax highlighting integration tests
+  // -------------------------------------------------------------------------
+
+  it("highlights JS keywords in diff lines for .ts files", () => {
+    const diff = makeDiffContent({
+      filePath: "src/app.ts",
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 1, content: "const x = 42;" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} />);
+    const lineContent = screen.getAllByTestId("line-content")[0];
+    const keywordSpan = lineContent.querySelector("[data-token-type='keyword']");
+    expect(keywordSpan).not.toBeNull();
+    expect(keywordSpan?.textContent).toBe("const");
+  });
+
+  it("renders plain text for unknown file extensions (no token spans)", () => {
+    const diff = makeDiffContent({
+      filePath: "data.xyz",
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "context", oldLineNo: 1, newLineNo: 1, content: "const x = 42;" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} />);
+    const lineContent = screen.getAllByTestId("line-content")[0];
+    const tokenSpans = lineContent.querySelectorAll("[data-token-type]");
+    expect(tokenSpans.length).toBe(0);
+    expect(lineContent.textContent).toBe("const x = 42;");
+  });
+
+  it("highlights strings in diff lines", () => {
+    const diff = makeDiffContent({
+      filePath: "src/main.ts",
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "context", oldLineNo: 1, newLineNo: 1, content: 'const name = "hello";' }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} />);
+    const lineContent = screen.getAllByTestId("line-content")[0];
+    const stringSpan = lineContent.querySelector("[data-token-type='string']");
+    expect(stringSpan).not.toBeNull();
+    expect(stringSpan?.textContent).toBe('"hello"');
+  });
+
+  it("highlights syntax in split mode too", () => {
+    const diff = makeDiffContent({
+      filePath: "src/app.ts",
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "context", oldLineNo: 1, newLineNo: 1, content: "const x = 42;" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} mode="split" />);
+    const splitContents = screen.getAllByTestId("split-line-content");
+    // Both left and right panels should have highlighting
+    const leftKeyword = splitContents[0].querySelector("[data-token-type='keyword']");
+    expect(leftKeyword).not.toBeNull();
+    expect(leftKeyword?.textContent).toBe("const");
+  });
 });

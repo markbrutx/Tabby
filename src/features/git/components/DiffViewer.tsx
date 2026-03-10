@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import type { DiffContent, DiffHunk, DiffLine } from "@/features/git/domain/models";
+import { detectLanguage, tokenizeLine, type Token } from "./syntaxHighlight";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -219,6 +220,47 @@ function formatLineNo(n: number | null): string {
 }
 
 // ---------------------------------------------------------------------------
+// Syntax highlighting helpers
+// ---------------------------------------------------------------------------
+
+const TOKEN_CLASS_MAP: Record<Token["type"], string> = {
+  keyword: "text-[var(--color-token-keyword)]",
+  string: "text-[var(--color-token-string)]",
+  comment: "text-[var(--color-token-comment)] italic",
+  number: "text-[var(--color-token-number)]",
+  type: "text-[var(--color-token-type)]",
+  punctuation: "text-[var(--color-token-punctuation)]",
+  plain: "",
+};
+
+interface HighlightedContentProps {
+  readonly content: string;
+  readonly language: string | null;
+}
+
+function HighlightedContent({ content, language }: HighlightedContentProps) {
+  const tokens = useMemo(() => tokenizeLine(content, language), [content, language]);
+
+  if (tokens.length === 1 && tokens[0].type === "plain") {
+    return <>{content}</>;
+  }
+
+  return (
+    <>
+      {tokens.map((token, i) => {
+        const cls = TOKEN_CLASS_MAP[token.type];
+        if (cls === "") return <span key={i}>{token.text}</span>;
+        return (
+          <span key={i} className={cls} data-token-type={token.type}>
+            {token.text}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
@@ -300,11 +342,12 @@ function HunkHeaderCell({ header, isStaged, onStageHunk }: HunkHeaderCellProps) 
 
 interface DiffLineCellProps {
   readonly line: DiffLine;
+  readonly language: string | null;
   readonly isStaged?: boolean;
   readonly onToggleStage?: () => void;
 }
 
-function DiffLineCell({ line, isStaged, onToggleStage }: DiffLineCellProps) {
+function DiffLineCell({ line, language, isStaged, onToggleStage }: DiffLineCellProps) {
   const lineClass = getLineClassName(line.kind);
   const isStageable = line.kind === "addition" || line.kind === "deletion";
   const gutterBg =
@@ -347,7 +390,7 @@ function DiffLineCell({ line, isStaged, onToggleStage }: DiffLineCellProps) {
         {formatLineNo(line.newLineNo)}
       </span>
       <span className="flex-1 whitespace-pre px-2" data-testid="line-content">
-        {line.content}
+        <HighlightedContent content={line.content} language={language} />
       </span>
     </div>
   );
@@ -391,11 +434,12 @@ function SplitHunkHeader({ header, isStaged, onStageHunk }: SplitHunkHeaderProps
 
 interface SplitLineCellProps {
   readonly row: SplitLineRow;
+  readonly language: string | null;
   readonly isStaged?: boolean;
   readonly onToggleStage?: () => void;
 }
 
-function SplitLineCell({ row, isStaged, onToggleStage }: SplitLineCellProps) {
+function SplitLineCell({ row, language, isStaged, onToggleStage }: SplitLineCellProps) {
   const lineClass = getSplitLineClassName(row.kind);
   const isStageable = row.kind === "addition" || row.kind === "deletion";
   const gutterBg =
@@ -431,7 +475,7 @@ function SplitLineCell({ row, isStaged, onToggleStage }: SplitLineCellProps) {
         {formatLineNo(row.lineNo)}
       </span>
       <span className="flex-1 whitespace-pre px-2" data-testid="split-line-content">
-        {row.content}
+        <HighlightedContent content={row.content} language={language} />
       </span>
     </div>
   );
@@ -546,11 +590,12 @@ interface UnifiedRendererProps {
   readonly rows: readonly DiffRow[];
   readonly filePath: string;
   readonly hunks: readonly DiffHunk[];
+  readonly language: string | null;
   readonly staging?: StagingCallbacks;
   readonly stagedLines?: ReadonlySet<string>;
 }
 
-function UnifiedRenderer({ rows, filePath, hunks, staging, stagedLines }: UnifiedRendererProps) {
+function UnifiedRenderer({ rows, filePath, hunks, language, staging, stagedLines }: UnifiedRendererProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { handleScroll, totalHeight, startIdx, endIdx } = useVirtualScroll(
     rows.length,
@@ -596,6 +641,7 @@ function UnifiedRenderer({ rows, filePath, hunks, staging, stagedLines }: Unifie
               ) : (
                 <DiffLineCell
                   line={row.line}
+                  language={language}
                   isStaged={stagedLines !== undefined && stagedLines.has(lineKey(row.line))}
                   onToggleStage={staging !== undefined ? () => {
                     const key = lineKey(row.line);
@@ -626,11 +672,12 @@ interface SplitRendererProps {
   readonly pairs: readonly SplitPair[];
   readonly filePath: string;
   readonly hunks: readonly DiffHunk[];
+  readonly language: string | null;
   readonly staging?: StagingCallbacks;
   readonly stagedLines?: ReadonlySet<string>;
 }
 
-function SplitRenderer({ pairs, filePath, hunks, staging, stagedLines }: SplitRendererProps) {
+function SplitRenderer({ pairs, filePath, hunks, language, staging, stagedLines }: SplitRendererProps) {
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
   const { onLeftScroll, onRightScroll } = useSyncScroll(leftRef, rightRef);
@@ -692,6 +739,7 @@ function SplitRenderer({ pairs, filePath, hunks, staging, stagedLines }: SplitRe
                 ) : (
                   <SplitLineCell
                     row={pair.left}
+                    language={language}
                     isStaged={stagedLines !== undefined && pair.left.sourceLineKey !== null && stagedLines.has(pair.left.sourceLineKey)}
                     onToggleStage={staging !== undefined && pair.left.sourceLineKey !== null ? () => {
                       const key = (pair.left as SplitLineRow).sourceLineKey;
@@ -740,6 +788,7 @@ function SplitRenderer({ pairs, filePath, hunks, staging, stagedLines }: SplitRe
                 ) : (
                   <SplitLineCell
                     row={pair.right}
+                    language={language}
                     isStaged={stagedLines !== undefined && pair.right.sourceLineKey !== null && stagedLines.has(pair.right.sourceLineKey)}
                     onToggleStage={staging !== undefined && pair.right.sourceLineKey !== null ? () => {
                       const key = (pair.right as SplitLineRow).sourceLineKey;
@@ -789,6 +838,11 @@ export function DiffViewer({ diffContent, mode: initialMode, staging, stagedLine
     [diffContent],
   );
 
+  const language = useMemo(
+    () => (diffContent ? detectLanguage(diffContent.filePath) : null),
+    [diffContent],
+  );
+
   const handleToggle = useCallback(() => {
     setMode((prev) => (prev === "unified" ? "split" : "unified"));
   }, []);
@@ -821,6 +875,7 @@ export function DiffViewer({ diffContent, mode: initialMode, staging, stagedLine
           rows={unifiedRows}
           filePath={diffContent.filePath}
           hunks={diffContent.hunks}
+          language={language}
           staging={staging}
           stagedLines={stagedLines}
         />
@@ -829,6 +884,7 @@ export function DiffViewer({ diffContent, mode: initialMode, staging, stagedLine
           pairs={splitPairs}
           filePath={diffContent.filePath}
           hunks={diffContent.hunks}
+          language={language}
           staging={staging}
           stagedLines={stagedLines}
         />
