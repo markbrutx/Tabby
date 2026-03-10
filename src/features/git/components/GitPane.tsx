@@ -12,6 +12,7 @@ import { DiffViewer, type StagingCallbacks } from "./DiffViewer";
 import { CommitPanel } from "./CommitPanel";
 import { BranchSelector } from "./BranchSelector";
 import { HistoryPanel } from "./HistoryPanel";
+import { BlameView } from "./BlameView";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -115,6 +116,10 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
   const fetchCommitLog = store((s) => s.fetchCommitLog);
   const fetchMoreCommits = store((s) => s.fetchMoreCommits);
   const selectCommit = store((s) => s.selectCommit);
+  const blameEntries = store((s) => s.blameEntries);
+  const blameFilePath = store((s) => s.blameFilePath);
+  const blameLoading = store((s) => s.blameLoading);
+  const fetchBlame = store((s) => s.fetchBlame);
 
   const stagingCallbacks: StagingCallbacks = useMemo(() => ({
     onStageLines: (filePath: string, lineRanges: string[]) => void stageLines(filePath, lineRanges),
@@ -195,6 +200,23 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
               onRefresh={listBranches}
             />
           </div>
+        ) : activeView === "blame" ? (
+          <div className="flex min-w-0 flex-1 flex-col" data-testid="git-blame-view">
+            {blameLoading ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)]" />
+              </div>
+            ) : (
+              <BlameView
+                filePath={blameFilePath ?? ""}
+                entries={blameEntries}
+                onCommitClick={(hash) => {
+                  setActiveView("history");
+                  void fetchCommitLog().then(() => void selectCommit(hash));
+                }}
+              />
+            )}
+          </div>
         ) : activeView === "history" ? (
           <>
             {/* Left panel — commit list */}
@@ -235,6 +257,7 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
                 onStageFiles={(paths) => void stageFiles(paths)}
                 onUnstageFiles={(paths) => void unstageFiles(paths)}
                 onDiscardChanges={(paths) => void discardChanges(paths)}
+                onBlameFile={(path) => void fetchBlame(path)}
               />
             </div>
 

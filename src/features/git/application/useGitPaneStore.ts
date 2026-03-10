@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { GitClient } from "@/app-shell/clients";
 import type {
+  BlameEntry,
   BranchInfo,
   CommitInfo,
   DiffContent,
@@ -13,7 +14,7 @@ import { hunkLineRanges } from "@/features/git/components/DiffViewer";
 // Types
 // ---------------------------------------------------------------------------
 
-export type GitActiveView = "changes" | "history" | "branches" | "stash";
+export type GitActiveView = "changes" | "history" | "branches" | "stash" | "blame";
 
 export interface GitPaneState {
   readonly files: readonly FileStatus[];
@@ -31,6 +32,9 @@ export interface GitPaneState {
   readonly hasMoreCommits: boolean;
   readonly selectedCommitHash: string | null;
   readonly commitDiffContent: DiffContent | null;
+  readonly blameEntries: readonly BlameEntry[];
+  readonly blameFilePath: string | null;
+  readonly blameLoading: boolean;
 
   refreshStatus: () => Promise<void>;
   selectFile: (filePath: string | null) => Promise<void>;
@@ -51,6 +55,7 @@ export interface GitPaneState {
   fetchCommitLog: () => Promise<void>;
   fetchMoreCommits: () => Promise<void>;
   selectCommit: (hash: string | null) => Promise<void>;
+  fetchBlame: (filePath: string) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +86,9 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
     hasMoreCommits: true,
     selectedCommitHash: null,
     commitDiffContent: null,
+    blameEntries: [],
+    blameFilePath: null,
+    blameLoading: false,
 
     async refreshStatus() {
       set({ loading: true, error: null });
@@ -487,6 +495,36 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
         const message =
           err instanceof Error ? err.message : "Failed to load commit diff";
         set({ error: message });
+      }
+    },
+
+    async fetchBlame(filePath: string) {
+      set({ blameLoading: true, blameFilePath: filePath, activeView: "blame" });
+      try {
+        const result = await gitClient.dispatch({
+          kind: "blame",
+          pane_id: paneId,
+          path: filePath,
+        });
+        if (result.kind === "blame") {
+          set({
+            blameEntries: result.entries.map((e) => ({
+              hash: e.hash,
+              author: e.author,
+              date: e.date,
+              lineStart: e.lineStart,
+              lineCount: e.lineCount,
+              content: e.content,
+            })),
+            blameLoading: false,
+          });
+        } else {
+          set({ blameLoading: false });
+        }
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to fetch blame";
+        set({ error: message, blameLoading: false });
       }
     },
   }));

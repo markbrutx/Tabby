@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { FileStatus, FileStatusKind } from "@/features/git/domain/models";
 
 // ---------------------------------------------------------------------------
@@ -12,6 +12,7 @@ export interface FileTreePanelProps {
   readonly onStageFiles: (paths: readonly string[]) => void;
   readonly onUnstageFiles: (paths: readonly string[]) => void;
   readonly onDiscardChanges: (paths: readonly string[]) => void;
+  readonly onBlameFile?: (path: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,10 +79,18 @@ interface FileEntryProps {
   readonly statusKind: FileStatusKind;
   readonly isSelected: boolean;
   readonly onSelect: (path: string) => void;
+  readonly onContextMenu?: (event: React.MouseEvent, path: string) => void;
   readonly actionButtons: React.ReactNode;
 }
 
-function FileEntry({ file, statusKind, isSelected, onSelect, actionButtons }: FileEntryProps) {
+function FileEntry({ file, statusKind, isSelected, onSelect, onContextMenu, actionButtons }: FileEntryProps) {
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (onContextMenu) {
+      e.preventDefault();
+      onContextMenu(e, file.path);
+    }
+  };
+
   return (
     <div
       className={`group flex items-center gap-1 px-2 py-0.5 text-xs transition-colors ${
@@ -90,6 +99,7 @@ function FileEntry({ file, statusKind, isSelected, onSelect, actionButtons }: Fi
           : "text-[var(--color-text-soft)] hover:bg-[var(--color-surface-hover)]"
       }`}
       data-testid="file-entry"
+      onContextMenu={handleContextMenu}
     >
       <StatusBadge status={statusKind} />
       <button
@@ -104,6 +114,57 @@ function FileEntry({ file, statusKind, isSelected, onSelect, actionButtons }: Fi
       <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         {actionButtons}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Context menu
+// ---------------------------------------------------------------------------
+
+interface ContextMenuState {
+  readonly x: number;
+  readonly y: number;
+  readonly filePath: string;
+}
+
+interface FileContextMenuProps {
+  readonly menu: ContextMenuState;
+  readonly onBlame: (path: string) => void;
+  readonly onClose: () => void;
+}
+
+function FileContextMenu({ menu, onBlame, onClose }: FileContextMenuProps) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 min-w-[120px] rounded border border-[var(--color-border)] bg-[var(--color-bg-elevated)] py-1 shadow-lg"
+      style={{ left: menu.x, top: menu.y }}
+      data-testid="file-context-menu"
+    >
+      <button
+        type="button"
+        className="w-full px-3 py-1 text-left text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+        onClick={() => {
+          onBlame(menu.filePath);
+          onClose();
+        }}
+        data-testid="context-menu-blame"
+      >
+        Blame
+      </button>
     </div>
   );
 }
@@ -190,10 +251,25 @@ export function FileTreePanel({
   onStageFiles,
   onUnstageFiles,
   onDiscardChanges,
+  onBlameFile,
 }: FileTreePanelProps) {
   const [stagedExpanded, setStagedExpanded] = useState(true);
   const [unstagedExpanded, setUnstagedExpanded] = useState(true);
   const [discardTarget, setDiscardTarget] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, filePath: string) => {
+      if (onBlameFile) {
+        setContextMenu({ x: e.clientX, y: e.clientY, filePath });
+      }
+    },
+    [onBlameFile],
+  );
+
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
 
   const stagedFiles = categorizeStagedFiles(files);
   const unstagedFiles = categorizeUnstagedFiles(files);
@@ -252,6 +328,7 @@ export function FileTreePanel({
             statusKind={file.indexStatus}
             isSelected={selectedFile === file.path}
             onSelect={onSelectFile}
+            onContextMenu={handleContextMenu}
             actionButtons={
               <button
                 type="button"
@@ -295,6 +372,7 @@ export function FileTreePanel({
             statusKind={file.worktreeStatus}
             isSelected={selectedFile === file.path}
             onSelect={onSelectFile}
+            onContextMenu={handleContextMenu}
             actionButtons={
               <>
                 <button
@@ -327,6 +405,15 @@ export function FileTreePanel({
           filePath={discardTarget}
           onConfirm={handleConfirmDiscard}
           onCancel={handleCancelDiscard}
+        />
+      )}
+
+      {/* Context menu */}
+      {contextMenu !== null && onBlameFile && (
+        <FileContextMenu
+          menu={contextMenu}
+          onBlame={onBlameFile}
+          onClose={handleCloseContextMenu}
         />
       )}
     </div>
