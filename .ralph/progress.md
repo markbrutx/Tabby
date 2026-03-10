@@ -1,5 +1,42 @@
 # Progress Log
 
+## 2026-03-10 10:38 - GIT-029: Create DiffViewer component — unified mode
+Thread:
+Run: 20260310-012951-93839 (iteration 31)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-31.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-31.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: f90ec8f feat: add DiffViewer component with unified mode and virtual scrolling (GIT-029)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run test -- --run -> PASS (290 tests, 24 files)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS
+- Files changed:
+  - src/features/git/components/DiffViewer.tsx (new — 210 lines)
+  - src/features/git/components/DiffViewer.test.tsx (new — 243 lines)
+  - src/features/git/components/GitPane.tsx (updated — use DiffViewer component)
+- Implemented DiffViewer component with:
+  - Unified diff rendering: old line number | new line number | content
+  - Line coloring: green for additions, red for deletions, none for context
+  - Hunk headers with @@ markers in blue styling
+  - Monospace font with proper gutter alignment (50px per line number column)
+  - Virtual scrolling using absolute positioning and ResizeObserver (only renders visible lines + overscan)
+  - Empty state for null/empty diff
+  - Binary file indicator
+  - File mode change display banner
+  - Integrated into GitPane replacing inline diff rendering
+- 17 component tests covering all acceptance criteria
+- **Learnings for future iterations:**
+  - Virtual scrolling via absolute positioning + overscan is straightforward without external libs
+  - ResizeObserver needs polyfill in jsdom tests (same pattern as useBrowserWebview.test.tsx)
+  - .ralph/ is gitignored — don't include in git add
+---
+
 ## 2026-03-10 10:35 - GIT-028: Create FileTreePanel component with status view
 Thread:
 Run: 20260310-012951-93839 (iteration 30)

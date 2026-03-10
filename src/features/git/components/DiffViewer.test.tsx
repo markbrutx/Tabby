@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DiffViewer } from "./DiffViewer";
 import type { DiffContent, DiffHunk, DiffLine } from "@/features/git/domain/models";
@@ -56,7 +56,7 @@ function makeDiffContent(overrides: Partial<DiffContent> = {}): DiffContent {
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// Unified mode tests (existing)
 // ---------------------------------------------------------------------------
 
 describe("DiffViewer", () => {
@@ -283,5 +283,217 @@ describe("DiffViewer", () => {
     // Virtual scrolling: should NOT render all 5000 lines as DOM elements
     const renderedLines = container.querySelectorAll("[data-testid='diff-line']");
     expect(renderedLines.length).toBeLessThan(5000);
+  });
+
+  // -------------------------------------------------------------------------
+  // Mode toggle tests
+  // -------------------------------------------------------------------------
+
+  it("renders mode toggle header with toggle button", () => {
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} />);
+    expect(screen.getByTestId("diff-mode-header")).toBeInTheDocument();
+    expect(screen.getByTestId("diff-mode-toggle")).toBeInTheDocument();
+  });
+
+  it("defaults to unified mode", () => {
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} />);
+    // In unified mode, toggle button says "Split"
+    expect(screen.getByTestId("diff-mode-toggle")).toHaveTextContent("Split");
+    expect(screen.getByTestId("diff-scroll-container")).toBeInTheDocument();
+  });
+
+  it("accepts mode prop to start in split mode", () => {
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} mode="split" />);
+    expect(screen.getByTestId("diff-mode-toggle")).toHaveTextContent("Unified");
+    expect(screen.getByTestId("split-container")).toBeInTheDocument();
+  });
+
+  it("toggle switches between unified and split modes", () => {
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} />);
+
+    // Starts in unified mode
+    expect(screen.getByTestId("diff-scroll-container")).toBeInTheDocument();
+    expect(screen.queryByTestId("split-container")).not.toBeInTheDocument();
+
+    // Click toggle → split mode
+    fireEvent.click(screen.getByTestId("diff-mode-toggle"));
+    expect(screen.queryByTestId("diff-scroll-container")).not.toBeInTheDocument();
+    expect(screen.getByTestId("split-container")).toBeInTheDocument();
+
+    // Click toggle → back to unified
+    fireEvent.click(screen.getByTestId("diff-mode-toggle"));
+    expect(screen.getByTestId("diff-scroll-container")).toBeInTheDocument();
+    expect(screen.queryByTestId("split-container")).not.toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------------
+  // Split mode rendering tests
+  // -------------------------------------------------------------------------
+
+  it("split mode renders two columns (left and right panels)", () => {
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} mode="split" />);
+    expect(screen.getByTestId("split-left")).toBeInTheDocument();
+    expect(screen.getByTestId("split-right")).toBeInTheDocument();
+  });
+
+  it("split mode renders hunk headers in both panels", () => {
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          header: "@@ -1,2 +1,3 @@",
+          lines: [makeLine({ kind: "context", content: "  ctx" })],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} mode="split" />);
+    const splitHeaders = screen.getAllByTestId("split-hunk-header");
+    expect(splitHeaders.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("split mode shows deletions on left, additions on right", () => {
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "deletion", oldLineNo: 1, newLineNo: null, content: "- old code" }),
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 1, content: "+ new code" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} mode="split" />);
+
+    const splitLines = screen.getAllByTestId("split-line");
+    // Should have at least 2 lines (one left deletion, one right addition)
+    expect(splitLines.length).toBeGreaterThanOrEqual(2);
+
+    // Find deletion (left) and addition (right) by class
+    const deletionLine = splitLines.find((el) => el.className.includes("bg-red-900"));
+    const additionLine = splitLines.find((el) => el.className.includes("bg-green-900"));
+    expect(deletionLine).toBeDefined();
+    expect(additionLine).toBeDefined();
+  });
+
+  it("split mode inserts blank lines for unmatched additions", () => {
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 1, content: "+ only add" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} mode="split" />);
+
+    // Left panel should have a blank line
+    const leftPanel = screen.getByTestId("split-left");
+    const leftLines = leftPanel.querySelectorAll("[data-testid='split-line']");
+    expect(leftLines.length).toBeGreaterThanOrEqual(1);
+    // The blank line has empty line number
+    const leftLineNo = leftLines[0].querySelector("[data-testid='split-line-no']");
+    expect(leftLineNo).toHaveTextContent("");
+  });
+
+  it("split mode uses same color coding (green right, red left)", () => {
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "deletion", oldLineNo: 1, newLineNo: null, content: "- removed" }),
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 1, content: "+ added" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} mode="split" />);
+
+    const leftPanel = screen.getByTestId("split-left");
+    const rightPanel = screen.getByTestId("split-right");
+
+    const leftLines = leftPanel.querySelectorAll("[data-testid='split-line']");
+    const rightLines = rightPanel.querySelectorAll("[data-testid='split-line']");
+
+    // Left deletion should be red
+    const leftDeletion = Array.from(leftLines).find((el) => el.className.includes("bg-red-900"));
+    expect(leftDeletion).toBeDefined();
+
+    // Right addition should be green
+    const rightAddition = Array.from(rightLines).find((el) => el.className.includes("bg-green-900"));
+    expect(rightAddition).toBeDefined();
+  });
+
+  it("split mode virtual scrolling limits DOM nodes for large diffs", () => {
+    const lines: DiffLine[] = [];
+    for (let i = 0; i < 5000; i++) {
+      lines.push(makeLine({
+        kind: i % 3 === 0 ? "addition" : i % 3 === 1 ? "deletion" : "context",
+        oldLineNo: i % 3 === 0 ? null : i,
+        newLineNo: i % 3 === 1 ? null : i,
+        content: `  line number ${i}`,
+      }));
+    }
+    const diff = makeDiffContent({
+      hunks: [makeHunk({ lines })],
+    });
+
+    const { container } = render(<DiffViewer diffContent={diff} mode="split" />);
+    expect(container.querySelector("[data-testid='split-container']")).toBeInTheDocument();
+
+    // Virtual scrolling should limit rendered DOM nodes
+    const renderedLines = container.querySelectorAll("[data-testid='split-line']");
+    expect(renderedLines.length).toBeLessThan(5000);
+  });
+
+  it("split mode scroll sync: both panels have scroll containers", () => {
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} mode="split" />);
+
+    const leftPanel = screen.getByTestId("split-left");
+    const rightPanel = screen.getByTestId("split-right");
+
+    // Both should be scrollable containers (overflow-auto)
+    expect(leftPanel.className).toContain("overflow-auto");
+    expect(rightPanel.className).toContain("overflow-auto");
+  });
+
+  it("does not render mode toggle for null diffContent", () => {
+    render(<DiffViewer diffContent={null} />);
+    expect(screen.queryByTestId("diff-mode-header")).not.toBeInTheDocument();
+  });
+
+  it("does not render mode toggle for binary diffs", () => {
+    const diff = makeDiffContent({ isBinary: true, hunks: [] });
+    render(<DiffViewer diffContent={diff} />);
+    expect(screen.queryByTestId("diff-mode-header")).not.toBeInTheDocument();
+  });
+
+  it("split mode context lines appear on both sides", () => {
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "context", oldLineNo: 5, newLineNo: 5, content: "  shared line" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} mode="split" />);
+
+    const leftPanel = screen.getByTestId("split-left");
+    const rightPanel = screen.getByTestId("split-right");
+
+    const leftContents = leftPanel.querySelectorAll("[data-testid='split-line-content']");
+    const rightContents = rightPanel.querySelectorAll("[data-testid='split-line-content']");
+
+    expect(leftContents.length).toBeGreaterThanOrEqual(1);
+    expect(rightContents.length).toBeGreaterThanOrEqual(1);
+    expect(leftContents[0]).toHaveTextContent("shared line");
+    expect(rightContents[0]).toHaveTextContent("shared line");
   });
 });
