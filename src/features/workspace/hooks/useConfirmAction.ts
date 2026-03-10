@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { emit } from "@tauri-apps/api/event";
 import { isTauriRuntime } from "@/lib/runtime";
 
 type ConfirmAction =
@@ -75,9 +76,7 @@ export function useConfirmAction({
         break;
       case "quitApp":
         if (isTauriRuntime()) {
-          void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
-            void getCurrentWindow().destroy();
-          });
+          void emit("quit-confirmed");
         }
         break;
     }

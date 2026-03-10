@@ -12,7 +12,7 @@ pub use cli::CliArgs;
 use std::sync::Arc;
 
 use specta_typescript::Typescript;
-use tauri::{Emitter, Manager, Wry};
+use tauri::{Emitter, Listener, Manager, Wry};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 use tracing::{error, warn};
 use tracing_subscriber::EnvFilter;
@@ -118,6 +118,11 @@ pub fn run(cli_args: CliArgs) {
             }
         })
         .setup(move |app| {
+            let exit_handle = app.handle().clone();
+            app.listen("quit-confirmed", move |_| {
+                exit_handle.exit(0);
+            });
+
             let app_handle = app.handle().clone();
             let shell = Arc::new(AppShell::new(app_handle.clone(), cli_args.clone()).map_err(
                 |error| -> Box<dyn std::error::Error> {

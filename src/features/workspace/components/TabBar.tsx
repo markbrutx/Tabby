@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HelpCircle, Plus, Settings, X } from "lucide-react";
 import { ShortcutBadge } from "@/features/workspace/components/ShortcutBadge";
+import { isTauriRuntime } from "@/lib/runtime";
 
 interface TabEntry {
   id: string;
@@ -59,11 +60,23 @@ export function TabBar({
     setEditValue(tab.title);
   }, []);
 
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button, input, a, [role='button']")) return;
+    if (!isTauriRuntime()) return;
+    void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+      void getCurrentWindow().startDragging();
+    });
+  }, []);
+
   return (
     <div
-      className="flex h-10 shrink-0 select-none items-center gap-0 overflow-x-auto bg-[var(--color-surface)] pl-[72px] text-xs"
+      className="flex h-10 shrink-0 select-none items-center bg-[var(--color-surface)] pl-[72px] text-xs"
       data-tauri-drag-region
+      onMouseDown={handleDragStart}
     >
+      <div className="flex items-center gap-0 overflow-x-auto">
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
         const isEditing = editingTabId === tab.id;
@@ -140,6 +153,7 @@ export function TabBar({
           <Plus size={14} />
         </button>
       ) : null}
+      </div>
       <div className="flex-1" data-tauri-drag-region />
       <button
         data-testid="shortcuts-button"

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { emit, listen } from "@tauri-apps/api/event";
 import { RecoveryScreen } from "@/components/RecoveryScreen";
+import { TitleBarDragRegion } from "@/components/TitleBarDragRegion";
 import { ConfirmDialog } from "@/features/workspace/components/ConfirmDialog";
 import { SplitTreeRenderer } from "@/features/workspace/components/SplitTreeRenderer";
 import { TabBar } from "@/features/workspace/components/TabBar";
@@ -17,6 +19,7 @@ import type { SetupWizardConfig } from "@/features/workspace/store/types";
 import { applyResolvedTheme, useResolvedTheme } from "@/features/workspace/theme";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
 import { buildWorkspaceSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
+import { isTauriRuntime } from "@/lib/runtime";
 
 function App() {
   const {
@@ -114,7 +117,38 @@ function App() {
   const handleOpenShortcuts = useCallback(() => setShortcutsOpen(true), []);
   const handleCloseShortcuts = useCallback(() => setShortcutsOpen(false), []);
 
-  useTauriMenuEvents(handleOpenSettings, confirmDialog.requestQuitApp);
+  useTauriMenuEvents(handleOpenSettings);
+
+  const closeHandlerRef = useRef<() => void>();
+  closeHandlerRef.current = () => {
+    if (isHydrating || !workspaceModel) {
+      void emit("quit-confirmed");
+    } else {
+      confirmDialog.requestQuitApp();
+    }
+  };
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen("app-close-requested", () => {
+      closeHandlerRef.current?.();
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   const handleSplitRight = useCallback(
     (paneId: string) => setSplitPopup({ paneId, direction: "horizontal" }),
@@ -179,19 +213,25 @@ function App() {
 
   if (isHydrating) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[var(--color-bg)] text-[var(--color-text)]">
-        <p className="text-sm text-[var(--color-text-muted)]">Starting...</p>
+      <div className="flex h-screen flex-col bg-[var(--color-bg)] text-[var(--color-text)]">
+        <TitleBarDragRegion />
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-[var(--color-text-muted)]">Starting...</p>
+        </div>
       </div>
     );
   }
 
   if (!workspaceModel || !settings) {
     return (
-      <RecoveryScreen
-        title="Workspace unavailable"
-        message={error ?? "Tabby could not bootstrap the workspace."}
-        onRetry={() => void bootstrapCoordinator.initialize()}
-      />
+      <div className="flex h-screen flex-col bg-[var(--color-bg)]">
+        <TitleBarDragRegion />
+        <RecoveryScreen
+          title="Workspace unavailable"
+          message={error ?? "Tabby could not bootstrap the workspace."}
+          onRetry={() => void bootstrapCoordinator.initialize()}
+        />
+      </div>
     );
   }
 
@@ -199,11 +239,14 @@ function App() {
 
   if (!activeTab && !wizardTab) {
     return (
-      <RecoveryScreen
-        title="No active workspace"
-        message={error ?? "All workspaces have been closed."}
-        onRetry={() => void bootstrapCoordinator.initialize()}
-      />
+      <div className="flex h-screen flex-col bg-[var(--color-bg)]">
+        <TitleBarDragRegion />
+        <RecoveryScreen
+          title="No active workspace"
+          message={error ?? "All workspaces have been closed."}
+          onRetry={() => void bootstrapCoordinator.initialize()}
+        />
+      </div>
     );
   }
 

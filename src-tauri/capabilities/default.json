@@ -8,6 +8,9 @@
     "core:webview:default",
     "core:webview:allow-create-webview",
     "core:webview:allow-create-webview-window",
+    "core:window:allow-start-dragging",
+    "core:window:allow-destroy",
+    "core:window:allow-close",
     "dialog:default",
     "store:default"
   ]
