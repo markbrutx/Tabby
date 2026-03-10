@@ -1,5 +1,44 @@
 # Progress Log
 
+## 2026-03-10 10:55 - GIT-031: Add line-level and hunk-level staging to DiffViewer
+Thread:
+Run: 20260310-012951-93839 (iteration 33)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-33.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-33.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 44fb7ec feat: add line-level and hunk-level staging to DiffViewer (GIT-031)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (321 tests, 48 DiffViewer tests including 17 new staging tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (563 tests)
+- Files changed:
+  - src/features/git/components/DiffViewer.tsx
+  - src/features/git/components/DiffViewer.test.tsx
+  - src/features/git/application/useGitPaneStore.ts
+  - src/features/git/components/GitPane.tsx
+- Implemented line-level and hunk-level staging in DiffViewer:
+  - Added `StagingCallbacks` interface with onStageLines/onUnstageLines/onStageHunk/onUnstageHunk
+  - Clickable gutter area on each diff line: "+" icon for unstaged, "✓" for staged
+  - Context lines have disabled gutter buttons; only additions/deletions are stageable
+  - Hunk headers show "Stage Hunk" / "Unstage Hunk" button based on staged state
+  - Visual feedback: staged lines get yellow highlight and checkmark icon
+  - `stagedLines` prop (ReadonlySet<string>) for tracking staged line state
+  - Line ranges generated in unified diff format (e.g., "5-5") for the stage_lines API
+  - Added `stageLines`, `unstageLines`, `stageHunk`, `unstageHunk` actions to GitPaneStore
+  - Wired staging callbacks in GitPane component
+  - Works in both unified and split view modes
+  - 17 new tests: gutter rendering, click callbacks, staged/unstaged visual state, hunk staging, split mode staging
+- **Learnings for future iterations:**
+  - Zustand's `create((set, get) => ...)` pattern allows `get()` for reading state within actions
+  - `lineKey` pattern (e.g., "add:5", "del:3") provides stable identity for diff lines
+  - Split mode requires carrying `sourceLineKey` through the split row transformation
+---
+
 ## 2026-03-10 10:43 - GIT-030: Add split (side-by-side) mode to DiffViewer
 Thread:
 Run: 20260310-012951-93839 (iteration 32)
