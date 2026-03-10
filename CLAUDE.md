@@ -49,7 +49,12 @@ The codebase follows a layered architecture with four bounded contexts: **Worksp
 ├─────────────────────────────────────────────────────────┤
 │              Domain Model (Rust crates)                  │
 │  tabby-workspace · tabby-runtime · tabby-settings       │
-│  tabby-contracts (shared DTOs and event structs)         │
+│        ↓ depend on                                       │
+│  tabby-kernel (shared kernel: value objects, id types)   │
+├─────────────────────────────────────────────────────────┤
+│              Transport DTOs (Rust crate)                 │
+│  tabby-contracts (DTOs, view models, event structs)      │
+│    ↑ re-exports VOs from tabby-kernel for IPC compat     │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -77,10 +82,11 @@ The codebase follows a layered architecture with four bounded contexts: **Worksp
 
 ### Domain Crates (Rust)
 
-- `src-tauri/crates/tabby-workspace/` — Workspace context: `WorkspaceSession`, `Tab`, `PaneSlot`, `SplitNode`, `PaneSpec` (Terminal | Browser), `PaneContentDefinition`, layout presets, domain events.
-- `src-tauri/crates/tabby-runtime/` — Runtime context: `RuntimeRegistry`, `PaneRuntime`, `RuntimeStatus`, `RuntimeKind`, `RuntimeSessionId`.
-- `src-tauri/crates/tabby-settings/` — Settings context: `UserPreferences`, `TerminalProfile`, `ProfileCatalog`, value objects (`FontSize`, `ProfileId`, `WorkingDirectory`), persistence helpers.
-- `src-tauri/crates/tabby-contracts/` — shared DTOs, view models, command enums, event structs, and value objects consumed by both Rust and TypeScript via specta.
+- `src-tauri/crates/tabby-kernel/` — Shared kernel: pure value objects (`PaneId`, `TabId`, `PaneContentId`, `BrowserUrl`, `WorkingDirectory`, `CommandTemplate`, `LayoutPreset`), `id_newtype!` macro, `ValueObjectError`. Zero transport dependencies — no serde, specta, or Tauri.
+- `src-tauri/crates/tabby-workspace/` — Workspace context: `WorkspaceSession`, `Tab`, `PaneSlot`, `SplitNode`, `PaneSpec` (Terminal | Browser), `PaneContentDefinition`, layout presets, domain events. Depends on `tabby-kernel`.
+- `src-tauri/crates/tabby-runtime/` — Runtime context: `RuntimeRegistry`, `PaneRuntime`, `RuntimeStatus`, `RuntimeKind`, `RuntimeSessionId`. Depends on `tabby-kernel`.
+- `src-tauri/crates/tabby-settings/` — Settings context: `UserPreferences`, `TerminalProfile`, `ProfileCatalog`, value objects (`FontSize`, `ProfileId`), persistence helpers. Depends on `tabby-kernel`.
+- `src-tauri/crates/tabby-contracts/` — Transport DTOs, view models, command enums, event structs. Re-exports value objects from `tabby-kernel` for IPC compatibility. Consumed by both Rust and TypeScript via specta.
 
 ### Frontend (TypeScript/React)
 
@@ -122,7 +128,8 @@ Each bounded context owns its domain model and exposes it only through applicati
 - Application services depend on port traits, not on concrete infrastructure
 - `infrastructure/` implements port traits; depends on Tauri plugins and external crates
 - `shell/` provides `AppShell` facade and `PtyManager`; wires ports to services
-- Domain crates must not depend on each other (except through `tabby-contracts` for shared DTOs)
+- Domain crates depend on `tabby-kernel` for shared value objects, never on `tabby-contracts` (IPC/transport crate)
+- Domain crates must not depend on each other
 - Frontend features import domain models from their own `domain/` directory, not from other features
 - Generated DTOs (`tauri-bindings.ts`) appear only in transport clients and snapshot-mappers, never in stores or domain models
 
@@ -134,8 +141,10 @@ Each bounded context owns its domain model and exposes it only through applicati
 - Keep terminal and browser runtime behavior explicit rather than collapsing them into loosely typed state.
 - Keep Tauri commands thin and move behavior into application services or domain code.
 - Application services depend on port traits (`ports.rs`), never on concrete Tauri or plugin imports.
+- `ProjectionPublisherPort` accepts domain types (e.g. `&WorkspaceSession`), not DTOs; infrastructure adapters handle domain→DTO mapping internally.
 - Infrastructure adapters (`infrastructure/`) implement port traits; all Tauri-specific code lives here or in `shell/`.
-- Runtime lifecycle has a single owner: `RuntimeApplicationService`. All start/stop/replace/restart/exit flows go through it.
+- Runtime lifecycle has a single owner: `RuntimeApplicationService`. All start/stop/replace/restart/exit flows — including browser surface commands — go through it.
+- Cross-context side effects (e.g. Runtime updating Settings) are coordinated by `AppShell`, not by services reaching into each other.
 - Workspace aggregate owns only structural concerns (tabs, panes, layout). Runtime-observed state (cwd, status) belongs to the runtime context.
 - Frontend stores use internal read models; generated DTOs (`tauri-bindings.ts`) exist only at the transport boundary (clients and snapshot-mappers).
 - Frontend cross-context orchestration is handled by `AppBootstrapCoordinator`, not by stores reaching into each other.
