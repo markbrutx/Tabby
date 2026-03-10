@@ -356,11 +356,38 @@ pub fn runtime_command_from_dto(dto: RuntimeCommandDto) -> RuntimeCommand {
 // Git: DTO → Domain (inbound / commands)
 // ---------------------------------------------------------------------------
 
+/// Extracts the `pane_id` string from any `GitCommandDto` variant.
+pub fn extract_git_pane_id(dto: &GitCommandDto) -> String {
+    match dto {
+        GitCommandDto::Status { pane_id, .. }
+        | GitCommandDto::Diff { pane_id, .. }
+        | GitCommandDto::Stage { pane_id, .. }
+        | GitCommandDto::Unstage { pane_id, .. }
+        | GitCommandDto::StageLines { pane_id, .. }
+        | GitCommandDto::Commit { pane_id, .. }
+        | GitCommandDto::Push { pane_id, .. }
+        | GitCommandDto::Pull { pane_id, .. }
+        | GitCommandDto::Fetch { pane_id, .. }
+        | GitCommandDto::Branches { pane_id, .. }
+        | GitCommandDto::CheckoutBranch { pane_id, .. }
+        | GitCommandDto::CreateBranch { pane_id, .. }
+        | GitCommandDto::DeleteBranch { pane_id, .. }
+        | GitCommandDto::MergeBranch { pane_id, .. }
+        | GitCommandDto::Log { pane_id, .. }
+        | GitCommandDto::Blame { pane_id, .. }
+        | GitCommandDto::StashPush { pane_id, .. }
+        | GitCommandDto::StashPop { pane_id, .. }
+        | GitCommandDto::StashList { pane_id, .. }
+        | GitCommandDto::StashDrop { pane_id, .. }
+        | GitCommandDto::DiscardChanges { pane_id, .. }
+        | GitCommandDto::RepoState { pane_id, .. } => pane_id.clone(),
+    }
+}
+
 /// Maps a `GitCommandDto` (transport) into a `GitCommand` (domain).
 ///
 /// The `repo_path` is resolved externally (e.g. from the pane's working directory)
 /// because `GitCommandDto` carries only a `pane_id`.
-#[allow(dead_code)]
 pub fn git_command_from_dto(
     dto: GitCommandDto,
     repo_path: PathBuf,
@@ -470,7 +497,6 @@ pub fn git_command_from_dto(
 // ---------------------------------------------------------------------------
 
 /// Maps a `GitResult` (domain) into a `GitResultDto` (transport).
-#[allow(dead_code)]
 pub fn git_result_to_dto(result: GitResult) -> GitResultDto {
     match result {
         GitResult::Status(files) => GitResultDto::Status {

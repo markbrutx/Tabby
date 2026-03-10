@@ -7,8 +7,8 @@ use std::sync::Arc;
 use tauri::AppHandle;
 
 use tabby_contracts::{
-    BrowserSurfaceCommandDto, RuntimeCommandDto, SettingsCommandDto, SettingsView,
-    WorkspaceBootstrapView, WorkspaceCommandDto, WorkspaceView,
+    BrowserSurfaceCommandDto, GitCommandDto, GitResultDto, RuntimeCommandDto, SettingsCommandDto,
+    SettingsView, WorkspaceBootstrapView, WorkspaceCommandDto, WorkspaceView,
 };
 use tabby_settings::{built_in_profile_catalog, default_preferences};
 use tabby_workspace::layout::LayoutPreset;
@@ -18,12 +18,13 @@ use crate::application::commands::WorkspaceCommand;
 use crate::application::ports::ProjectionPublisherPort;
 use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
 use crate::application::{
-    BootstrapService, RuntimeApplicationService, RuntimeCoordinator, SettingsApplicationService,
-    WorkspaceApplicationService,
+    BootstrapService, GitApplicationService, RuntimeApplicationService, RuntimeCoordinator,
+    SettingsApplicationService, WorkspaceApplicationService,
 };
 use crate::cli::CliArgs;
 use crate::infrastructure::{
-    TauriBrowserSurfaceAdapter, TauriProjectionPublisher, TauriStorePreferencesRepository,
+    CliGitAdapter, TauriBrowserSurfaceAdapter, TauriProjectionPublisher,
+    TauriStorePreferencesRepository,
 };
 use crate::mapping::dto_mappers;
 use crate::shell::error::ShellError;
@@ -40,6 +41,7 @@ pub struct AppShell {
     settings_service: SettingsApplicationService,
     workspace_service: WorkspaceApplicationService,
     runtime_service: Arc<RuntimeApplicationService>,
+    git_service: GitApplicationService,
     publisher: Box<dyn ProjectionPublisherPort>,
 }
 
@@ -53,6 +55,9 @@ impl AppShell {
         let runtime_publisher = TauriProjectionPublisher::new(app.clone());
         let publisher = TauriProjectionPublisher::new(app);
 
+        let git_adapter = CliGitAdapter::new();
+        let git_service = GitApplicationService::new(Box::new(git_adapter));
+
         Ok(Self {
             bootstrap_service: BootstrapService::new(cli_args),
             workspace_service: WorkspaceApplicationService::new(),
@@ -61,6 +66,7 @@ impl AppShell {
                 Box::new(browser_port),
                 Box::new(runtime_publisher),
             )),
+            git_service,
             publisher: Box::new(publisher),
             settings_service,
         })
@@ -160,6 +166,38 @@ impl AppShell {
     ) -> Result<(), ShellError> {
         self.runtime_service
             .dispatch_browser_surface_command(command)
+    }
+
+    pub fn dispatch_git_command(&self, dto: GitCommandDto) -> Result<GitResultDto, ShellError> {
+        let pane_id = dto_mappers::extract_git_pane_id(&dto);
+        let pane_id_vo = tabby_workspace::PaneId::from(pane_id);
+
+        // Resolve repo path: runtime-observed path first, then workspace pane spec.
+        let repo_path = self
+            .runtime_service
+            .repo_path_for_pane(&pane_id_vo)?
+            .or_else(|| {
+                self.workspace_service
+                    .pane_spec(&pane_id_vo)
+                    .ok()
+                    .flatten()
+                    .and_then(|spec| match spec {
+                        tabby_workspace::PaneSpec::Terminal(s) => {
+                            Some(std::path::PathBuf::from(s.working_directory))
+                        }
+                        tabby_workspace::PaneSpec::Git(s) => {
+                            Some(std::path::PathBuf::from(s.working_directory))
+                        }
+                        tabby_workspace::PaneSpec::Browser(_) => None,
+                    })
+            })
+            .ok_or_else(|| {
+                ShellError::NotFound(format!("no repo path found for pane {pane_id_vo}"))
+            })?;
+
+        let command = dto_mappers::git_command_from_dto(dto, repo_path)?;
+        let result = self.git_service.dispatch_command(command)?;
+        Ok(dto_mappers::git_result_to_dto(result))
     }
 
     pub fn handle_browser_location_observation(

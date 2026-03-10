@@ -261,6 +261,24 @@ impl RuntimeApplicationService {
         Ok(self.lock_runtimes()?.snapshot().to_vec())
     }
 
+    /// Returns the repo path for a pane suitable for git operations.
+    ///
+    /// Resolution order: `git_repo_path` (explicit git pane) → `terminal_cwd`
+    /// (observed cwd from PTY) → workspace pane spec working directory (initial).
+    pub fn repo_path_for_pane(
+        &self,
+        pane_id: &PaneId,
+    ) -> Result<Option<std::path::PathBuf>, ShellError> {
+        let runtimes = self.lock_runtimes()?;
+        let runtime = runtimes.get(pane_id);
+        Ok(runtime.and_then(|r| {
+            r.git_repo_path
+                .as_ref()
+                .or(r.terminal_cwd.as_ref())
+                .map(|wd| std::path::PathBuf::from(wd.as_str()))
+        }))
+    }
+
     fn lock_runtimes(&self) -> Result<std::sync::MutexGuard<'_, RuntimeRegistry>, ShellError> {
         self.runtimes
             .lock()
