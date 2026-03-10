@@ -258,7 +258,7 @@ function App() {
     shortcutsOpen;
 
   const displayTabs = wizardTab
-    ? [...workspaceModel.tabs, { id: wizardTab.id, title: wizardTab.title }]
+    ? [...workspaceModel.tabs, { id: wizardTab.id, title: wizardTab.title, isWizard: true }]
     : workspaceModel.tabs;
 
   const displayActiveTabId = wizardTab
@@ -332,6 +332,7 @@ function App() {
           <WorkspaceSetupWizard
             profiles={profiles}
             settings={settings}
+            defaultTitle={`Workspace ${workspaceModel.tabs.length + 1}`}
             isFirstLaunch={
               workspaceModel.tabs.length === 0 && !settings.hasCompletedOnboarding
             }

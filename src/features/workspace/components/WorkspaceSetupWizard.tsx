@@ -50,6 +50,7 @@ interface WorkspaceSetupWizardProps {
   profiles: ProfileReadModel[];
   settings: SettingsReadModel;
   isFirstLaunch: boolean;
+  defaultTitle: string;
   onComplete: (config: SetupWizardConfig) => void;
   onCancel?: () => void;
 }
@@ -58,9 +59,11 @@ export function WorkspaceSetupWizard({
   profiles,
   settings,
   isFirstLaunch,
+  defaultTitle,
   onComplete,
   onCancel,
 }: WorkspaceSetupWizardProps) {
+  const [title, setTitle] = useState(defaultTitle);
   const [groups, setGroups] = useState<PaneGroupConfig[]>([
     makeDefaultGroup("terminal", settings, profiles),
   ]);
@@ -103,10 +106,10 @@ export function WorkspaceSetupWizard({
   }
 
   function handleSubmit() {
-    if (hasInvalidGroup || totalPanes === 0) {
+    if (hasInvalidGroup || totalPanes === 0 || !title.trim()) {
       return;
     }
-    onComplete({ groups, layoutVariantId: selectedVariantId });
+    onComplete({ title: title.trim(), groups, layoutVariantId: selectedVariantId });
   }
 
   const canAddMore = totalPanes < MAX_PANES;
@@ -127,51 +130,68 @@ export function WorkspaceSetupWizard({
         </div>
 
         <div className="mt-8 flex gap-10">
-          <div className="flex-1 space-y-3">
-            <h3 className="text-xs font-medium text-[var(--color-text-muted)]">
-              Groups
-            </h3>
-            {groups.map((group, index) => (
-              <PaneGroupRow
-                key={index}
-                index={index}
-                group={group}
-                profiles={profiles}
-                maxCount={MAX_PANES - totalPanes + group.count}
-                canRemove={groups.length > 1}
-                onChange={(updated) => handleUpdateGroup(index, updated)}
-                onRemove={() => handleRemoveGroup(index)}
+          <div className="flex-1 space-y-5">
+            <div className="space-y-3">
+              <h3 className="text-xs font-medium text-[var(--color-text-muted)]">
+                Workspace Name
+              </h3>
+              <input
+                data-testid="workspace-name-input"
+                className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] px-3 py-2 text-sm text-[var(--color-text)] outline-none ring-1 ring-transparent transition focus:border-[var(--color-accent)] focus:ring-[var(--color-accent-soft)]"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="My Awesome Workspace"
+                maxLength={64}
               />
-            ))}
+            </div>
 
-            {canAddMore ? (
-              <div className="mt-2 flex gap-2.5">
-                <button
-                  data-testid="add-terminal-group"
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2.5 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
-                  onClick={() => handleAddGroup("terminal")}
-                >
-                  <Terminal size={14} />
-                  Terminal
-                </button>
-                <button
-                  data-testid="add-browser-group"
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2.5 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
-                  onClick={() => handleAddGroup("browser")}
-                >
-                  <Globe size={14} />
-                  Browser
-                </button>
-                <button
-                  data-testid="add-git-group"
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2.5 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
-                  onClick={() => handleAddGroup("git")}
-                >
-                  <GitBranch size={14} />
-                  Git
-                </button>
-              </div>
-            ) : null}
+            <div className="space-y-3">
+              <div className="h-px w-full bg-[var(--color-border)]" />
+              <h3 className="text-xs font-medium text-[var(--color-text-muted)]">
+                Groups
+              </h3>
+              {groups.map((group, index) => (
+                <PaneGroupRow
+                  key={index}
+                  index={index}
+                  group={group}
+                  profiles={profiles}
+                  maxCount={MAX_PANES - totalPanes + group.count}
+                  canRemove={groups.length > 1}
+                  onChange={(updated) => handleUpdateGroup(index, updated)}
+                  onRemove={() => handleRemoveGroup(index)}
+                />
+              ))}
+
+              {canAddMore ? (
+                <div className="mt-2 flex gap-2.5">
+                  <button
+                    data-testid="add-terminal-group"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2.5 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
+                    onClick={() => handleAddGroup("terminal")}
+                  >
+                    <Terminal size={14} />
+                    Terminal
+                  </button>
+                  <button
+                    data-testid="add-browser-group"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2.5 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
+                    onClick={() => handleAddGroup("browser")}
+                  >
+                    <Globe size={14} />
+                    Browser
+                  </button>
+                  <button
+                    data-testid="add-git-group"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2.5 text-sm text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
+                    onClick={() => handleAddGroup("git")}
+                  >
+                    <GitBranch size={14} />
+                    Git
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="w-[300px] shrink-0">

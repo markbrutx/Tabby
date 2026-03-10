@@ -4,6 +4,7 @@ export type PaneGroupConfig =
   | { mode: "git"; workingDirectory: string; count: number };
 
 export interface SetupWizardConfig {
+  title: string;
   groups: PaneGroupConfig[];
   layoutVariantId: string | null;
 }

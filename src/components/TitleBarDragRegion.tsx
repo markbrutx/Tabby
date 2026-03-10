@@ -12,7 +12,7 @@ export function TitleBarDragRegion() {
 
   return (
     <div
-      className="h-10 w-full shrink-0 select-none"
+      className="h-11 w-full shrink-0 select-none border-b border-[var(--color-border)] bg-[var(--color-bg)]"
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
     />

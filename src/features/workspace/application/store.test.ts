@@ -67,7 +67,7 @@ function makeMockWorkspaceClient(
   return {
     bootstrap: vi.fn().mockResolvedValue(makeWorkspaceReadModel()),
     dispatch: vi.fn().mockResolvedValue(makeWorkspaceView()),
-    listenProjectionUpdated: vi.fn().mockResolvedValue(() => {}),
+    listenProjectionUpdated: vi.fn().mockResolvedValue(() => { }),
     ...overrides,
   };
 }
@@ -340,6 +340,7 @@ describe("createWorkspaceStore", () => {
 
     await store.getState().loadBootstrap(makeWorkspaceReadModel());
     await store.getState().createTabFromWizard({
+      title: "Workspace 1",
       groups: [
         {
           mode: "terminal",

@@ -57,7 +57,7 @@ function makeWizardTab(workspace?: WorkspaceReadModel | null): WizardTab {
   const nextIndex = (workspace?.tabs.length ?? 0) + 1;
   return {
     id: `__wizard_${Date.now()}__`,
-    title: `Workspace ${nextIndex}`,
+    title: "New Workspace",
   };
 }
 
@@ -149,8 +149,7 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
     },
 
     async createTabFromWizard(config) {
-      const { wizardTab: currentWizard } = get();
-      const customTitle = currentWizard?.title ?? null;
+      const customTitle = config.title;
 
       const paneSpecs = config.groups.flatMap(toPaneSpec);
       const totalPanes = paneSpecs.length;

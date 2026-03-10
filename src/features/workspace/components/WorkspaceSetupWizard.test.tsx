@@ -35,6 +35,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -47,6 +48,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={{ ...settings, hasCompletedOnboarding: true }}
         isFirstLaunch={false}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -59,6 +61,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -72,6 +75,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={{ ...settings, defaultTerminalProfileId: "" }}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -85,6 +89,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -98,6 +103,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -112,6 +118,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -127,6 +134,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -143,6 +151,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -155,6 +164,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -172,6 +182,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -187,6 +198,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -204,6 +216,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -225,6 +238,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={onComplete}
       />,
     );
@@ -250,6 +264,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={onComplete}
       />,
     );
@@ -264,6 +279,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={false}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
         onCancel={onCancel}
       />,
@@ -278,6 +294,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
@@ -290,6 +307,7 @@ describe("WorkspaceSetupWizard", () => {
         profiles={profiles}
         settings={settings}
         isFirstLaunch={true}
+        defaultTitle="Workspace 1"
         onComplete={vi.fn()}
       />,
     );
