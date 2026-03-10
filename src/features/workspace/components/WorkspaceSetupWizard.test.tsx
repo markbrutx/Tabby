@@ -10,6 +10,9 @@ vi.mock("@/lib/pickDirectory", () => ({
 const profiles: ProfileReadModel[] = [
   { id: "terminal", label: "Terminal", description: "Shell", startupCommandTemplate: null },
   { id: "claude", label: "Claude Code", description: "AI assistant", startupCommandTemplate: "claude" },
+  { id: "codex", label: "Codex", description: "OpenAI coding agent", startupCommandTemplate: "codex" },
+  { id: "gemini", label: "Gemini CLI", description: "Google Gemini coding agent", startupCommandTemplate: "gemini" },
+  { id: "opencode", label: "OpenCode CLI", description: "OpenCode coding agent", startupCommandTemplate: "opencode" },
   { id: "custom", label: "Custom", description: "Run any command", startupCommandTemplate: null },
 ];
 

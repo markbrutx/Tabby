@@ -10,6 +10,8 @@ pub const CUSTOM_PROFILE_ID: &str = "custom";
 pub const TERMINAL_PROFILE_ID: &str = "terminal";
 pub const CLAUDE_PROFILE_ID: &str = "claude";
 pub const CODEX_PROFILE_ID: &str = "codex";
+pub const GEMINI_PROFILE_ID: &str = "gemini";
+pub const OPENCODE_PROFILE_ID: &str = "opencode";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeMode {
@@ -97,6 +99,18 @@ pub fn built_in_profile_catalog() -> ProfileCatalog {
                 label: String::from("Codex"),
                 description: String::from("OpenAI coding agent"),
                 startup_command_template: Some(CommandTemplate::new("codex")),
+            },
+            TerminalProfile {
+                id: ProfileId::new(GEMINI_PROFILE_ID),
+                label: String::from("Gemini CLI"),
+                description: String::from("Google Gemini coding agent"),
+                startup_command_template: Some(CommandTemplate::new("gemini")),
+            },
+            TerminalProfile {
+                id: ProfileId::new(OPENCODE_PROFILE_ID),
+                label: String::from("OpenCode CLI"),
+                description: String::from("OpenCode coding agent"),
+                startup_command_template: Some(CommandTemplate::new("opencode")),
             },
             TerminalProfile {
                 id: ProfileId::new(CUSTOM_PROFILE_ID),

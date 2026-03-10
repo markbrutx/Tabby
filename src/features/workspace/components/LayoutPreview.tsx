@@ -17,6 +17,8 @@ const GROUP_LABELS: Record<string, string> = {
   git: "G",
   claude: "C",
   codex: "X",
+  gemini: "M",
+  opencode: "O",
   custom: "\u2699",
 };
 
@@ -94,11 +96,10 @@ function VariantThumbnail({
   return (
     <button
       data-testid={`variant-${variant.id}`}
-      className={`relative h-[28px] w-[40px] shrink-0 overflow-hidden rounded border transition ${
-        isSelected
+      className={`relative h-[28px] w-[40px] shrink-0 overflow-hidden rounded border transition ${isSelected
           ? "border-[var(--color-accent)] shadow-sm shadow-[var(--color-accent)]/20"
           : "border-[var(--color-border)] hover:border-[var(--color-border-strong)]"
-      }`}
+        }`}
       style={{ background: "var(--color-bg)" }}
       onClick={onClick}
       title={variant.label}
@@ -106,9 +107,8 @@ function VariantThumbnail({
       {cells.map((rect, i) => (
         <div
           key={i}
-          className={`absolute rounded-[1px] ${
-            isSelected ? "bg-[var(--color-accent)]" : "bg-[var(--color-text-muted)]/30"
-          }`}
+          className={`absolute rounded-[1px] ${isSelected ? "bg-[var(--color-accent)]" : "bg-[var(--color-text-muted)]/30"
+            }`}
           style={{
             left: `calc(${rect.x * 100}% + 1px)`,
             top: `calc(${rect.y * 100}% + 1px)`,
