@@ -54,3 +54,39 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - CommitHash normalizes to lowercase for consistent equality comparison
   - Follow tabby-kernel patterns: try_new() + Display + AsRef<str> for string VOs
 ---
+
+## 2026-03-10 01:37 - GIT-003: File status and diff domain types in tabby-git
+Thread:
+Run: 20260310-012951-93839 (iteration 3)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-3.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-3.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: b5fd351 feat: add file status and diff domain types for tabby-git (GIT-003)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test -p tabby-git -> PASS (55 tests)
+  - Command: cargo test --workspace -> PASS
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/crates/tabby-git/src/lib.rs (added diff and file_status modules + re-exports)
+  - src-tauri/crates/tabby-git/src/file_status.rs (new: FileStatusKind enum, FileStatus struct + 8 tests)
+  - src-tauri/crates/tabby-git/src/diff.rs (new: DiffLineKind, DiffLine, DiffHunk, DiffContent + 19 tests)
+- Implemented all acceptance criteria:
+  - FileStatusKind: Modified, Added, Deleted, Renamed, Copied, Untracked, Ignored, Conflicted
+  - FileStatus: path, old_path, index_status, worktree_status with getters
+  - DiffLineKind: Context, Addition, Deletion, HunkHeader
+  - DiffLine: kind, old_line_no, new_line_no, content with getters
+  - DiffHunk: old_start, old_count, new_start, new_count, header, lines with getters
+  - DiffContent: file_path, old_path, hunks, is_binary, file_mode_change with getters
+  - All types are Debug + Clone + PartialEq, no serde
+  - 27 unit tests covering construction, field access, equality, and cloning
+- **Learnings for future iterations:**
+  - cargo needs `source ~/.zshrc` in this env, not just `export PATH`
+  - Separate modules per concern (file_status.rs, diff.rs) keeps files small and focused
+  - Copy derive only for small enums; structs with String fields use Clone only
+---
