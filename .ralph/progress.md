@@ -299,3 +299,37 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - cargo fmt reorders imports and collapses short method signatures to single lines
   - .ralph/ directory is gitignored; don't try to git add files from it
 ---
+
+## 2026-03-10 09:00 - GIT-010: Create GitApplicationService with command dispatch
+Thread:
+Run: 20260310-012951-93839 (iteration 11)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-11.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-11.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 6fa267e feat: add GitApplicationService with command dispatch (GIT-010)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (182 tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/src/application/commands.rs (added GitCommand and GitResult enums)
+  - src-tauri/src/application/git_service.rs (new - GitApplicationService with dispatch_command)
+  - src-tauri/src/application/mod.rs (registered git_service module and re-export)
+- Implemented GitApplicationService with:
+  - Constructor taking Box<dyn GitOperationsPort + Send + Sync>
+  - dispatch_command method matching on all 22 GitCommand variants
+  - Each variant delegates to the corresponding GitOperationsPort method
+  - Domain results mapped to GitResult enum variants
+  - GitCommand enum with PathBuf repo_path and domain value objects (BranchName, RemoteName, StashId)
+  - GitResult enum wrapping domain types (FileStatus, CommitInfo, BranchInfo, etc.)
+  - 10 unit tests with MockGitPort verifying dispatch routing
+- **Learnings for future iterations:**
+  - Domain types (CommitInfo, BranchInfo, FileStatus, GitRepositoryState) use private fields with constructor methods - must use ::new() not struct literals
+  - Domain types use value objects (CommitHash, BranchName, WorkingDirectory) not raw strings
+  - Use accessor methods (short_hash(), head_branch()) not field access in assertions
+---
