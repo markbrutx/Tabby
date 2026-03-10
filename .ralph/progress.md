@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-03-10 09:50 - GIT-019: Implement log, blame, stash, repo_state operations
+Thread:
+Run: 20260310-012951-93839 (iteration 21)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-21.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-21.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: c027444 feat: implement log, blame, stash, repo_state operations (GIT-019)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (305 tests)
+- Files changed:
+  - src-tauri/src/infrastructure/cli_git_adapter.rs
+  - .ralph/activity.log
+  - .ralph/progress.md
+- Implemented all 7 stubbed operations in CliGitAdapter:
+  - log(): custom format with record/group separators, parses CommitInfo with parent hashes
+  - blame(): porcelain parser that groups contiguous lines by commit hash into BlameEntry blocks
+  - stash_push/pop/list/drop: full stash lifecycle with format parsing for list
+  - repo_state(): rev-parse for HEAD + porcelain status for clean check
+- Added 3 parsing functions: parse_log_output, parse_blame_porcelain, parse_stash_list_output
+- Added 11 unit tests across all operations (5 log, 3 blame, 3 stash)
+- **Learnings for future iterations:**
+  - Clippy requires `strip_prefix` pattern instead of `starts_with` + manual slice
+  - Clippy prefers `is_some_and` over `map_or(false, ...)`
+  - Use `\x1e` (record separator) and `\x1d` (group separator) for git format delimiters to avoid conflicts with commit messages
+---
+
 ## 2026-03-10 09:43 - GIT-018: Implement push, pull, fetch, branch operations
 Thread:
 Run: 20260310-012951-93839 (iteration 20)
