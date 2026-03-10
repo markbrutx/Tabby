@@ -2,6 +2,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "xterm/css/xterm.css";
 import "./styles.css";
+
+if (import.meta.env.DEV) {
+  document.title = "Tabby [DEV]";
+}
 import "@/features/paneRenderers";
 import { shellClients } from "@/app-shell/clients";
 import { AppShellContext } from "@/app-shell/context/AppShellContext";

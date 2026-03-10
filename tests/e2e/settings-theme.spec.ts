@@ -115,6 +115,35 @@ test("settings persist after save and reopen", async ({ page }) => {
   expect(classes).toContain("ring");
 });
 
+test("theme cards fit within grid without overflow", async ({ page }) => {
+  await page.keyboard.press("Meta+,");
+  await expect(page.getByTestId("settings-modal")).toBeVisible({ timeout: 3_000 });
+
+  const cards = page.locator("[data-testid^='theme-card-']");
+  const count = await cards.count();
+  expect(count).toBeGreaterThan(0);
+
+  const modal = page.getByTestId("settings-modal");
+  const modalBox = await modal.boundingBox();
+
+  for (let i = 0; i < count; i++) {
+    const card = cards.nth(i);
+    const cardBox = await card.boundingBox();
+    expect(cardBox).toBeTruthy();
+    expect(cardBox!.width).toBeLessThanOrEqual(modalBox!.width / 3);
+  }
+});
+
+test("theme card badge text is not clipped", async ({ page }) => {
+  await page.keyboard.press("Meta+,");
+  await expect(page.getByTestId("settings-modal")).toBeVisible({ timeout: 3_000 });
+
+  const midnightCard = page.getByTestId("theme-card-midnight");
+  const badge = midnightCard.locator("span").filter({ hasText: /^Dark$/ });
+  await expect(badge).toBeVisible();
+  await expect(badge).toHaveText("Dark");
+});
+
 test("reset to defaults restores original values", async ({ page }) => {
   // Change theme to Dawn
   await page.keyboard.press("Meta+,");

@@ -59,10 +59,10 @@ describe("PaneHeader", () => {
     expect(header.getAttribute("draggable")).toBe("true");
   });
 
-  it("shows drag over ring when isDragOver is true", () => {
-    renderHeader({ isDragOver: true });
+  it("does not show drag over ring (drop target moved to pane wrapper)", () => {
+    renderHeader();
     const header = screen.getByTestId("pane-header");
-    expect(header.className).toContain("ring-2");
+    expect(header.className).not.toContain("ring-2");
   });
 
   it("shows Open Git View button when onOpenGitView and cwd are provided", () => {

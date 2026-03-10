@@ -1,9 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
+import { createContext, useContext, useMemo, useRef } from "react";
 import {
   Panel,
   PanelGroup,
   PanelResizeHandle,
-  type ImperativePanelHandle,
 } from "react-resizable-panels";
 import { RefreshCw } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -13,6 +12,7 @@ import type {
   PaneSnapshotModel,
   TabSnapshotModel,
 } from "@/features/workspace/model/workspaceSnapshot";
+import type { DragSourceProps, DropTargetProps } from "@/features/workspace/paneRegistry";
 import type { SplitNode } from "@/features/workspace/domain/models";
 import type { ThemeDefinition } from "@/features/theme/domain/models";
 import type { GitClient } from "@/app-shell/clients";
@@ -29,16 +29,14 @@ interface SplitTreeCtx {
   visible: boolean;
   modalOpen: boolean;
   gitClient: GitClient;
-  collapsedPaneIds: ReadonlySet<string>;
   onFocus: (tabId: string, paneId: string) => Promise<void>;
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
   onSwapPaneSlots: (paneIdA: string, paneIdB: string) => void;
   onOpenGitView: (paneId: string, cwd: string) => void;
-  onToggleCollapse: (paneId: string) => void;
   dragSourceRef: React.MutableRefObject<string | null>;
-  dragOverPaneId: string | null;
-  buildDragProps: (paneId: string, onSwapPaneSlots: (a: string, b: string) => void) => import("@/features/workspace/paneRegistry").DragProps;
+  buildDragSourceProps: (paneId: string) => DragSourceProps;
+  buildDropTargetProps: (paneId: string, onSwapPaneSlots: (a: string, b: string) => void) => DropTargetProps;
 }
 
 const TreeContext = createContext<SplitTreeCtx | null>(null);
@@ -59,13 +57,11 @@ interface SplitTreeRendererProps {
   visible: boolean;
   modalOpen?: boolean;
   gitClient: GitClient;
-  collapsedPaneIds: ReadonlySet<string>;
   onFocus: (tabId: string, paneId: string) => Promise<void>;
   onRestart: (paneId: string) => Promise<void>;
   onClosePane: (paneId: string) => void;
   onSwapPaneSlots: (paneIdA: string, paneIdB: string) => void;
   onOpenGitView: (paneId: string, cwd: string) => void;
-  onToggleCollapse: (paneId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,12 +80,10 @@ function PaneLeaf({ paneId }: { paneId: string }) {
   const ctx = useTreeContext();
   const {
     tab, theme, visible, modalOpen,
-    onFocus, onRestart, onClosePane, onSwapPaneSlots, onToggleCollapse,
-    collapsedPaneIds,
-    dragSourceRef, buildDragProps,
+    onFocus, onRestart, onClosePane, onSwapPaneSlots,
+    dragSourceRef, buildDragSourceProps, buildDropTargetProps,
   } = ctx;
 
-  const isCollapsed = collapsedPaneIds.has(paneId);
   const pane = findPaneById(tab, paneId);
   const browserPaneRef = useRef(null);
 
@@ -98,7 +92,8 @@ function PaneLeaf({ paneId }: { paneId: string }) {
   const isActive = tab.activePaneId === pane.id;
   const isDragSource = dragSourceRef.current === pane.id;
 
-  const dragProps = buildDragProps(pane.id, onSwapPaneSlots);
+  const dragProps = buildDragSourceProps(pane.id);
+  const dropProps = buildDropTargetProps(pane.id, onSwapPaneSlots);
 
   const renderer = getPaneRenderer(pane.paneKind);
   if (!renderer) return null;
@@ -110,9 +105,7 @@ function PaneLeaf({ paneId }: { paneId: string }) {
     isActive,
     visible,
     modalOpen,
-    isCollapsed,
     paneCount: tab.panes.length,
-    onToggleCollapse: () => onToggleCollapse(pane.id),
     onClose: () => onClosePane(pane.id),
     onRestart: () => void onRestart(pane.id),
     onFocus: () => void onFocus(tab.id, pane.id),
@@ -145,90 +138,33 @@ function PaneLeaf({ paneId }: { paneId: string }) {
         />
       )}
     >
-      <div className={`flex h-full flex-col ${isDragSource ? "opacity-50" : ""}`}>
-        {renderer.renderHeader(rendererCtx)}
-        {isCollapsed ? null : (
-          <div
-            className="min-h-0 flex-1"
-            onMouseDown={rendererCtx.onFocus}
-          >
-            {renderer.renderContent(rendererCtx)}
-          </div>
+      <div
+        className={`relative flex h-full flex-col ${isDragSource ? "opacity-50" : ""}`}
+        onDragOver={dropProps.onDragOver}
+        onDragEnter={dropProps.onDragEnter}
+        onDragLeave={dropProps.onDragLeave}
+        onDrop={dropProps.onDrop}
+      >
+        {dropProps.isDragOver && (
+          <div className="pointer-events-none absolute inset-0 z-50 rounded border-2 border-[var(--color-accent)] bg-[var(--color-accent)]/10" />
         )}
+        {renderer.renderHeader(rendererCtx)}
+        <div
+          className="min-h-0 flex-1"
+          onMouseDown={rendererCtx.onFocus}
+        >
+          {renderer.renderContent(rendererCtx)}
+        </div>
       </div>
     </ErrorBoundary>
   );
 }
 
 // ---------------------------------------------------------------------------
-// NodeRenderer — recursive tree walker (now only takes `node`)
+// NodeRenderer — recursive tree walker
 // ---------------------------------------------------------------------------
 
 function NodeRenderer({ node }: { node: SplitNode }) {
-  const ctx = useTreeContext();
-  const firstPanelRef = useRef<ImperativePanelHandle>(null);
-  const secondPanelRef = useRef<ImperativePanelHandle>(null);
-
-  const isSplit = node.type === "split";
-  const firstChild = isSplit ? node.first : null;
-  const secondChild = isSplit ? node.second : null;
-  const firstIsLeaf = firstChild?.type === "pane";
-  const secondIsLeaf = secondChild?.type === "pane";
-  const firstCollapsed = firstIsLeaf && ctx.collapsedPaneIds.has(firstChild.paneId);
-  const secondCollapsed = secondIsLeaf && ctx.collapsedPaneIds.has(secondChild.paneId);
-
-  // Guard: if both siblings are collapsed, auto-expand the second one
-  useEffect(() => {
-    if (firstCollapsed && secondCollapsed && secondIsLeaf && secondChild) {
-      ctx.onToggleCollapse(secondChild.paneId);
-    }
-  }, [firstCollapsed, secondCollapsed, secondIsLeaf, secondChild, ctx]);
-
-  useEffect(() => {
-    if (!firstIsLeaf) return;
-    if (firstCollapsed) {
-      firstPanelRef.current?.collapse();
-    } else {
-      firstPanelRef.current?.expand();
-    }
-  }, [firstCollapsed, firstIsLeaf]);
-
-  useEffect(() => {
-    if (!secondIsLeaf) return;
-    if (secondCollapsed) {
-      secondPanelRef.current?.collapse();
-    } else {
-      secondPanelRef.current?.expand();
-    }
-  }, [secondCollapsed, secondIsLeaf]);
-
-  // Handlers to sync drag-collapse/expand with the store
-  // NOTE: these must be called unconditionally (before the early return)
-  // to satisfy React's rules of hooks.
-  const handleFirstCollapse = useCallback(() => {
-    if (firstIsLeaf && firstChild) {
-      ctx.onToggleCollapse(firstChild.paneId);
-    }
-  }, [firstIsLeaf, firstChild, ctx]);
-
-  const handleFirstExpand = useCallback(() => {
-    if (firstIsLeaf && firstChild && ctx.collapsedPaneIds.has(firstChild.paneId)) {
-      ctx.onToggleCollapse(firstChild.paneId);
-    }
-  }, [firstIsLeaf, firstChild, ctx]);
-
-  const handleSecondCollapse = useCallback(() => {
-    if (secondIsLeaf && secondChild) {
-      ctx.onToggleCollapse(secondChild.paneId);
-    }
-  }, [secondIsLeaf, secondChild, ctx]);
-
-  const handleSecondExpand = useCallback(() => {
-    if (secondIsLeaf && secondChild && ctx.collapsedPaneIds.has(secondChild.paneId)) {
-      ctx.onToggleCollapse(secondChild.paneId);
-    }
-  }, [secondIsLeaf, secondChild, ctx]);
-
   if (node.type === "pane") {
     return <PaneLeaf paneId={node.paneId} />;
   }
@@ -239,30 +175,14 @@ function NodeRenderer({ node }: { node: SplitNode }) {
 
   return (
     <PanelGroup direction={direction} className="h-full">
-      <Panel
-        ref={firstIsLeaf ? firstPanelRef : undefined}
-        defaultSize={firstSize}
-        minSize={firstIsLeaf ? 0 : 5}
-        collapsible={firstIsLeaf}
-        collapsedSize={0}
-        onCollapse={firstIsLeaf ? handleFirstCollapse : undefined}
-        onExpand={firstIsLeaf ? handleFirstExpand : undefined}
-      >
+      <Panel defaultSize={firstSize} minSize={5}>
         <NodeRenderer node={node.first} />
       </Panel>
       <PanelResizeHandle
         className={`resize-handle ${direction === "horizontal" ? "w-[3px]" : "h-[3px]"
           } shrink-0 bg-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]`}
       />
-      <Panel
-        ref={secondIsLeaf ? secondPanelRef : undefined}
-        defaultSize={secondSize}
-        minSize={secondIsLeaf ? 0 : 5}
-        collapsible={secondIsLeaf}
-        collapsedSize={0}
-        onCollapse={secondIsLeaf ? handleSecondCollapse : undefined}
-        onExpand={secondIsLeaf ? handleSecondExpand : undefined}
-      >
+      <Panel defaultSize={secondSize} minSize={5}>
         <NodeRenderer node={node.second} />
       </Panel>
     </PanelGroup>
@@ -279,15 +199,13 @@ export function SplitTreeRenderer({
   visible,
   modalOpen = false,
   gitClient,
-  collapsedPaneIds,
   onFocus,
   onRestart,
   onClosePane,
   onSwapPaneSlots,
   onOpenGitView,
-  onToggleCollapse,
 }: SplitTreeRendererProps) {
-  const { dragSourceRef, dragOverPaneId, buildDragProps } = usePaneDragDrop();
+  const { dragSourceRef, buildDragSourceProps, buildDropTargetProps } = usePaneDragDrop();
 
   const ctx: SplitTreeCtx = useMemo(() => ({
     tab,
@@ -295,20 +213,18 @@ export function SplitTreeRenderer({
     visible,
     modalOpen,
     gitClient,
-    collapsedPaneIds,
     onFocus,
     onRestart,
     onClosePane,
     onSwapPaneSlots,
     onOpenGitView,
-    onToggleCollapse,
     dragSourceRef,
-    dragOverPaneId,
-    buildDragProps,
+    buildDragSourceProps,
+    buildDropTargetProps,
   }), [
-    tab, theme, visible, modalOpen, gitClient, collapsedPaneIds,
-    onFocus, onRestart, onClosePane, onSwapPaneSlots, onOpenGitView, onToggleCollapse,
-    dragSourceRef, dragOverPaneId, buildDragProps,
+    tab, theme, visible, modalOpen, gitClient,
+    onFocus, onRestart, onClosePane, onSwapPaneSlots, onOpenGitView,
+    dragSourceRef, buildDragSourceProps, buildDropTargetProps,
   ]);
 
   return (

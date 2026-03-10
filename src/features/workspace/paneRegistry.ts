@@ -9,25 +9,26 @@ export interface PaneRendererContext {
   readonly isActive: boolean;
   readonly visible: boolean;
   readonly modalOpen: boolean;
-  readonly isCollapsed: boolean;
   readonly paneCount: number;
-  readonly onToggleCollapse: () => void;
   readonly onClose: () => void;
   readonly onRestart: () => void;
   readonly onFocus: () => void;
-  readonly dragProps: DragProps;
+  readonly dragProps: DragSourceProps;
   readonly extras: Readonly<Record<string, unknown>>;
 }
 
-export interface DragProps {
+export interface DragSourceProps {
   readonly draggable: true;
-  readonly isDragOver: boolean;
   readonly onDragStart: React.DragEventHandler;
+  readonly onDragEnd: React.DragEventHandler;
+}
+
+export interface DropTargetProps {
+  readonly isDragOver: boolean;
   readonly onDragOver: React.DragEventHandler;
   readonly onDragEnter: React.DragEventHandler;
   readonly onDragLeave: React.DragEventHandler;
   readonly onDrop: React.DragEventHandler;
-  readonly onDragEnd: React.DragEventHandler;
 }
 
 export interface PaneRenderer {

@@ -28,14 +28,14 @@ export function ThemePreviewCard({
       type="button"
       data-testid={`theme-card-${theme.id}`}
       onClick={onSelect}
-      className={`group relative w-[180px] rounded-lg border p-3 text-left transition ${
+      className={`group relative w-full rounded-lg border p-3 text-left transition ${
         isActive
           ? "border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]"
           : "border-[var(--color-border)] hover:border-[var(--color-border-strong)]"
       } bg-[var(--color-surface-overlay)]`}
     >
       <div className="flex items-center justify-between">
-        <span className="truncate text-sm font-medium text-[var(--color-text)]">
+        <span className="min-w-0 truncate text-sm font-medium text-[var(--color-text)]">
           {theme.name}
         </span>
         <span

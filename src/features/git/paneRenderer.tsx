@@ -11,8 +11,6 @@ registerPaneRenderer("git", {
         branch={null}
         isActive={ctx.isActive}
         paneCount={ctx.paneCount}
-        isCollapsed={ctx.isCollapsed}
-        onToggleCollapse={ctx.onToggleCollapse}
         onClose={ctx.onClose}
         {...ctx.dragProps}
       />

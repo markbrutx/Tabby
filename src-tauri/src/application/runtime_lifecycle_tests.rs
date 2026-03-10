@@ -148,17 +148,24 @@ mod tests {
     impl RuntimeObservationReceiver for TestRuntimeService {
         fn on_terminal_output_received(&self, _pane_id: &PaneId, _data: &[u8]) {}
 
-        fn on_terminal_exited(&self, pane_id: &PaneId, exit_code: Option<i32>) {
+        fn on_terminal_exited(
+            &self,
+            pane_id: &PaneId,
+            runtime_session_id: &str,
+            exit_code: Option<i32>,
+        ) {
             let failed = exit_code.is_some_and(|code| code != 0);
             let message = exit_code
                 .filter(|code| *code != 0)
                 .map(|code| format!("Process exited with code {code}"));
 
+            let session_id =
+                tabby_runtime::RuntimeSessionId::from(String::from(runtime_session_id));
             let result = self
                 .registry
                 .lock()
                 .expect("registry lock")
-                .mark_terminal_exit(pane_id, None, failed, message);
+                .mark_terminal_exit(pane_id, Some(&session_id), failed, message);
 
             if let Ok(runtime) = result {
                 self.emit_projection(runtime.pane_id.as_ref(), runtime.status);
@@ -217,7 +224,7 @@ mod tests {
 
         // Simulate natural PTY exit (exit code 0) via observation receiver
         let pane_id = PaneId::from(String::from("pane-1"));
-        service.on_terminal_exited(&pane_id, Some(0));
+        service.on_terminal_exited(&pane_id, "pty-1", Some(0));
 
         // Registry must reflect Exited status
         assert_eq!(
@@ -244,7 +251,7 @@ mod tests {
         service.start_runtime("pane-fail", &terminal_spec("/tmp"));
 
         let pane_id = PaneId::from(String::from("pane-fail"));
-        service.on_terminal_exited(&pane_id, Some(127));
+        service.on_terminal_exited(&pane_id, "pty-1", Some(127));
 
         assert_eq!(
             service.registry_get_status("pane-fail"),
@@ -266,7 +273,7 @@ mod tests {
         service.start_runtime("pane-u", &terminal_spec("/tmp"));
 
         let pane_id = PaneId::from(String::from("pane-u"));
-        service.on_terminal_exited(&pane_id, None);
+        service.on_terminal_exited(&pane_id, "pty-1", None);
 
         assert_eq!(
             service.registry_get_status("pane-u"),
@@ -1078,7 +1085,7 @@ mod tests {
         apply_events(&service, switch_events);
 
         // Natural exit on tab 1's terminal (even though we may be on a different tab)
-        service.on_terminal_exited(&tab_1_pane, Some(0));
+        service.on_terminal_exited(&tab_1_pane, "pty-1", Some(0));
 
         // Registry must still be updated even though we switched tabs
         assert_eq!(

@@ -7,7 +7,6 @@ import { selectActiveTab } from "@/features/workspace/selectors";
 import { useResolvedTheme } from "@/features/workspace/theme";
 import { useThemeStore } from "@/features/theme/application/themeStore";
 import { buildWorkspaceSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
-import { useCollapseStore } from "@/features/workspace/application/collapseStore";
 
 export function useAppOrchestration() {
   const {
@@ -65,27 +64,21 @@ export function useAppOrchestration() {
     [workspace, runtimes, profiles],
   );
 
-  const collapseStore = useCollapseStore();
   const initializeThemes = useThemeStore((s) => s.initialize);
   const resolvedTheme = useResolvedTheme(settings?.theme);
 
   const closePaneWithCleanup = useCallback(
     async (paneId: string) => {
-      const activeTab = workspaceModel ? selectActiveTab(workspaceModel) : null;
-      if (activeTab) {
-        collapseStore.cleanupPane(activeTab.id, paneId);
-      }
       await closePane(paneId);
     },
-    [closePane, workspaceModel, collapseStore],
+    [closePane],
   );
 
   const closeTabWithCleanup = useCallback(
     async (tabId: string) => {
-      collapseStore.cleanupTab(tabId);
       await closeTab(tabId);
     },
-    [closeTab, collapseStore],
+    [closeTab],
   );
 
   const confirmDialog = useConfirmAction({
@@ -103,7 +96,6 @@ export function useAppOrchestration() {
     settings,
     profiles,
     resolvedTheme,
-    collapseStore,
     confirmDialog,
     initializeThemes,
     createTabFromWizard,

@@ -1,33 +1,39 @@
 import { useCallback, useRef, useState } from "react";
-import type { DragProps } from "@/features/workspace/paneRegistry";
+import type { DragSourceProps, DropTargetProps } from "@/features/workspace/paneRegistry";
 
 export interface PaneDragDropState {
   readonly dragSourceRef: React.MutableRefObject<string | null>;
   readonly dragOverPaneId: string | null;
-  readonly onDragOverChange: (paneId: string | null) => void;
-  readonly buildDragProps: (
+  readonly buildDragSourceProps: (paneId: string) => DragSourceProps;
+  readonly buildDropTargetProps: (
     paneId: string,
     onSwapPaneSlots: (a: string, b: string) => void,
-  ) => DragProps;
+  ) => DropTargetProps;
 }
 
 export function usePaneDragDrop(): PaneDragDropState {
   const dragSourceRef = useRef<string | null>(null);
   const [dragOverPaneId, setDragOverPaneId] = useState<string | null>(null);
 
-  const onDragOverChange = useCallback((paneId: string | null) => {
-    setDragOverPaneId(paneId);
-  }, []);
-
-  const buildDragProps = useCallback(
-    (paneId: string, onSwapPaneSlots: (a: string, b: string) => void): DragProps => ({
+  const buildDragSourceProps = useCallback(
+    (paneId: string): DragSourceProps => ({
       draggable: true as const,
-      isDragOver: dragOverPaneId === paneId,
       onDragStart: (e: React.DragEvent) => {
         dragSourceRef.current = paneId;
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData("text/plain", paneId);
       },
+      onDragEnd: () => {
+        dragSourceRef.current = null;
+        setDragOverPaneId(null);
+      },
+    }),
+    [],
+  );
+
+  const buildDropTargetProps = useCallback(
+    (paneId: string, onSwapPaneSlots: (a: string, b: string) => void): DropTargetProps => ({
+      isDragOver: dragOverPaneId === paneId,
       onDragOver: (e: React.DragEvent) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
@@ -38,7 +44,12 @@ export function usePaneDragDrop(): PaneDragDropState {
           setDragOverPaneId(paneId);
         }
       },
-      onDragLeave: () => {
+      onDragLeave: (e: React.DragEvent) => {
+        const related = e.relatedTarget as Node | null;
+        const current = e.currentTarget as Node;
+        if (related && current.contains(related)) {
+          return;
+        }
         if (dragOverPaneId === paneId) {
           setDragOverPaneId(null);
         }
@@ -52,13 +63,9 @@ export function usePaneDragDrop(): PaneDragDropState {
         dragSourceRef.current = null;
         setDragOverPaneId(null);
       },
-      onDragEnd: () => {
-        dragSourceRef.current = null;
-        setDragOverPaneId(null);
-      },
     }),
     [dragOverPaneId],
   );
 
-  return { dragSourceRef, dragOverPaneId, onDragOverChange, buildDragProps };
+  return { dragSourceRef, dragOverPaneId, buildDragSourceProps, buildDropTargetProps };
 }

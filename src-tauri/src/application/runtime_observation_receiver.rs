@@ -23,7 +23,12 @@ pub trait RuntimeObservationReceiver: Send + Sync {
 
     /// Called by the PTY read thread when the terminal process has exited.
     /// `exit_code` is `None` when the exit status could not be determined.
-    fn on_terminal_exited(&self, pane_id: &PaneId, exit_code: Option<i32>);
+    fn on_terminal_exited(
+        &self,
+        pane_id: &PaneId,
+        runtime_session_id: &str,
+        exit_code: Option<i32>,
+    );
 
     /// Called by the browser surface adapter when the URL changes.
     fn on_browser_location_changed(&self, pane_id: &PaneId, url: &str);
@@ -72,7 +77,12 @@ mod tests {
             }
         }
 
-        fn on_terminal_exited(&self, pane_id: &PaneId, exit_code: Option<i32>) {
+        fn on_terminal_exited(
+            &self,
+            pane_id: &PaneId,
+            _runtime_session_id: &str,
+            exit_code: Option<i32>,
+        ) {
             if let Ok(mut log) = self.log.lock() {
                 log.terminal_exits.push((pane_id.to_string(), exit_code));
             }
@@ -115,7 +125,7 @@ mod tests {
         let receiver = MockObservationReceiver::new();
         let pane_id = pane("pane-2");
 
-        receiver.on_terminal_exited(&pane_id, Some(0));
+        receiver.on_terminal_exited(&pane_id, "session-2", Some(0));
 
         let log = receiver.into_log();
         assert_eq!(log.terminal_exits.len(), 1);
@@ -128,7 +138,7 @@ mod tests {
         let receiver = MockObservationReceiver::new();
         let pane_id = pane("pane-3");
 
-        receiver.on_terminal_exited(&pane_id, None);
+        receiver.on_terminal_exited(&pane_id, "session-3", None);
 
         let log = receiver.into_log();
         assert_eq!(log.terminal_exits.len(), 1);
@@ -168,7 +178,7 @@ mod tests {
         let pane_id = pane("pane-arc");
 
         receiver.on_terminal_output_received(&pane_id, b"test");
-        receiver.on_terminal_exited(&pane_id, Some(1));
+        receiver.on_terminal_exited(&pane_id, "session-arc", Some(1));
         receiver.on_browser_location_changed(&pane_id, "https://test.com");
         receiver.on_terminal_cwd_changed(&pane_id, "/tmp");
     }
@@ -216,14 +226,22 @@ mod tests {
     impl RuntimeObservationReceiver for RegistryBackedReceiver {
         fn on_terminal_output_received(&self, _pane_id: &PaneId, _data: &[u8]) {}
 
-        fn on_terminal_exited(&self, pane_id: &PaneId, exit_code: Option<i32>) {
+        fn on_terminal_exited(
+            &self,
+            pane_id: &PaneId,
+            runtime_session_id: &str,
+            exit_code: Option<i32>,
+        ) {
             let failed = exit_code.is_some_and(|code| code != 0);
             let message = exit_code
                 .filter(|code| *code != 0)
                 .map(|code| format!("Process exited with code {code}"));
 
+            let session_id = RuntimeSessionId::from(String::from(runtime_session_id));
             if let Ok(mut runtimes) = self.registry.lock() {
-                if let Ok(runtime) = runtimes.mark_terminal_exit(pane_id, None, failed, message) {
+                if let Ok(runtime) =
+                    runtimes.mark_terminal_exit(pane_id, Some(&session_id), failed, message)
+                {
                     // Simulate projection emit
                     if let Ok(mut projections) = self.projections_emitted.lock() {
                         projections.push((runtime.pane_id.to_string(), runtime.status));
@@ -248,7 +266,7 @@ mod tests {
 
         // Simulate PTY exit: infrastructure calls on_terminal_exited
         let pane_id = pane("pane-1");
-        receiver.on_terminal_exited(&pane_id, Some(0));
+        receiver.on_terminal_exited(&pane_id, "pty-session-1", Some(0));
 
         // Verify: registry was updated with Exited status
         let snapshot = receiver.registry.lock().expect("lock").snapshot();
@@ -275,7 +293,7 @@ mod tests {
 
         // Simulate PTY exit with failure code
         let pane_id = pane("pane-f");
-        receiver.on_terminal_exited(&pane_id, Some(1));
+        receiver.on_terminal_exited(&pane_id, "pty-session-2", Some(1));
 
         // Verify: registry records Failed status
         let snapshot = receiver.registry.lock().expect("lock").snapshot();
@@ -305,7 +323,7 @@ mod tests {
 
         // Simulate PTY exit with unknown exit code (None)
         let pane_id = pane("pane-u");
-        receiver.on_terminal_exited(&pane_id, None);
+        receiver.on_terminal_exited(&pane_id, "pty-session-3", None);
 
         let snapshot = receiver.registry.lock().expect("lock").snapshot();
         assert_eq!(snapshot.len(), 1);

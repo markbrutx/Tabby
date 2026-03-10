@@ -28,7 +28,7 @@ export function TerminalPane({
       data-active={active ? "true" : "false"}
       className="h-full overflow-hidden"
     >
-      <div ref={containerRef} className="h-full w-full px-1 py-1" />
+      <div ref={containerRef} className="h-full w-full px-2 py-2" />
     </div>
   );
 }

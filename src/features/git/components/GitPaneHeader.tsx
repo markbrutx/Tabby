@@ -1,4 +1,4 @@
-import { GitBranch, GripVertical, Maximize2, Minus, X } from "lucide-react";
+import { GitBranch, GripVertical, X } from "lucide-react";
 import { shortenPath } from "@/features/workspace/utils/shortenPath";
 
 interface GitPaneHeaderProps {
@@ -6,17 +6,10 @@ interface GitPaneHeaderProps {
   readonly branch: string | null;
   readonly isActive: boolean;
   readonly paneCount: number;
-  readonly isCollapsed?: boolean;
-  readonly onToggleCollapse?: () => void;
   readonly onClose: () => void;
   readonly draggable?: boolean;
   readonly onDragStart?: React.DragEventHandler;
-  readonly onDragOver?: React.DragEventHandler;
-  readonly onDragEnter?: React.DragEventHandler;
-  readonly onDragLeave?: React.DragEventHandler;
-  readonly onDrop?: React.DragEventHandler;
   readonly onDragEnd?: React.DragEventHandler;
-  readonly isDragOver?: boolean;
 }
 
 function repoBasename(repoPath: string): string {
@@ -29,17 +22,10 @@ export function GitPaneHeader({
   branch,
   isActive,
   paneCount,
-  isCollapsed = false,
-  onToggleCollapse,
   onClose,
   draggable = false,
   onDragStart,
-  onDragOver,
-  onDragEnter,
-  onDragLeave,
-  onDrop,
   onDragEnd,
-  isDragOver = false,
 }: GitPaneHeaderProps) {
   return (
     <div
@@ -47,13 +33,9 @@ export function GitPaneHeader({
         isActive
           ? "border-b border-[var(--color-accent)] bg-[var(--color-surface)] text-[var(--color-text)]"
           : "border-b border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]"
-      } ${isDragOver ? "ring-2 ring-[var(--color-accent)] ring-inset" : ""}`}
+      }`}
       draggable={draggable}
       onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
       onDragEnd={onDragEnd}
       data-testid="git-pane-header"
     >
@@ -82,20 +64,6 @@ export function GitPaneHeader({
       >
         {shortenPath(repoPath)}
       </span>
-
-      {onToggleCollapse && paneCount > 1 ? (
-        <button
-          className="ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleCollapse();
-          }}
-          title={isCollapsed ? "Expand pane (⌘M)" : "Collapse pane (⌘M)"}
-          data-testid="git-pane-header-collapse"
-        >
-          {isCollapsed ? <Maximize2 size={12} /> : <Minus size={12} />}
-        </button>
-      ) : null}
 
       {paneCount > 1 ? (
         <button

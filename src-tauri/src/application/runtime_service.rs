@@ -298,15 +298,21 @@ impl RuntimeObservationReceiver for RuntimeApplicationService {
         );
     }
 
-    fn on_terminal_exited(&self, pane_id: &PaneId, exit_code: Option<i32>) {
+    fn on_terminal_exited(
+        &self,
+        pane_id: &PaneId,
+        runtime_session_id: &str,
+        exit_code: Option<i32>,
+    ) {
         let failed = exit_code.is_some_and(|code| code != 0);
         let message = exit_code
             .filter(|code| *code != 0)
             .map(|code| format!("Process exited with code {code}"));
 
+        let session_id = tabby_runtime::RuntimeSessionId::from(String::from(runtime_session_id));
         let result = self.lock_runtimes().and_then(|mut runtimes| {
             runtimes
-                .mark_terminal_exit(pane_id, None, failed, message)
+                .mark_terminal_exit(pane_id, Some(&session_id), failed, message)
                 .map_err(|error| ShellError::NotFound(error.to_string()))
         });
 
@@ -783,7 +789,13 @@ mod tests {
 
     impl RuntimeObservationReceiver for MockObservationReceiver {
         fn on_terminal_output_received(&self, _pane_id: &PaneId, _data: &[u8]) {}
-        fn on_terminal_exited(&self, _pane_id: &PaneId, _exit_code: Option<i32>) {}
+        fn on_terminal_exited(
+            &self,
+            _pane_id: &PaneId,
+            _runtime_session_id: &str,
+            _exit_code: Option<i32>,
+        ) {
+        }
         fn on_browser_location_changed(&self, _pane_id: &PaneId, _url: &str) {}
         fn on_terminal_cwd_changed(&self, _pane_id: &PaneId, _cwd: &str) {}
     }

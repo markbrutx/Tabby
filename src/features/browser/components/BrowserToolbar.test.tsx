@@ -149,21 +149,9 @@ describe("BrowserToolbar", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 11. Drag over ring styling
+  // 11. No drag-over ring on toolbar (drop target moved to pane wrapper)
   // -----------------------------------------------------------------------
-  it("applies ring styling when isDragOver is true", () => {
-    renderToolbar({ isDragOver: true });
-    const toolbar = screen.getByTestId("browser-toolbar");
-    expect(toolbar.className).toContain("ring-2");
-  });
-
-  it("does not apply ring styling when isDragOver is false", () => {
-    renderToolbar({ isDragOver: false });
-    const toolbar = screen.getByTestId("browser-toolbar");
-    expect(toolbar.className).not.toContain("ring-2");
-  });
-
-  it("does not apply ring styling by default (isDragOver omitted)", () => {
+  it("does not apply ring styling (drop target on pane wrapper)", () => {
     renderToolbar();
     const toolbar = screen.getByTestId("browser-toolbar");
     expect(toolbar.className).not.toContain("ring-2");
@@ -218,18 +206,11 @@ describe("BrowserToolbar", () => {
     expect(onDragStart).toHaveBeenCalledTimes(1);
   });
 
-  it("fires onDragOver when dragging over", () => {
-    const onDragOver = vi.fn();
-    renderToolbar({ onDragOver });
-    fireEvent.dragOver(screen.getByTestId("browser-toolbar"));
-    expect(onDragOver).toHaveBeenCalledTimes(1);
-  });
-
-  it("fires onDrop when dropped", () => {
-    const onDrop = vi.fn();
-    renderToolbar({ onDrop });
-    fireEvent.drop(screen.getByTestId("browser-toolbar"));
-    expect(onDrop).toHaveBeenCalledTimes(1);
+  it("fires onDragEnd when dragging ends", () => {
+    const onDragEnd = vi.fn();
+    renderToolbar({ draggable: true, onDragEnd });
+    fireEvent.dragEnd(screen.getByTestId("browser-toolbar"));
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
   });
 
   // -----------------------------------------------------------------------

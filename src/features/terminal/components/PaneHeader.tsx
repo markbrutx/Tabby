@@ -1,4 +1,4 @@
-import { GitBranch, GripVertical, Maximize2, Minus, RefreshCw, X } from "lucide-react";
+import { GitBranch, GripVertical, RefreshCw, X } from "lucide-react";
 import { shortenPath } from "@/features/workspace/utils/shortenPath";
 
 interface PaneHeaderProps {
@@ -6,19 +6,12 @@ interface PaneHeaderProps {
   cwd: string;
   isActive: boolean;
   paneCount: number;
-  isCollapsed?: boolean;
-  onToggleCollapse?: () => void;
   onClose: () => void;
   onRestart: () => void;
   onOpenGitView?: () => void;
   draggable?: boolean;
   onDragStart?: React.DragEventHandler;
-  onDragOver?: React.DragEventHandler;
-  onDragEnter?: React.DragEventHandler;
-  onDragLeave?: React.DragEventHandler;
-  onDrop?: React.DragEventHandler;
   onDragEnd?: React.DragEventHandler;
-  isDragOver?: boolean;
 }
 
 export function PaneHeader({
@@ -26,19 +19,12 @@ export function PaneHeader({
   cwd,
   isActive,
   paneCount,
-  isCollapsed = false,
-  onToggleCollapse,
   onClose,
   onRestart,
   onOpenGitView,
   draggable = false,
   onDragStart,
-  onDragOver,
-  onDragEnter,
-  onDragLeave,
-  onDrop,
   onDragEnd,
-  isDragOver = false,
 }: PaneHeaderProps) {
   return (
     <div
@@ -46,13 +32,9 @@ export function PaneHeader({
         isActive
           ? "border-b border-[var(--color-accent)] bg-[var(--color-surface)] text-[var(--color-text)]"
           : "border-b border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]"
-      } ${isDragOver ? "ring-2 ring-[var(--color-accent)] ring-inset" : ""}`}
+      }`}
       draggable={draggable}
       onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
       onDragEnd={onDragEnd}
       data-testid="pane-header"
     >
@@ -98,20 +80,6 @@ export function PaneHeader({
       >
         <RefreshCw size={12} />
       </button>
-
-      {onToggleCollapse && paneCount > 1 ? (
-        <button
-          className="ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleCollapse();
-          }}
-          title={isCollapsed ? "Expand pane (⌘M)" : "Collapse pane (⌘M)"}
-          data-testid="pane-header-collapse"
-        >
-          {isCollapsed ? <Maximize2 size={12} /> : <Minus size={12} />}
-        </button>
-      ) : null}
 
       {paneCount > 1 ? (
         <button

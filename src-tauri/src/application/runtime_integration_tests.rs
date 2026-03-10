@@ -183,7 +183,13 @@ mod tests {
 
     impl RuntimeObservationReceiver for MockObservationReceiver {
         fn on_terminal_output_received(&self, _pane_id: &PaneId, _data: &[u8]) {}
-        fn on_terminal_exited(&self, _pane_id: &PaneId, _exit_code: Option<i32>) {}
+        fn on_terminal_exited(
+            &self,
+            _pane_id: &PaneId,
+            _runtime_session_id: &str,
+            _exit_code: Option<i32>,
+        ) {
+        }
         fn on_browser_location_changed(&self, _pane_id: &PaneId, _url: &str) {}
         fn on_terminal_cwd_changed(&self, _pane_id: &PaneId, _cwd: &str) {}
     }
@@ -548,7 +554,12 @@ mod tests {
 
         // Simulate PTY exit via the observation receiver trait on the real service
         let pane_id = pid("pane-exit");
-        RuntimeObservationReceiver::on_terminal_exited(&h.runtime_service, &pane_id, Some(0));
+        RuntimeObservationReceiver::on_terminal_exited(
+            &h.runtime_service,
+            &pane_id,
+            "mock-pty-1",
+            Some(0),
+        );
 
         // Registry updated to Exited
         let snapshot = h.runtime_service.snapshot().expect("snapshot");
@@ -574,7 +585,12 @@ mod tests {
         h.emitter.runtime_statuses.lock().expect("lock").clear();
 
         let pane_id = pid("pane-fail");
-        RuntimeObservationReceiver::on_terminal_exited(&h.runtime_service, &pane_id, Some(127));
+        RuntimeObservationReceiver::on_terminal_exited(
+            &h.runtime_service,
+            &pane_id,
+            "mock-pty-1",
+            Some(127),
+        );
 
         let snapshot = h.runtime_service.snapshot().expect("snapshot");
         assert_eq!(snapshot[0].status, RuntimeStatus::Failed);
@@ -600,7 +616,12 @@ mod tests {
         h.emitter.runtime_statuses.lock().expect("lock").clear();
 
         let pane_id = pid("pane-u");
-        RuntimeObservationReceiver::on_terminal_exited(&h.runtime_service, &pane_id, None);
+        RuntimeObservationReceiver::on_terminal_exited(
+            &h.runtime_service,
+            &pane_id,
+            "mock-pty-1",
+            None,
+        );
 
         let snapshot = h.runtime_service.snapshot().expect("snapshot");
         assert_eq!(snapshot[0].status, RuntimeStatus::Exited);
@@ -982,6 +1003,7 @@ mod tests {
         RuntimeObservationReceiver::on_terminal_exited(
             &h.runtime_service,
             &pid("pane-lc"),
+            "mock-pty-1",
             Some(0),
         );
         let snapshot = h.runtime_service.snapshot().expect("snapshot");

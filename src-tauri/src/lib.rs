@@ -136,6 +136,13 @@ pub fn run(cli_args: CliArgs) {
                 }
             }
 
+            #[cfg(debug_assertions)]
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(error) = window.set_title("Tabby [DEV]") {
+                    warn!(?error, "Failed to set dev window title");
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(specta_builder.invoke_handler());

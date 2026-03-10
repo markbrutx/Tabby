@@ -180,7 +180,13 @@ mod tests {
 
     impl RuntimeObservationReceiver for MockObservationReceiver {
         fn on_terminal_output_received(&self, _pane_id: &tabby_workspace::PaneId, _data: &[u8]) {}
-        fn on_terminal_exited(&self, _pane_id: &tabby_workspace::PaneId, _exit_code: Option<i32>) {}
+        fn on_terminal_exited(
+            &self,
+            _pane_id: &tabby_workspace::PaneId,
+            _runtime_session_id: &str,
+            _exit_code: Option<i32>,
+        ) {
+        }
         fn on_browser_location_changed(&self, _pane_id: &tabby_workspace::PaneId, _url: &str) {}
         fn on_terminal_cwd_changed(&self, _pane_id: &tabby_workspace::PaneId, _cwd: &str) {}
     }

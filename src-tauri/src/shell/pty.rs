@@ -121,7 +121,11 @@ impl PtyManager {
 
             let exit_code = resolve_exit_code(&session);
             let domain_pane_id = PaneId::from(pane_id);
-            observation_receiver.on_terminal_exited(&domain_pane_id, exit_code);
+            observation_receiver.on_terminal_exited(
+                &domain_pane_id,
+                &runtime_session_id_for_thread,
+                exit_code,
+            );
         });
 
         Ok(runtime_session_id)
@@ -239,7 +243,7 @@ fn build_pty_command(working_directory: &str, startup_command: Option<&str>) -> 
             builder.arg("-l");
             builder.arg("-i");
             builder.arg("-c");
-            builder.arg(format!("exec {cmd}"));
+            builder.arg(format!("{cmd}; exec $SHELL"));
             builder
         }
         None => {

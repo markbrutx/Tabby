@@ -1,13 +1,14 @@
 {
   "name": "tabby",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "lint": "eslint src && ./scripts/check-dto-boundary.sh",
     "lint:dto-boundary": "./scripts/check-dto-boundary.sh",
     "test": "vitest run",

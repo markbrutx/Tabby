@@ -77,6 +77,11 @@ export function TabBar({
       data-tauri-drag-region
       onMouseDown={handleDragStart}
     >
+      {import.meta.env.DEV && (
+        <span className="mr-1 rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-400">
+          DEV
+        </span>
+      )}
       <div className="flex items-center gap-1.5 overflow-x-auto px-2">
         {tabs.map((tab, index) => {
           const isActive = tab.id === activeTabId;

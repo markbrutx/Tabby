@@ -12,8 +12,6 @@ function BrowserPaneHeader({ ctx }: { ctx: PaneRendererContext }) {
       url={ctx.pane.url ?? DEFAULT_BROWSER_URL}
       isActive={ctx.isActive}
       paneCount={ctx.paneCount}
-      isCollapsed={ctx.isCollapsed}
-      onToggleCollapse={ctx.onToggleCollapse}
       onNavigate={(url) => {
         browserPaneRef.current?.navigate(url);
       }}

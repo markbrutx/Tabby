@@ -26,7 +26,6 @@ export function AppLayout({ orchestration, callbacks }: AppLayoutProps) {
     settings,
     profiles,
     resolvedTheme,
-    collapseStore,
     confirmDialog,
     createTabFromWizard,
     openSetupWizard,
@@ -51,7 +50,6 @@ export function AppLayout({ orchestration, callbacks }: AppLayoutProps) {
     handleCloseSettings,
     handleSwapPaneSlots,
     handleOpenGitView,
-    handleToggleCollapse,
     setSplitPopup,
   } = callbacks;
 
@@ -140,13 +138,11 @@ export function AppLayout({ orchestration, callbacks }: AppLayoutProps) {
                 visible={isActive}
                 modalOpen={modalOpen}
                 gitClient={shellClients.git}
-                collapsedPaneIds={collapseStore.getCollapsedSet(tab.id)}
                 onFocus={focusPane}
                 onRestart={restartPaneRuntime}
                 onClosePane={confirmDialog.requestClosePane}
                 onSwapPaneSlots={handleSwapPaneSlots}
                 onOpenGitView={handleOpenGitView}
-                onToggleCollapse={handleToggleCollapse}
               />
             </div>
           );
@@ -188,10 +184,6 @@ export function AppLayout({ orchestration, callbacks }: AppLayoutProps) {
           profiles={profiles}
           defaultSpec={activePane.spec}
           onConfirm={(paneSpec) => {
-            const tab = workspaceModel ? selectActiveTab(workspaceModel) : null;
-            if (tab) {
-              collapseStore.expandPane(tab.id, splitPopup.paneId);
-            }
             void splitPane(splitPopup.paneId, splitPopup.direction, paneSpec);
             setSplitPopup(null);
           }}

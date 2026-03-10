@@ -14,8 +14,6 @@ registerPaneRenderer("terminal", {
         cwd={ctx.pane.cwd}
         isActive={ctx.isActive}
         paneCount={ctx.paneCount}
-        isCollapsed={ctx.isCollapsed}
-        onToggleCollapse={ctx.onToggleCollapse}
         onClose={ctx.onClose}
         onRestart={ctx.onRestart}
         onOpenGitView={
