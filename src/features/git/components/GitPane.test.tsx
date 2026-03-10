@@ -72,7 +72,7 @@ describe("GitPane", () => {
     });
 
     expect(screen.getByTestId("git-file-list")).toBeInTheDocument();
-    expect(screen.getByText("src/main.ts")).toBeInTheDocument();
+    expect(screen.getAllByText("src/main.ts").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows error state on failure", async () => {
@@ -121,7 +121,7 @@ describe("GitPane", () => {
       expect(screen.getByTestId("git-pane")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Changes")).toBeInTheDocument();
+    expect(screen.getAllByText("Changes").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("History")).toBeInTheDocument();
     expect(screen.getByText("Branches")).toBeInTheDocument();
     expect(screen.getByText("Stash")).toBeInTheDocument();

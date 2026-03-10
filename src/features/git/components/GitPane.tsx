@@ -7,6 +7,7 @@ import {
   type GitActiveView,
   type GitPaneState,
 } from "@/features/git/application/useGitPaneStore";
+import { FileTreePanel } from "./FileTreePanel";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -86,6 +87,9 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
   const refreshStatus = store((s) => s.refreshStatus);
   const setActiveView = store((s) => s.setActiveView);
   const selectFile = store((s) => s.selectFile);
+  const stageFiles = store((s) => s.stageFiles);
+  const unstageFiles = store((s) => s.unstageFiles);
+  const discardChanges = store((s) => s.discardChanges);
 
   useEffect(() => {
     void refreshStatus();
@@ -141,29 +145,17 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
       <div className="flex min-h-0 flex-1">
         {/* Left panel — file tree */}
         <div
-          className="flex w-56 flex-col overflow-y-auto border-r border-[var(--color-border)]"
+          className="flex w-56 flex-col border-r border-[var(--color-border)]"
           data-testid="git-file-list"
         >
-          {files.length === 0 ? (
-            <div className="p-3 text-xs text-[var(--color-text-soft)]">
-              No changes
-            </div>
-          ) : (
-            files.map((file) => (
-              <button
-                key={file.path}
-                type="button"
-                className={`w-full px-3 py-1 text-left text-xs transition-colors ${
-                  selectedFile === file.path
-                    ? "bg-[var(--color-accent)]/15 text-[var(--color-text)]"
-                    : "text-[var(--color-text-soft)] hover:bg-[var(--color-surface-hover)]"
-                }`}
-                onClick={() => void selectFile(file.path)}
-              >
-                <span className="truncate">{file.path}</span>
-              </button>
-            ))
-          )}
+          <FileTreePanel
+            files={files}
+            selectedFile={selectedFile}
+            onSelectFile={(path) => void selectFile(path)}
+            onStageFiles={(paths) => void stageFiles(paths)}
+            onUnstageFiles={(paths) => void unstageFiles(paths)}
+            onDiscardChanges={(paths) => void discardChanges(paths)}
+          />
         </div>
 
         {/* Center — diff content */}

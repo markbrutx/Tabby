@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-03-10 10:23 - GIT-027: Create GitPane shell component with local Zustand store
+Thread:
+Run: 20260310-012951-93839 (iteration 29)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-29.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-29.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 0350c12 feat: add GitPane shell component with local Zustand store (GIT-027)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (252 tests, 6 new GitPane tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (312 tests)
+- Files changed:
+  - src/features/git/application/useGitPaneStore.ts (new)
+  - src/features/git/components/GitPane.tsx (new)
+  - src/features/git/components/GitPane.test.tsx (new)
+- Created GitPane shell component with PaneSnapshotModel prop and GitClient injection
+- Created useGitPaneStore factory with state: files, selectedFile, diffContent, repoState, activeView, loading, error
+- Store actions: refreshStatus (fetches status + repoState), selectFile (fetches diff), setActiveView
+- Component layout: header (branch + view tabs), left panel (file list), center (diff area), bottom (commit textarea)
+- Loading skeleton and error state rendering
+- 6 component tests: renders without crash, loading state, file list, error state, branch name, commit/diff areas, view tabs
+- **Learnings for future iterations:**
+  - GitCommandDto uses pane_id (not repoPath) — the backend resolves repo path from pane context
+  - GitCommandDto uses `staged` (not `cached`) for diff commands
+  - Store factory pattern with ref-based initialization avoids recreating store on re-renders
+  - .ralph/ is gitignored — progress/activity logs won't be staged
+---
+
 ## 2026-03-10 10:20 - GIT-026: Update workspace snapshot builder for Git panes
 Thread:
 Run: 20260310-012951-93839 (iteration 28)

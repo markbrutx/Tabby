@@ -24,6 +24,9 @@ export interface GitPaneState {
   refreshStatus: () => Promise<void>;
   selectFile: (filePath: string | null) => Promise<void>;
   setActiveView: (view: GitActiveView) => void;
+  stageFiles: (paths: readonly string[]) => Promise<void>;
+  unstageFiles: (paths: readonly string[]) => Promise<void>;
+  discardChanges: (paths: readonly string[]) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +102,69 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
 
     setActiveView(view) {
       set({ activeView: view });
+    },
+
+    async stageFiles(paths: readonly string[]) {
+      try {
+        await gitClient.dispatch({
+          kind: "stage",
+          pane_id: paneId,
+          paths: [...paths],
+        });
+        const statusResult = await gitClient.dispatch({
+          kind: "status",
+          pane_id: paneId,
+        });
+        const files =
+          statusResult.kind === "status" ? statusResult.files : [];
+        set({ files });
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to stage files";
+        set({ error: message });
+      }
+    },
+
+    async unstageFiles(paths: readonly string[]) {
+      try {
+        await gitClient.dispatch({
+          kind: "unstage",
+          pane_id: paneId,
+          paths: [...paths],
+        });
+        const statusResult = await gitClient.dispatch({
+          kind: "status",
+          pane_id: paneId,
+        });
+        const files =
+          statusResult.kind === "status" ? statusResult.files : [];
+        set({ files });
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to unstage files";
+        set({ error: message });
+      }
+    },
+
+    async discardChanges(paths: readonly string[]) {
+      try {
+        await gitClient.dispatch({
+          kind: "discardChanges",
+          pane_id: paneId,
+          paths: [...paths],
+        });
+        const statusResult = await gitClient.dispatch({
+          kind: "status",
+          pane_id: paneId,
+        });
+        const files =
+          statusResult.kind === "status" ? statusResult.files : [];
+        set({ files });
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to discard changes";
+        set({ error: message });
+      }
     },
   }));
 }
