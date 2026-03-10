@@ -24,6 +24,7 @@ interface WorkspaceShortcutsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
+  onToggleCollapsePane: (paneId: string) => void;
 }
 
 export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
@@ -49,6 +50,7 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
         onZoomIn,
         onZoomOut,
         onZoomReset,
+        onToggleCollapsePane,
       } = propsRef.current;
 
       if (!workspace || !event.metaKey) {
@@ -99,6 +101,16 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
 
       const activeTab = selectActiveTab(workspace);
       const activePane = selectActivePane(workspace);
+
+      // Cmd+M — Toggle collapse active pane
+      if (event.key.toLowerCase() === "m" && !event.shiftKey) {
+        event.preventDefault();
+        const pane = selectActivePane(workspace);
+        if (pane) {
+          onToggleCollapsePane(pane.id);
+        }
+        return;
+      }
 
       // Cmd+Shift+W — Close entire tab
       if (event.shiftKey && event.key.toLowerCase() === "w") {
@@ -253,6 +265,13 @@ export function useWorkspaceShortcuts(props: WorkspaceShortcutsProps) {
       if (!workspace) return;
       const pane = selectActivePane(workspace);
       if (pane) onSplitDown(pane.id);
+    });
+
+    reg("shortcut-collapse-pane", () => {
+      const { workspace, onToggleCollapsePane } = propsRef.current;
+      if (!workspace) return;
+      const pane = selectActivePane(workspace);
+      if (pane) onToggleCollapsePane(pane.id);
     });
 
     reg("shortcut-restart-pane", () => {

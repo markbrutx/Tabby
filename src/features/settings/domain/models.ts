@@ -6,7 +6,7 @@
  * convert between these models and the wire-format DTOs.
  */
 
-export type ThemeMode = "system" | "dawn" | "midnight";
+export type ThemeMode = string;
 
 export type LayoutPreset = "1x1" | "1x2" | "2x2" | "2x3" | "3x3";
 

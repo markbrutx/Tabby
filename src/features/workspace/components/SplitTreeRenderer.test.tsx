@@ -4,6 +4,39 @@ import { SplitTreeRenderer } from "./SplitTreeRenderer";
 import type { TabSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import type { GitClient } from "@/app-shell/clients";
 import type { GitResultDto } from "@/contracts/tauri-bindings";
+import type { ThemeDefinition } from "@/features/theme/domain/models";
+
+const MOCK_THEME: ThemeDefinition = {
+  id: "midnight",
+  name: "Midnight",
+  kind: "dark",
+  builtIn: true,
+  colors: {
+    bg: "#120b08",
+    surface: "#1b120d",
+    text: "#f8ece2",
+    textSoft: "#dcc7ba",
+    textMuted: "#b79684",
+    accent: "#f2a084",
+    accentStrong: "#e97d61",
+    accentSoft: "rgba(233, 125, 97, 0.18)",
+    border: "rgba(252, 232, 217, 0.08)",
+    borderStrong: "rgba(252, 232, 217, 0.16)",
+    danger: "#d56a67",
+    dangerStrong: "#bf5656",
+    dangerSoft: "rgba(213, 106, 103, 0.14)",
+    warning: "#d6a06f",
+    surfaceOverlay: "rgba(255, 240, 232, 0.05)",
+    surfaceHover: "rgba(255, 240, 232, 0.1)",
+    scrollbar: "rgba(255, 240, 232, 0.18)",
+    tokenKeyword: "#c792ea",
+    tokenString: "#c3e88d",
+    tokenComment: "#637777",
+    tokenNumber: "#f78c6c",
+    tokenType: "#ffcb6b",
+    tokenPunctuation: "#89ddff",
+  },
+};
 
 function makeMockGitClient(): GitClient {
   return {
@@ -61,6 +94,8 @@ const defaultHandlers = {
   onClosePane: vi.fn(),
   onSwapPaneSlots: vi.fn(),
   onOpenGitView: vi.fn(),
+  onToggleCollapse: vi.fn(),
+  collapsedPaneIds: new Set<string>(),
 };
 
 describe("SplitTreeRenderer", () => {
@@ -72,7 +107,7 @@ describe("SplitTreeRenderer", () => {
       <SplitTreeRenderer
         tab={tab}
 
-        theme="midnight"
+        theme={MOCK_THEME}
         visible={true}
         gitClient={gitClient}
         {...defaultHandlers}
@@ -137,7 +172,7 @@ describe("SplitTreeRenderer", () => {
       <SplitTreeRenderer
         tab={tab}
 
-        theme="midnight"
+        theme={MOCK_THEME}
         visible={true}
         gitClient={gitClient}
         {...defaultHandlers}

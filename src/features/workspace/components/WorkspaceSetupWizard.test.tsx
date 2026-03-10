@@ -244,6 +244,7 @@ describe("WorkspaceSetupWizard", () => {
     );
     fireEvent.click(screen.getByTestId("wizard-create"));
     expect(onComplete).toHaveBeenCalledWith({
+      title: "Workspace 1",
       groups: [
         {
           mode: "terminal",

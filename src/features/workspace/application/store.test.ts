@@ -178,7 +178,7 @@ describe("createWorkspaceStore", () => {
     );
 
     expect(store.getState().wizardTab).not.toBeNull();
-    expect(store.getState().wizardTab?.title).toBe("Workspace 1");
+    expect(store.getState().wizardTab?.title).toBe("New Workspace");
   });
 
   it("dispatches setActiveTab command and updates workspace state", async () => {
@@ -300,7 +300,7 @@ describe("createWorkspaceStore", () => {
     store.getState().openSetupWizard();
 
     expect(store.getState().wizardTab).not.toBeNull();
-    expect(store.getState().wizardTab?.title).toBe("Workspace 2");
+    expect(store.getState().wizardTab?.title).toBe("New Workspace");
   });
 
   it("closeSetupWizard clears wizard when tabs exist", async () => {

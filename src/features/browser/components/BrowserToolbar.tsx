@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { GripVertical, RotateCw, X } from "lucide-react";
+import { GripVertical, Maximize2, Minus, RotateCw, X } from "lucide-react";
 import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain/models";
 import { normalizeUrl } from "@/features/browser/hooks/useBrowserWebview";
 
@@ -7,6 +7,8 @@ interface BrowserToolbarProps {
   url: string;
   isActive: boolean;
   paneCount: number;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
   onNavigate: (url: string) => void;
   onReload: () => void;
   onClose: () => void;
@@ -24,6 +26,8 @@ export function BrowserToolbar({
   url,
   isActive,
   paneCount,
+  isCollapsed = false,
+  onToggleCollapse,
   onNavigate,
   onReload,
   onClose,
@@ -114,6 +118,20 @@ export function BrowserToolbar({
       >
         Go
       </button>
+
+      {onToggleCollapse && paneCount > 1 ? (
+        <button
+          className="ml-0.5 flex shrink-0 items-center justify-center rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCollapse();
+          }}
+          title={isCollapsed ? "Expand pane (⌘M)" : "Collapse pane (⌘M)"}
+          data-testid="browser-toolbar-collapse"
+        >
+          {isCollapsed ? <Maximize2 size={13} /> : <Minus size={13} />}
+        </button>
+      ) : null}
 
       {paneCount > 1 ? (
         <button

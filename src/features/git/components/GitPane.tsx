@@ -90,6 +90,7 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
   const unstageHunk = store((s) => s.unstageHunk);
   const stagedLinesSet = store((s) => s.stagedLines);
   const commitAction = store((s) => s.commit);
+  const pushAllAction = store((s) => s.pushAll);
   const fetchLastCommitInfo = store((s) => s.fetchLastCommitInfo);
   const branches = store((s) => s.branches);
   const branchesLoading = store((s) => s.branchesLoading);
@@ -295,6 +296,7 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
                 <CommitPanel
                   files={files}
                   onCommit={commitAction}
+                  onPushAll={pushAllAction}
                   onFetchLastCommitInfo={fetchLastCommitInfo}
                   onCommitSuccess={async () => { await refreshStatus(); }}
                 />

@@ -8,6 +8,7 @@ import type { CommitInfo, FileStatus } from "@/features/git/domain/models";
 export interface CommitPanelProps {
   readonly files: readonly FileStatus[];
   readonly onCommit: (message: string, amend: boolean) => Promise<void>;
+  readonly onPushAll: (message: string) => Promise<void>;
   readonly onFetchLastCommitInfo: () => Promise<CommitInfo | null>;
   readonly onCommitSuccess: () => Promise<void>;
 }
@@ -31,13 +32,14 @@ function countStagedFiles(files: readonly FileStatus[]): number {
 // CommitPanel
 // ---------------------------------------------------------------------------
 
-export function CommitPanel({ files, onCommit, onFetchLastCommitInfo, onCommitSuccess }: CommitPanelProps) {
+export function CommitPanel({ files, onCommit, onPushAll, onFetchLastCommitInfo, onCommitSuccess }: CommitPanelProps) {
   const [message, setMessage] = useState("");
   const [amend, setAmend] = useState(false);
   const [authorName, setAuthorName] = useState<string | null>(null);
   const [authorEmail, setAuthorEmail] = useState<string | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevAmendRef = useRef(false);
 
@@ -96,6 +98,25 @@ export function CommitPanel({ files, onCommit, onFetchLastCommitInfo, onCommitSu
       setCommitting(false);
     }
   }, [canCommit, onCommit, message, amend, onCommitSuccess]);
+
+  const handlePushAll = useCallback(async () => {
+    if (pushing) return;
+
+    setPushing(true);
+    setCommitError(null);
+
+    try {
+      await onPushAll(message);
+      setMessage("");
+      setAmend(false);
+      await onCommitSuccess();
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Push failed";
+      setCommitError(errorMessage);
+    } finally {
+      setPushing(false);
+    }
+  }, [pushing, onPushAll, message, onCommitSuccess]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -169,6 +190,22 @@ export function CommitPanel({ files, onCommit, onFetchLastCommitInfo, onCommitSu
           data-testid="commit-button"
         >
           {committing ? "Committing..." : "Commit"}
+        </button>
+
+        {/* Push All button */}
+        <button
+          type="button"
+          disabled={pushing || committing}
+          onClick={() => void handlePushAll()}
+          className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+            !pushing && !committing
+              ? "bg-[var(--color-success,#22c55e)] text-white hover:opacity-90"
+              : "cursor-not-allowed bg-[var(--color-surface)] text-[var(--color-text-soft)] opacity-50"
+          }`}
+          title="Stage all, commit, and push"
+          data-testid="push-all-button"
+        >
+          {pushing ? "Pushing..." : "Push All"}
         </button>
       </div>
 

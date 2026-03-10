@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use tabby_kernel::LayoutPreset;
 
-use crate::{FontSize, ProfileId, SettingsError, ThemeMode, UserPreferences, WorkingDirectory};
+use crate::{FontSize, ProfileId, SettingsError, UserPreferences, WorkingDirectory};
 
 // ---------------------------------------------------------------------------
 // Persistence schema — what gets written to / read from disk
@@ -27,19 +27,11 @@ pub struct PersistedPreferences {
     pub default_working_directory: String,
     pub default_custom_command: String,
     pub font_size: u16,
-    pub theme: PersistedThemeMode,
+    pub theme: String,
     pub launch_fullscreen: bool,
     pub has_completed_onboarding: bool,
     #[serde(default)]
     pub last_working_directory: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PersistedThemeMode {
-    System,
-    Dawn,
-    Midnight,
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +49,7 @@ impl PersistedPreferences {
             default_working_directory: preferences.default_working_directory.as_str().to_string(),
             default_custom_command: preferences.default_custom_command.clone(),
             font_size: preferences.font_size.value(),
-            theme: PersistedThemeMode::from_domain(preferences.theme),
+            theme: preferences.theme.clone(),
             launch_fullscreen: preferences.launch_fullscreen,
             has_completed_onboarding: preferences.has_completed_onboarding,
             last_working_directory: preferences.last_working_directory.clone(),
@@ -74,29 +66,11 @@ impl PersistedPreferences {
             )?,
             default_custom_command: self.default_custom_command.clone(),
             font_size: FontSize::new(self.font_size)?,
-            theme: self.theme.to_domain(),
+            theme: self.theme.clone(),
             launch_fullscreen: self.launch_fullscreen,
             has_completed_onboarding: self.has_completed_onboarding,
             last_working_directory: self.last_working_directory.clone(),
         })
-    }
-}
-
-impl PersistedThemeMode {
-    fn from_domain(mode: ThemeMode) -> Self {
-        match mode {
-            ThemeMode::System => Self::System,
-            ThemeMode::Dawn => Self::Dawn,
-            ThemeMode::Midnight => Self::Midnight,
-        }
-    }
-
-    fn to_domain(self) -> ThemeMode {
-        match self {
-            Self::System => ThemeMode::System,
-            Self::Dawn => ThemeMode::Dawn,
-            Self::Midnight => ThemeMode::Midnight,
-        }
     }
 }
 
@@ -137,7 +111,7 @@ mod tests {
             default_working_directory: WorkingDirectory::new("/tmp").expect("valid path"),
             default_custom_command: String::from("fish"),
             font_size: FontSize::new(16).expect("valid size"),
-            theme: ThemeMode::Dawn,
+            theme: String::from("dawn"),
             launch_fullscreen: true,
             has_completed_onboarding: true,
             last_working_directory: Some(String::from("/home")),
@@ -151,7 +125,7 @@ mod tests {
         assert_eq!(restored.default_working_directory.as_str(), "/tmp");
         assert_eq!(restored.default_custom_command, "fish");
         assert_eq!(restored.font_size.value(), 16);
-        assert!(matches!(restored.theme, ThemeMode::Dawn));
+        assert_eq!(restored.theme, "dawn");
         assert!(restored.launch_fullscreen);
         assert!(restored.has_completed_onboarding);
         assert_eq!(restored.last_working_directory.as_deref(), Some("/home"));
@@ -209,7 +183,7 @@ mod tests {
         assert_eq!(restored.default_layout, LayoutPreset::OneByTwo);
         assert_eq!(restored.default_terminal_profile_id, "claude");
         assert_eq!(restored.font_size.value(), 18);
-        assert!(matches!(restored.theme, ThemeMode::Midnight));
+        assert_eq!(restored.theme, "midnight");
         assert_eq!(restored.last_working_directory.as_deref(), Some("/var"));
     }
 

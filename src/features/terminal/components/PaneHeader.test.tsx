@@ -4,6 +4,7 @@ import { PaneHeader } from "./PaneHeader";
 
 function renderHeader(overrides: Partial<Parameters<typeof PaneHeader>[0]> = {}) {
   const onClose = vi.fn();
+  const onRestart = vi.fn();
   const onOpenGitView = vi.fn();
 
   render(
@@ -13,12 +14,13 @@ function renderHeader(overrides: Partial<Parameters<typeof PaneHeader>[0]> = {})
       isActive={false}
       paneCount={2}
       onClose={onClose}
+      onRestart={onRestart}
       onOpenGitView={onOpenGitView}
       {...overrides}
     />,
   );
 
-  return { onClose, onOpenGitView };
+  return { onClose, onRestart, onOpenGitView };
 }
 
 describe("PaneHeader", () => {

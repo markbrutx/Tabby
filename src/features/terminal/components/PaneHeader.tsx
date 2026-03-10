@@ -1,4 +1,4 @@
-import { GitBranch, GripVertical, X } from "lucide-react";
+import { GitBranch, GripVertical, Maximize2, Minus, RefreshCw, X } from "lucide-react";
 import { shortenPath } from "@/features/workspace/utils/shortenPath";
 
 interface PaneHeaderProps {
@@ -6,7 +6,10 @@ interface PaneHeaderProps {
   cwd: string;
   isActive: boolean;
   paneCount: number;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
   onClose: () => void;
+  onRestart: () => void;
   onOpenGitView?: () => void;
   draggable?: boolean;
   onDragStart?: React.DragEventHandler;
@@ -23,7 +26,10 @@ export function PaneHeader({
   cwd,
   isActive,
   paneCount,
+  isCollapsed = false,
+  onToggleCollapse,
   onClose,
+  onRestart,
   onOpenGitView,
   draggable = false,
   onDragStart,
@@ -78,6 +84,32 @@ export function PaneHeader({
           data-testid="pane-header-open-git"
         >
           <GitBranch size={12} />
+        </button>
+      ) : null}
+
+      <button
+        className="ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRestart();
+        }}
+        title="Restart (⌘⇧R)"
+        data-testid="pane-header-restart"
+      >
+        <RefreshCw size={12} />
+      </button>
+
+      {onToggleCollapse && paneCount > 1 ? (
+        <button
+          className="ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCollapse();
+          }}
+          title={isCollapsed ? "Expand pane (⌘M)" : "Collapse pane (⌘M)"}
+          data-testid="pane-header-collapse"
+        >
+          {isCollapsed ? <Maximize2 size={12} /> : <Minus size={12} />}
         </button>
       ) : null}
 

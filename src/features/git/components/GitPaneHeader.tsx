@@ -1,4 +1,4 @@
-import { GitBranch, GripVertical, X } from "lucide-react";
+import { GitBranch, GripVertical, Maximize2, Minus, X } from "lucide-react";
 import { shortenPath } from "@/features/workspace/utils/shortenPath";
 
 interface GitPaneHeaderProps {
@@ -6,6 +6,8 @@ interface GitPaneHeaderProps {
   readonly branch: string | null;
   readonly isActive: boolean;
   readonly paneCount: number;
+  readonly isCollapsed?: boolean;
+  readonly onToggleCollapse?: () => void;
   readonly onClose: () => void;
   readonly draggable?: boolean;
   readonly onDragStart?: React.DragEventHandler;
@@ -27,6 +29,8 @@ export function GitPaneHeader({
   branch,
   isActive,
   paneCount,
+  isCollapsed = false,
+  onToggleCollapse,
   onClose,
   draggable = false,
   onDragStart,
@@ -78,6 +82,20 @@ export function GitPaneHeader({
       >
         {shortenPath(repoPath)}
       </span>
+
+      {onToggleCollapse && paneCount > 1 ? (
+        <button
+          className="ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCollapse();
+          }}
+          title={isCollapsed ? "Expand pane (⌘M)" : "Collapse pane (⌘M)"}
+          data-testid="git-pane-header-collapse"
+        >
+          {isCollapsed ? <Maximize2 size={12} /> : <Minus size={12} />}
+        </button>
+      ) : null}
 
       {paneCount > 1 ? (
         <button

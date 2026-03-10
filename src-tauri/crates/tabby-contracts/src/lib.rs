@@ -14,16 +14,6 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub enum ThemeModeDto {
-    #[serde(rename = "system")]
-    System,
-    #[serde(rename = "dawn")]
-    Dawn,
-    #[serde(rename = "midnight")]
-    Midnight,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LayoutPresetDto {
     #[serde(rename = "1x1")]
     OneByOne,
@@ -123,7 +113,7 @@ pub struct SettingsView {
     pub default_working_directory: String,
     pub default_custom_command: String,
     pub font_size: u16,
-    pub theme: ThemeModeDto,
+    pub theme: String,
     pub launch_fullscreen: bool,
     pub has_completed_onboarding: bool,
     pub last_working_directory: Option<String>,

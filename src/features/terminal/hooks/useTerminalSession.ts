@@ -4,7 +4,8 @@ import { WebglAddon } from "xterm-addon-webgl";
 import { Terminal } from "xterm";
 import { useRuntimeStore } from "@/contexts/stores";
 import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
-import { getTerminalTheme, type ResolvedTheme } from "@/features/workspace/theme";
+import type { ThemeDefinition } from "@/features/theme/domain/models";
+import { getTerminalTheme } from "@/features/workspace/theme";
 import { registerPtyOutput } from "@/features/terminal/ptyOutputDispatcher";
 import { isTauriRuntime } from "@/lib/runtime";
 
@@ -12,7 +13,7 @@ const TERMINAL_FONT_SIZE = 14;
 
 interface UseTerminalSessionOptions {
   pane: PaneSnapshotModel;
-  theme: ResolvedTheme;
+  theme: ThemeDefinition;
   active: boolean;
   visible: boolean;
 }
@@ -91,7 +92,7 @@ export function useTerminalSession({
       fontSize: TERMINAL_FONT_SIZE,
       lineHeight: 1.2,
       letterSpacing: 0,
-      theme: getTerminalTheme(theme),
+      theme: getTerminalTheme(theme.kind),
     });
 
     const fitAddon = new FitAddon();
@@ -223,7 +224,7 @@ export function useTerminalSession({
     }
 
     try {
-      terminalRef.current.options.theme = getTerminalTheme(theme);
+      terminalRef.current.options.theme = getTerminalTheme(theme.kind);
     } catch {
       // Renderer may be in a bad state.
     }

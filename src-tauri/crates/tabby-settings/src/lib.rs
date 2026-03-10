@@ -13,13 +13,6 @@ pub const CODEX_PROFILE_ID: &str = "codex";
 pub const GEMINI_PROFILE_ID: &str = "gemini";
 pub const OPENCODE_PROFILE_ID: &str = "opencode";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ThemeMode {
-    System,
-    Dawn,
-    Midnight,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerminalProfile {
     pub id: ProfileId,
@@ -40,7 +33,7 @@ pub struct UserPreferences {
     pub default_working_directory: WorkingDirectory,
     pub default_custom_command: String,
     pub font_size: FontSize,
-    pub theme: ThemeMode,
+    pub theme: String,
     pub launch_fullscreen: bool,
     pub has_completed_onboarding: bool,
     pub last_working_directory: Option<String>,
@@ -72,7 +65,7 @@ pub fn default_preferences() -> UserPreferences {
         default_working_directory: WorkingDirectory::empty(),
         default_custom_command: String::new(),
         font_size: FontSize::default(),
-        theme: ThemeMode::System,
+        theme: String::from("system"),
         launch_fullscreen: true,
         has_completed_onboarding: false,
         last_working_directory: None,

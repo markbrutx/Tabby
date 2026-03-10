@@ -840,7 +840,12 @@ mod tests {
         // Open a terminal pane
         let open_events = h
             .workspace_service
-            .open_tab(LayoutPreset::OneByOne, false, None, vec![terminal_spec("/tmp")])
+            .open_tab(
+                LayoutPreset::OneByOne,
+                false,
+                None,
+                vec![terminal_spec("/tmp")],
+            )
             .expect("open_tab should succeed");
         h.coordinate(open_events)
             .expect("coordinate should succeed");

@@ -42,6 +42,7 @@ function renderPanel(overrides?: Partial<CommitPanelProps>) {
   const defaults: CommitPanelProps = {
     files: [makeStagedFile("src/main.ts"), makeStagedFile("src/lib.ts")],
     onCommit: vi.fn().mockResolvedValue(undefined),
+    onPushAll: vi.fn().mockResolvedValue(undefined),
     onFetchLastCommitInfo: vi.fn().mockResolvedValue(makeCommitInfo()),
     onCommitSuccess: vi.fn().mockResolvedValue(undefined),
     ...overrides,

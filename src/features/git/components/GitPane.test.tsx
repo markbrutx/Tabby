@@ -83,7 +83,7 @@ describe("GitPane", () => {
     render(<GitPane pane={makePaneSnapshot()} gitClient={client} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("git-error")).toBeInTheDocument();
+      expect(screen.getByTestId("pane-error-state")).toBeInTheDocument();
     });
 
     expect(screen.getByText("git not found")).toBeInTheDocument();

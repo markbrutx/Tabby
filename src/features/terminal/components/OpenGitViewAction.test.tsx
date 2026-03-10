@@ -14,6 +14,7 @@ describe("Open Git View action", () => {
         isActive={true}
         paneCount={1}
         onClose={vi.fn()}
+        onRestart={vi.fn()}
         onOpenGitView={onOpenGitView}
       />,
     );
@@ -34,6 +35,7 @@ describe("Open Git View action", () => {
         isActive={true}
         paneCount={1}
         onClose={vi.fn()}
+        onRestart={vi.fn()}
         onOpenGitView={vi.fn()}
       />,
     );
@@ -49,6 +51,7 @@ describe("Open Git View action", () => {
         isActive={true}
         paneCount={1}
         onClose={vi.fn()}
+        onRestart={vi.fn()}
       />,
     );
 
@@ -67,6 +70,7 @@ describe("Open Git View action", () => {
           isActive={true}
           paneCount={1}
           onClose={vi.fn()}
+        onRestart={vi.fn()}
           onOpenGitView={onOpenGitView}
         />
       </div>,

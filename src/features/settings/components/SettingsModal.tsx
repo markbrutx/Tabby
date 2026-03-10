@@ -3,14 +3,10 @@ import { useEffect, useState } from "react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
-
-const THEME_OPTIONS = [
-  { value: "system", label: "System" },
-  { value: "dawn", label: "Dawn (light)" },
-  { value: "midnight", label: "Midnight (dark)" },
-];
+import { useThemeStore } from "@/features/theme/application/themeStore";
+import { ThemeSelector } from "@/features/theme/components/ThemeSelector";
+import { ThemeEditorModal } from "@/features/theme/components/ThemeEditorModal";
 
 interface SettingsModalProps {
   settings: SettingsReadModel;
@@ -29,6 +25,11 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [draft, setDraft] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
+  const [editorThemeId, setEditorThemeId] = useState<string | null | undefined>(
+    undefined,
+  );
+  const themes = useThemeStore((s) => s.themes);
+  const importTheme = useThemeStore((s) => s.importTheme);
 
   useEffect(() => {
     setDraft(settings);
@@ -50,6 +51,27 @@ export function SettingsModal({
     onClose();
   }
 
+  function handleImportTheme() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const imported = importTheme(reader.result as string);
+          setDraft((current) => ({ ...current, theme: imported.id }));
+        } catch {
+          // Import failed — invalid file, no action needed
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
@@ -60,7 +82,7 @@ export function SettingsModal({
     >
       <div
         data-testid="settings-modal"
-        className="w-full max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-2xl"
+        className="w-full max-w-xl rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Settings</h2>
@@ -98,27 +120,21 @@ export function SettingsModal({
             </div>
           </label>
 
-          <label className="block">
+          <div>
             <span className="mb-1.5 block text-sm text-[var(--color-text-soft)]">
               Theme
             </span>
-            <Select
-              data-testid="settings-theme"
-              value={draft.theme}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  theme: event.target.value as SettingsReadModel["theme"],
-                }))
+            <ThemeSelector
+              activeThemeId={draft.theme}
+              themes={themes}
+              onSelectTheme={(id) =>
+                setDraft((current) => ({ ...current, theme: id }))
               }
-            >
-              {THEME_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
-          </label>
+              onCreateTheme={() => setEditorThemeId(null)}
+              onEditTheme={(id) => setEditorThemeId(id)}
+              onImportTheme={handleImportTheme}
+            />
+          </div>
 
           <label className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-3 py-2">
             <span className="text-sm">Launch fullscreen</span>
@@ -159,6 +175,13 @@ export function SettingsModal({
           </Button>
         </div>
       </div>
+
+      {editorThemeId !== undefined && (
+        <ThemeEditorModal
+          themeId={editorThemeId}
+          onClose={() => setEditorThemeId(undefined)}
+        />
+      )}
     </div>
   );
 }

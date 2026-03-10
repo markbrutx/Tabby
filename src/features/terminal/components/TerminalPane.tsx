@@ -1,10 +1,10 @@
 import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
-import type { ResolvedTheme } from "@/features/workspace/theme";
+import type { ThemeDefinition } from "@/features/theme/domain/models";
 import { useTerminalSession } from "@/features/terminal/hooks/useTerminalSession";
 
 interface TerminalPaneProps {
   pane: PaneSnapshotModel;
-  theme: ResolvedTheme;
+  theme: ThemeDefinition;
   active: boolean;
   visible: boolean;
 }

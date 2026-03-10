@@ -30,6 +30,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: ["\u2318", "\u2325", "\u2190\u2191\u2192\u2193"], description: "Navigate between panes" },
       { keys: ["\u2318", "]"], description: "Next pane" },
       { keys: ["\u2318", "["], description: "Previous pane" },
+      { keys: ["\u2318", "M"], description: "Toggle collapse pane" },
       { keys: ["\u2318", "\u21e7", "R"], description: "Restart active pane" },
     ],
   },

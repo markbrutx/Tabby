@@ -15,9 +15,13 @@ import { selectActivePane, selectActiveTab } from "@/features/workspace/selector
 import { shellClients } from "@/app-shell/clients";
 import { useWorkspaceStore, useSettingsStore, useRuntimeStore, bootstrapCoordinator } from "@/contexts/stores";
 import type { SetupWizardConfig } from "@/features/workspace/store/types";
-import { applyResolvedTheme, useResolvedTheme } from "@/features/workspace/theme";
+import { useResolvedTheme } from "@/features/workspace/theme";
+import { applyTheme } from "@/features/theme/application/themeApplicator";
+import { useThemeStore } from "@/features/theme/application/themeStore";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
 import { buildWorkspaceSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
+import { useCollapseStore } from "@/features/workspace/application/collapseStore";
+import { collectPaneIds, findNextPane } from "@/features/workspace/layoutReadModel";
 
 function App() {
   const {
@@ -79,6 +83,9 @@ function App() {
     [workspace, runtimes, profiles],
   );
 
+  const collapseStore = useCollapseStore();
+  const initializeThemes = useThemeStore((s) => s.initialize);
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [splitPopup, setSplitPopup] = useState<{
@@ -88,10 +95,29 @@ function App() {
 
   const resolvedTheme = useResolvedTheme(settings?.theme);
 
+  const closePaneWithCleanup = useCallback(
+    async (paneId: string) => {
+      const activeTab = workspaceModel ? selectActiveTab(workspaceModel) : null;
+      if (activeTab) {
+        collapseStore.cleanupPane(activeTab.id, paneId);
+      }
+      await closePane(paneId);
+    },
+    [closePane, workspaceModel, collapseStore],
+  );
+
+  const closeTabWithCleanup = useCallback(
+    async (tabId: string) => {
+      collapseStore.cleanupTab(tabId);
+      await closeTab(tabId);
+    },
+    [closeTab, collapseStore],
+  );
+
   const confirmDialog = useConfirmAction({
     workspace: workspaceModel ?? { tabs: [] },
-    closePane,
-    closeTab,
+    closePane: closePaneWithCleanup,
+    closeTab: closeTabWithCleanup,
   });
 
   useEffect(() => {
@@ -99,7 +125,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    applyResolvedTheme(resolvedTheme);
+    initializeThemes();
+  }, [initializeThemes]);
+
+  useEffect(() => {
+    applyTheme(resolvedTheme);
   }, [resolvedTheme]);
 
   useEffect(() => {
@@ -136,12 +166,47 @@ function App() {
 
   const handleOpenGitView = useCallback(
     (paneId: string, cwd: string) => {
+      const activeTab = workspaceModel ? selectActiveTab(workspaceModel) : null;
+      if (activeTab) {
+        collapseStore.expandPane(activeTab.id, paneId);
+      }
       void splitPane(paneId, "horizontal", {
         kind: "git",
         workingDirectory: cwd,
       });
     },
-    [splitPane],
+    [splitPane, workspaceModel, collapseStore],
+  );
+
+  const handleToggleCollapse = useCallback(
+    (paneId: string) => {
+      if (!workspaceModel) return;
+      const activeTab = selectActiveTab(workspaceModel);
+      if (!activeTab) return;
+
+      const allPaneIds = collectPaneIds(activeTab.layout);
+      const wasCollapsed = collapseStore.isCollapsed(activeTab.id, paneId);
+      const didCollapse = collapseStore.toggleCollapse(activeTab.id, paneId, allPaneIds);
+
+      // If we just collapsed the active pane, focus the next expanded pane
+      if (didCollapse && !wasCollapsed && activeTab.activePaneId === paneId) {
+        const collapsedSet = collapseStore.getCollapsedSet(activeTab.id);
+        const expandedIds = allPaneIds.filter((id) => !collapsedSet.has(id));
+        if (expandedIds.length > 0) {
+          // Find next pane in DFS order that is expanded
+          let candidate = findNextPane(activeTab.layout, paneId);
+          let attempts = allPaneIds.length;
+          while (candidate && collapsedSet.has(candidate) && attempts > 0) {
+            candidate = findNextPane(activeTab.layout, candidate);
+            attempts--;
+          }
+          if (candidate && !collapsedSet.has(candidate)) {
+            void focusPane(activeTab.id, candidate);
+          }
+        }
+      }
+    },
+    [workspaceModel, collapseStore, focusPane],
   );
 
   const handleZoomIn = useCallback(() => {
@@ -176,6 +241,7 @@ function App() {
     onZoomIn: handleZoomIn,
     onZoomOut: handleZoomOut,
     onZoomReset: handleZoomReset,
+    onToggleCollapsePane: handleToggleCollapse,
   });
 
   if (isHydrating) {
@@ -285,11 +351,13 @@ function App() {
                 visible={isActive}
                 modalOpen={modalOpen}
                 gitClient={shellClients.git}
+                collapsedPaneIds={collapseStore.getCollapsedSet(tab.id)}
                 onFocus={focusPane}
                 onRestart={restartPaneRuntime}
                 onClosePane={confirmDialog.requestClosePane}
                 onSwapPaneSlots={handleSwapPaneSlots}
                 onOpenGitView={handleOpenGitView}
+                onToggleCollapse={handleToggleCollapse}
               />
             </div>
           );
@@ -331,6 +399,10 @@ function App() {
           profiles={profiles}
           defaultSpec={activePane.spec}
           onConfirm={(paneSpec) => {
+            const activeTab = workspaceModel ? selectActiveTab(workspaceModel) : null;
+            if (activeTab) {
+              collapseStore.expandPane(activeTab.id, splitPopup.paneId);
+            }
             void splitPane(splitPopup.paneId, splitPopup.direction, paneSpec);
             setSplitPopup(null);
           }}

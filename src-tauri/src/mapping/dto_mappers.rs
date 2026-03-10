@@ -5,8 +5,8 @@ use tabby_contracts::{
     DiffLineKindDto, FileStatusDto, FileStatusKindDto, GitCommandDto, GitRepoStateDto,
     GitResultDto, LayoutPresetDto, PaneRuntimeView, PaneSpecDto, PaneView, ProfileCatalogView,
     ProfileView, RuntimeCommandDto, RuntimeKindDto, RuntimeStatusDto, SettingsCommandDto,
-    SettingsView, SplitDirectionDto, SplitNodeDto, StashEntryDto, TabView, ThemeModeDto,
-    WorkspaceBootstrapView, WorkspaceCommandDto, WorkspaceView,
+    SettingsView, SplitDirectionDto, SplitNodeDto, StashEntryDto, TabView, WorkspaceBootstrapView,
+    WorkspaceCommandDto, WorkspaceView,
 };
 use tabby_git::value_objects::{BranchName, RemoteName, StashId};
 use tabby_git::{
@@ -15,8 +15,7 @@ use tabby_git::{
 };
 use tabby_runtime::{PaneRuntime, RuntimeKind, RuntimeStatus};
 use tabby_settings::{
-    FontSize, ProfileCatalog, ProfileId, SettingsError, ThemeMode, UserPreferences,
-    WorkingDirectory,
+    FontSize, ProfileCatalog, ProfileId, SettingsError, UserPreferences, WorkingDirectory,
 };
 use tabby_workspace::layout::{LayoutPreset, SplitDirection, SplitNode};
 use tabby_workspace::{PaneContentDefinition, PaneId, PaneSpec, TabId, WorkspaceSession};
@@ -38,7 +37,7 @@ pub fn settings_view_from_preferences(preferences: &UserPreferences) -> Settings
         default_working_directory: preferences.default_working_directory.as_str().to_string(),
         default_custom_command: preferences.default_custom_command.clone(),
         font_size: preferences.font_size.value(),
-        theme: theme_mode_to_dto(preferences.theme),
+        theme: preferences.theme.clone(),
         launch_fullscreen: preferences.launch_fullscreen,
         has_completed_onboarding: preferences.has_completed_onboarding,
         last_working_directory: preferences.last_working_directory.clone(),
@@ -54,7 +53,7 @@ pub fn preferences_from_settings_view(
         default_working_directory: WorkingDirectory::new(view.default_working_directory.clone())?,
         default_custom_command: view.default_custom_command.clone(),
         font_size: FontSize::new(view.font_size)?,
-        theme: theme_mode_from_dto(view.theme),
+        theme: view.theme.clone(),
         launch_fullscreen: view.launch_fullscreen,
         has_completed_onboarding: view.has_completed_onboarding,
         last_working_directory: view.last_working_directory.clone(),
@@ -719,22 +718,6 @@ fn layout_preset_to_dto(value: LayoutPreset) -> LayoutPresetDto {
     }
 }
 
-fn theme_mode_to_dto(value: ThemeMode) -> ThemeModeDto {
-    match value {
-        ThemeMode::System => ThemeModeDto::System,
-        ThemeMode::Dawn => ThemeModeDto::Dawn,
-        ThemeMode::Midnight => ThemeModeDto::Midnight,
-    }
-}
-
-fn theme_mode_from_dto(value: ThemeModeDto) -> ThemeMode {
-    match value {
-        ThemeModeDto::System => ThemeMode::System,
-        ThemeModeDto::Dawn => ThemeMode::Dawn,
-        ThemeModeDto::Midnight => ThemeMode::Midnight,
-    }
-}
-
 fn split_node_to_dto(value: &SplitNode) -> SplitNodeDto {
     match value {
         SplitNode::Pane { pane_id } => SplitNodeDto::Pane {
@@ -874,7 +857,7 @@ mod tests {
             default_working_directory: WorkingDirectory::new("/tmp").expect("valid path"),
             default_custom_command: String::from("fish"),
             font_size: FontSize::new(16).expect("valid size"),
-            theme: ThemeMode::Dawn,
+            theme: String::from("dawn"),
             launch_fullscreen: true,
             has_completed_onboarding: true,
             last_working_directory: Some(String::from("/home")),
@@ -888,7 +871,7 @@ mod tests {
         assert_eq!(restored.default_working_directory.as_str(), "/tmp");
         assert_eq!(restored.default_custom_command, "fish");
         assert_eq!(restored.font_size.value(), 16);
-        assert!(matches!(restored.theme, ThemeMode::Dawn));
+        assert_eq!(restored.theme, "dawn");
         assert!(restored.launch_fullscreen);
         assert!(restored.has_completed_onboarding);
         assert_eq!(restored.last_working_directory.as_deref(), Some("/home"));
@@ -954,21 +937,6 @@ mod tests {
             split_direction_from_dto(SplitDirectionDto::Vertical),
             SplitDirection::Vertical
         ));
-    }
-
-    // -- Theme mode mapping -------------------------------------------------
-
-    #[test]
-    fn theme_mode_round_trips() {
-        let modes = [ThemeMode::System, ThemeMode::Dawn, ThemeMode::Midnight];
-        for mode in modes {
-            let dto = theme_mode_to_dto(mode);
-            let restored = theme_mode_from_dto(dto);
-            assert_eq!(
-                std::mem::discriminant(&mode),
-                std::mem::discriminant(&restored)
-            );
-        }
     }
 
     // -- PaneRuntime → PaneRuntimeView --------------------------------------

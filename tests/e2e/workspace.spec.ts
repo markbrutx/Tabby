@@ -1,417 +1,15 @@
 import { expect, test } from "@playwright/test";
+import { createTauriMockScript } from "./fixtures/tauri-mock";
 
 /**
  * Workspace E2E tests.
  *
- * Uses a `__TAURI_INTERNALS__` mock that simulates the Tauri backend
- * so the app's real invoke/listen code paths work against an in-memory
- * workspace.
+ * Uses a shared Tauri mock that simulates the backend so the app's
+ * real invoke/listen code paths work against an in-memory workspace.
  */
 
-function buildTauriMockScript(): string {
-  return `
-    (function () {
-      // ---- state ----
-      const profiles = [
-        { id: "terminal", label: "Terminal", description: "Login shell", startupCommandTemplate: null },
-        { id: "claude", label: "Claude Code", description: "Claude Code", startupCommandTemplate: "claude" },
-        { id: "codex", label: "Codex", description: "Codex", startupCommandTemplate: "codex" },
-        { id: "custom", label: "Custom", description: "Custom command", startupCommandTemplate: null },
-      ];
-
-      let settings = {
-        defaultLayout: "1x1",
-        defaultTerminalProfileId: "terminal",
-        defaultWorkingDirectory: "~/projects",
-        defaultCustomCommand: "",
-        fontSize: 13,
-        theme: "midnight",
-        launchFullscreen: true,
-        hasCompletedOnboarding: true,
-        lastWorkingDirectory: null,
-      };
-
-      let tabCounter = 0;
-      let paneCounter = 0;
-      let sessionCounter = 0;
-      let eventIdCounter = 0;
-      const callbackRegistry = {};
-      const eventListeners = {};
-
-      function nextTabId() { return "tab-" + (++tabCounter); }
-      function nextPaneId() { return "pane-" + (++paneCounter); }
-      function nextSessionId() { return "session-" + (++sessionCounter); }
-
-      function makePaneView(profileId, cwd, commandOverride) {
-        var paneId = nextPaneId();
-        return {
-          paneId: paneId,
-          title: "Pane " + paneCounter,
-          spec: {
-            kind: "terminal",
-            launch_profile_id: profileId || "terminal",
-            working_directory: cwd || "~/projects",
-            command_override: commandOverride || null,
-          },
-        };
-      }
-
-      function makePaneRuntime(paneId) {
-        return {
-          paneId: paneId,
-          runtimeSessionId: nextSessionId(),
-          kind: "terminal",
-          status: "running",
-          lastError: null,
-          browserLocation: null,
-        };
-      }
-
-      function leafNode(paneId) {
-        return { type: "pane", paneId: paneId };
-      }
-
-      function splitNode(direction, first, second) {
-        return { type: "split", direction: direction, ratio: 500, first: first, second: second };
-      }
-
-      function makeTab(paneSpecs) {
-        var tabId = nextTabId();
-        var panes = paneSpecs.map(function (spec) {
-          return makePaneView(
-            spec.launch_profile_id,
-            spec.working_directory,
-            spec.command_override,
-          );
-        });
-        var layout = panes.length === 1
-          ? leafNode(panes[0].paneId)
-          : panes.reduce(function (acc, p, i) {
-              return i === 0 ? leafNode(p.paneId) : splitNode("horizontal", acc, leafNode(p.paneId));
-            }, null);
-
-        return { tabId: tabId, title: "Workspace " + tabCounter, layout: layout, panes: panes, activePaneId: panes[0].paneId };
-      }
-
-      var initialPaneSpec = {
-        launch_profile_id: settings.defaultTerminalProfileId,
-        working_directory: settings.defaultWorkingDirectory,
-        command_override: null,
-      };
-      var workspace = { activeTabId: "", tabs: [] };
-      var initialTab = makeTab([initialPaneSpec]);
-      workspace = { activeTabId: initialTab.tabId, tabs: [initialTab] };
-
-      var runtimes = {};
-      function ensureRuntime(paneId) {
-        if (!runtimes[paneId]) {
-          runtimes[paneId] = makePaneRuntime(paneId);
-        }
-        return runtimes[paneId];
-      }
-
-      workspace.tabs.forEach(function (tab) {
-        tab.panes.forEach(function (p) { ensureRuntime(p.paneId); });
-      });
-
-      function currentView() {
-        return JSON.parse(JSON.stringify(workspace));
-      }
-
-      function allRuntimes() {
-        return Object.values(runtimes);
-      }
-
-      function emitEvent(eventName, payload) {
-        var listeners = eventListeners[eventName] || [];
-        listeners.forEach(function (entry) {
-          var cb = callbackRegistry[entry.handlerId];
-          if (cb) {
-            cb({ event: eventName, id: entry.eventId, payload: payload });
-          }
-        });
-      }
-
-      function emitTerminalOutput(paneId) {
-        var rt = runtimes[paneId];
-        if (!rt) return;
-        setTimeout(function () {
-          emitEvent("terminal_output_received", {
-            paneId: paneId,
-            runtimeSessionId: rt.runtimeSessionId,
-            chunk: "\\r\\nTerminal ready at " + paneId + "\\r\\n$ ",
-          });
-        }, 50);
-      }
-
-      function emitInitialOutput() {
-        workspace.tabs.forEach(function (tab) {
-          tab.panes.forEach(function (p) { emitTerminalOutput(p.paneId); });
-        });
-      }
-
-      function rebuildLayout(node, removedPaneId) {
-        if (node.type === "pane") {
-          return node.paneId === removedPaneId ? null : node;
-        }
-        var first = rebuildLayout(node.first, removedPaneId);
-        var second = rebuildLayout(node.second, removedPaneId);
-        if (!first) return second;
-        if (!second) return first;
-        return { type: "split", direction: node.direction, ratio: node.ratio, first: first, second: second };
-      }
-
-      window.__TAURI_INTERNALS__ = {
-        transformCallback: function (callback, once) {
-          var id = ++eventIdCounter;
-          if (once) {
-            callbackRegistry[id] = function () {
-              callback.apply(null, arguments);
-              delete callbackRegistry[id];
-            };
-          } else {
-            callbackRegistry[id] = callback;
-          }
-          return id;
-        },
-
-        invoke: function (cmd, args) {
-          if (cmd === "plugin:event|listen") {
-            var eventName = args.event;
-            var handlerId = args.handler;
-            var eid = ++eventIdCounter;
-            if (!eventListeners[eventName]) eventListeners[eventName] = [];
-            eventListeners[eventName].push({ handlerId: handlerId, eventId: eid });
-            if (eventName === "terminal_output_received") {
-              setTimeout(emitInitialOutput, 100);
-            }
-            return Promise.resolve(eid);
-          }
-
-          if (cmd === "plugin:event|unlisten") {
-            var evName = args.event;
-            var evId = args.eventId;
-            if (eventListeners[evName]) {
-              eventListeners[evName] = eventListeners[evName].filter(function (e) { return e.eventId !== evId; });
-            }
-            return Promise.resolve();
-          }
-
-          if (cmd === "bootstrap_shell") {
-            return Promise.resolve({
-              workspace: currentView(),
-              settings: JSON.parse(JSON.stringify(settings)),
-              profileCatalog: { terminalProfiles: profiles.slice() },
-              runtimeProjections: allRuntimes(),
-            });
-          }
-
-          if (cmd === "dispatch_workspace_command") {
-            return handleWorkspaceCommand(args.command);
-          }
-
-          if (cmd === "dispatch_settings_command") {
-            if (args.command.kind === "update") {
-              settings = args.command.settings;
-            }
-            return Promise.resolve(JSON.parse(JSON.stringify(settings)));
-          }
-
-          if (cmd === "dispatch_runtime_command") {
-            var rCmd = args.command;
-            if (rCmd.kind === "writeTerminalInput") {
-              emitEvent("terminal_output_received", {
-                paneId: rCmd.pane_id,
-                runtimeSessionId: (runtimes[rCmd.pane_id] || {}).runtimeSessionId || "",
-                chunk: rCmd.input,
-              });
-            }
-            return Promise.resolve(null);
-          }
-
-          if (cmd === "dispatch_browser_surface_command") {
-            return Promise.resolve(null);
-          }
-
-          return Promise.resolve(null);
-        },
-      };
-
-      function handleWorkspaceCommand(command) {
-        switch (command.kind) {
-          case "openTab": {
-            var specs = command.pane_specs || [initialPaneSpec];
-            var newTab = makeTab(specs);
-            newTab.panes.forEach(function (p) { ensureRuntime(p.paneId); });
-            workspace = {
-              activeTabId: newTab.tabId,
-              tabs: workspace.tabs.concat([newTab]),
-            };
-            newTab.panes.forEach(function (p) { emitTerminalOutput(p.paneId); });
-            emitEvent("workspace_projection_updated", { workspace: currentView() });
-            return Promise.resolve(currentView());
-          }
-
-          case "closeTab": {
-            workspace = {
-              activeTabId: workspace.activeTabId === command.tab_id
-                ? (workspace.tabs.filter(function (t) { return t.tabId !== command.tab_id; })[0] || { tabId: "" }).tabId
-                : workspace.activeTabId,
-              tabs: workspace.tabs.filter(function (t) { return t.tabId !== command.tab_id; }),
-            };
-            if (workspace.tabs.length === 0) {
-              var fresh = makeTab([initialPaneSpec]);
-              fresh.panes.forEach(function (p) { ensureRuntime(p.paneId); });
-              workspace = { activeTabId: fresh.tabId, tabs: [fresh] };
-              fresh.panes.forEach(function (p) { emitTerminalOutput(p.paneId); });
-            }
-            return Promise.resolve(currentView());
-          }
-
-          case "setActiveTab": {
-            workspace = { activeTabId: command.tab_id, tabs: workspace.tabs };
-            return Promise.resolve(currentView());
-          }
-
-          case "focusPane": {
-            workspace = {
-              activeTabId: command.tab_id,
-              tabs: workspace.tabs.map(function (t) {
-                return t.tabId === command.tab_id
-                  ? Object.assign({}, t, { activePaneId: command.pane_id })
-                  : t;
-              }),
-            };
-            return Promise.resolve(currentView());
-          }
-
-          case "splitPane": {
-            var tabIdx = -1;
-            for (var i = 0; i < workspace.tabs.length; i++) {
-              if (workspace.tabs[i].panes.some(function (p) { return p.paneId === command.pane_id; })) {
-                tabIdx = i;
-                break;
-              }
-            }
-            if (tabIdx === -1) return Promise.reject("Pane not found");
-
-            var tab = workspace.tabs[tabIdx];
-            var newPaneView = makePaneView(
-              command.pane_spec.launch_profile_id,
-              command.pane_spec.working_directory,
-              command.pane_spec.command_override,
-            );
-            ensureRuntime(newPaneView.paneId);
-
-            var newLayout = splitNode(
-              command.direction,
-              tab.layout,
-              leafNode(newPaneView.paneId),
-            );
-
-            var updatedTab = Object.assign({}, tab, {
-              layout: newLayout,
-              panes: tab.panes.concat([newPaneView]),
-            });
-
-            workspace = {
-              activeTabId: workspace.activeTabId,
-              tabs: workspace.tabs.map(function (t, idx) { return idx === tabIdx ? updatedTab : t; }),
-            };
-
-            emitTerminalOutput(newPaneView.paneId);
-            emitEvent("workspace_projection_updated", { workspace: currentView() });
-            return Promise.resolve(currentView());
-          }
-
-          case "closePane": {
-            var closedTabIdx = -1;
-            for (var j = 0; j < workspace.tabs.length; j++) {
-              if (workspace.tabs[j].panes.some(function (p) { return p.paneId === command.pane_id; })) {
-                closedTabIdx = j;
-                break;
-              }
-            }
-            if (closedTabIdx === -1) return Promise.reject("Pane not found");
-
-            var closedTab = workspace.tabs[closedTabIdx];
-            var remainingPanes = closedTab.panes.filter(function (p) { return p.paneId !== command.pane_id; });
-
-            if (remainingPanes.length === 0) {
-              workspace = {
-                activeTabId: workspace.activeTabId,
-                tabs: workspace.tabs.filter(function (_, idx) { return idx !== closedTabIdx; }),
-              };
-              if (workspace.tabs.length === 0) {
-                var autoTab = makeTab([initialPaneSpec]);
-                autoTab.panes.forEach(function (p) { ensureRuntime(p.paneId); });
-                workspace = { activeTabId: autoTab.tabId, tabs: [autoTab] };
-                autoTab.panes.forEach(function (p) { emitTerminalOutput(p.paneId); });
-              } else {
-                workspace = { activeTabId: workspace.tabs[0].tabId, tabs: workspace.tabs };
-              }
-            } else {
-              var newActivePaneId = closedTab.activePaneId === command.pane_id
-                ? remainingPanes[0].paneId
-                : closedTab.activePaneId;
-              var newClosedLayout = remainingPanes.length === 1
-                ? leafNode(remainingPanes[0].paneId)
-                : rebuildLayout(closedTab.layout, command.pane_id);
-
-              var updatedClosedTab = Object.assign({}, closedTab, {
-                panes: remainingPanes,
-                activePaneId: newActivePaneId,
-                layout: newClosedLayout,
-              });
-              workspace = {
-                activeTabId: workspace.activeTabId,
-                tabs: workspace.tabs.map(function (t, idx) { return idx === closedTabIdx ? updatedClosedTab : t; }),
-              };
-            }
-
-            delete runtimes[command.pane_id];
-            return Promise.resolve(currentView());
-          }
-
-          case "replacePaneSpec": {
-            workspace = {
-              activeTabId: workspace.activeTabId,
-              tabs: workspace.tabs.map(function (t) {
-                return Object.assign({}, t, {
-                  panes: t.panes.map(function (p) {
-                    return p.paneId === command.pane_id
-                      ? Object.assign({}, p, { spec: command.pane_spec })
-                      : p;
-                  }),
-                });
-              }),
-            };
-            return Promise.resolve(currentView());
-          }
-
-          case "restartPaneRuntime": {
-            if (runtimes[command.pane_id]) {
-              runtimes[command.pane_id] = makePaneRuntime(command.pane_id);
-              runtimes[command.pane_id].paneId = command.pane_id;
-              emitTerminalOutput(command.pane_id);
-              emitEvent("runtime_status_changed", { runtime: runtimes[command.pane_id] });
-            }
-            return Promise.resolve(currentView());
-          }
-
-          case "swapPaneSlots":
-            return Promise.resolve(currentView());
-
-          default:
-            return Promise.resolve(currentView());
-        }
-      }
-    })();
-  `;
-}
-
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript({ content: buildTauriMockScript() });
+  await page.addInitScript({ content: createTauriMockScript() });
   await page.goto("/");
   await page.locator("[data-active]").first().waitFor({ state: "visible", timeout: 10_000 });
 });
@@ -419,7 +17,6 @@ test.beforeEach(async ({ page }) => {
 test("bootstraps with a single terminal pane", async ({ page }) => {
   const tabs = page.locator('[data-testid^="tab-"]');
   await expect(tabs.first()).toBeVisible();
-  // [data-active] is unique to TerminalPane components
   await expect(page.locator("[data-active]")).toHaveCount(1);
 });
 
@@ -433,7 +30,6 @@ test("switches tabs by clicking", async ({ page }) => {
   await page.keyboard.press("Meta+t");
   await expect(page.locator('[data-testid^="tab-"]')).toHaveCount(2, { timeout: 5_000 });
 
-  // Click the first tab to switch back
   await page.locator('[data-testid^="tab-"]').first().click();
   await expect(page.locator('[data-testid^="pane-"]:visible').first()).toBeVisible();
 });
@@ -442,7 +38,6 @@ test("closes tab with close button", async ({ page }) => {
   await page.keyboard.press("Meta+t");
   await expect(page.locator('[data-testid^="tab-"]')).toHaveCount(2, { timeout: 5_000 });
 
-  // Click the close button on the second tab
   const closeButton = page.locator('[data-testid^="close-tab-"]').last();
   await closeButton.click();
   await expect(page.locator('[data-testid^="tab-"]')).toHaveCount(1, { timeout: 5_000 });
@@ -454,7 +49,6 @@ test("creates new tab via + button", async ({ page }) => {
 });
 
 test("pane focus via keyboard (Alt+Arrow)", async ({ page }) => {
-  // Split to get two panes
   await page.keyboard.press("Meta+d");
   const dialog = page.locator("[role=dialog]");
   await expect(dialog).toBeVisible({ timeout: 3_000 });
@@ -464,7 +58,6 @@ test("pane focus via keyboard (Alt+Arrow)", async ({ page }) => {
   const panes = page.locator("[data-active]");
   await expect(panes).toHaveCount(2, { timeout: 5_000 });
 
-  // Click first pane to focus it
   await panes.nth(0).click();
   await expect(panes.nth(0)).toHaveAttribute("data-active", "true");
 });
@@ -478,7 +71,7 @@ test("saves settings and closes modal", async ({ page }) => {
   await page.keyboard.press("Meta+,");
   await expect(page.getByTestId("settings-modal")).toBeVisible({ timeout: 3_000 });
 
-  await page.getByTestId("settings-layout").selectOption("2x2");
+  await page.getByTestId("theme-card-dawn").click();
   await page.getByTestId("save-settings").click();
 
   await expect(page.getByTestId("settings-modal")).toHaveCount(0, { timeout: 3_000 });
@@ -489,15 +82,97 @@ test("restarts pane with Cmd+Shift+R", async ({ page }) => {
   await pane.click();
   await page.keyboard.press("Meta+Shift+r");
 
-  // Pane should still be visible after restart
   await expect(pane).toBeVisible();
 });
 
 test("Cmd+W closes active pane", async ({ page }) => {
   await page.keyboard.press("Meta+w");
 
-  // Should still have a tab (auto-created after last pane closed)
   await expect(page.locator('[data-testid^="tab-"]').first()).toBeVisible({ timeout: 5_000 });
-  // A new terminal pane should appear
   await expect(page.locator("[data-active]").first()).toBeVisible({ timeout: 5_000 });
+});
+
+// ---------- Additional workspace tests ----------
+
+test("tab rename via double-click", async ({ page }) => {
+  const firstTab = page.getByTestId("tab-1");
+  await firstTab.dblclick();
+
+  const renameInput = page.getByTestId("tab-rename-input-1");
+  await expect(renameInput).toBeVisible({ timeout: 3_000 });
+
+  await renameInput.fill("My Terminal");
+  await renameInput.press("Enter");
+
+  await expect(page.getByText("My Terminal")).toBeVisible({ timeout: 3_000 });
+});
+
+test("multi-tab workflow: create tabs, switch, close", async ({ page }) => {
+  // Create a second tab via wizard
+  await page.keyboard.press("Meta+t");
+  const wizardCreate = page.getByTestId("wizard-create");
+  await expect(wizardCreate).toBeVisible({ timeout: 3_000 });
+  await wizardCreate.click();
+  await expect(page.locator('[data-testid^="tab-"]')).toHaveCount(2, { timeout: 5_000 });
+
+  // Switch between tabs
+  await page.getByTestId("tab-1").click();
+  await page.getByTestId("tab-2").click();
+
+  // Close the second tab (use last close button)
+  await page.locator('[data-testid^="close-tab-"]').last().click();
+
+  // If a confirm dialog appears, confirm it
+  const confirmOk = page.getByTestId("confirm-ok");
+  if (await confirmOk.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await confirmOk.click();
+  }
+
+  await expect(page.locator('[data-testid^="tab-"]')).toHaveCount(1, { timeout: 5_000 });
+});
+
+test("wizard creates tab with custom name", async ({ page }) => {
+  await page.keyboard.press("Meta+t");
+
+  const wizardTitle = page.getByTestId("wizard-title");
+  await expect(wizardTitle).toBeVisible({ timeout: 3_000 });
+
+  // Change workspace name
+  const nameInput = page.getByTestId("workspace-name-input");
+  if (await nameInput.isVisible()) {
+    await nameInput.fill("Dev Environment");
+  }
+
+  // Create the workspace
+  const createBtn = page.getByTestId("wizard-create");
+  await expect(createBtn).toBeVisible({ timeout: 3_000 });
+  await createBtn.click();
+
+  // New tab should exist
+  await expect(page.locator('[data-testid^="tab-"]')).toHaveCount(2, { timeout: 5_000 });
+});
+
+test("close last tab auto-creates new one", async ({ page }) => {
+  // Close the only tab
+  await page.locator('[data-testid="close-tab-1"]').click();
+
+  // A new tab should auto-appear
+  await expect(page.locator('[data-testid^="tab-"]').first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator("[data-active]").first()).toBeVisible({ timeout: 5_000 });
+});
+
+test("Cmd+Shift+W closes entire tab", async ({ page }) => {
+  // Split to get 2 panes in the tab
+  await page.keyboard.press("Meta+d");
+  const dialog = page.locator("[role=dialog]");
+  await expect(dialog).toBeVisible({ timeout: 3_000 });
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0, { timeout: 3_000 });
+  await expect(page.locator("[data-active]")).toHaveCount(2, { timeout: 5_000 });
+
+  // Close entire tab
+  await page.keyboard.press("Meta+Shift+w");
+
+  // Auto-created tab should appear
+  await expect(page.locator('[data-testid^="tab-"]').first()).toBeVisible({ timeout: 5_000 });
 });

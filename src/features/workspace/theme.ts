@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { ITheme } from "xterm";
-import type { ThemeMode } from "@/features/settings/domain/models";
+import type { ThemeKind, ThemeDefinition } from "@/features/theme/domain/models";
+import { applyTheme } from "@/features/theme/application/themeApplicator";
+import { useThemeStore } from "@/features/theme/application/themeStore";
 
-export type ResolvedTheme = Exclude<ThemeMode, "system">;
-
-const TERMINAL_THEMES: Record<ResolvedTheme, ITheme> = {
-  dawn: {
+const TERMINAL_THEMES: Record<ThemeKind, ITheme> = {
+  light: {
     background: "#fff7f1",
     foreground: "#5f463b",
     cursor: "#db735b",
@@ -27,7 +27,7 @@ const TERMINAL_THEMES: Record<ResolvedTheme, ITheme> = {
     brightCyan: "#98cad0",
     brightWhite: "#ffffff",
   },
-  midnight: {
+  dark: {
     background: "#130c08",
     foreground: "#f8ece2",
     cursor: "#e97d61",
@@ -51,59 +51,35 @@ const TERMINAL_THEMES: Record<ResolvedTheme, ITheme> = {
   },
 };
 
-function getSystemPrefersDark(): boolean {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return true;
-  }
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+export function getTerminalTheme(kind: ThemeKind): ITheme {
+  return TERMINAL_THEMES[kind];
 }
 
-export function resolveThemeMode(
-  themeMode: ThemeMode | undefined,
-  prefersDark: boolean,
-): ResolvedTheme {
-  if (!themeMode || themeMode === "system") {
-    return prefersDark ? "midnight" : "dawn";
-  }
-
-  return themeMode;
+export function applyResolvedTheme(theme: ThemeDefinition): void {
+  applyTheme(theme);
 }
 
-export function applyResolvedTheme(theme: ResolvedTheme): void {
-  if (typeof document === "undefined") {
-    return;
-  }
-
-  const root = document.documentElement;
-  root.dataset.theme = theme;
-  root.style.colorScheme = theme === "dawn" ? "light" : "dark";
-}
-
-export function getTerminalTheme(theme: ResolvedTheme): ITheme {
-  return TERMINAL_THEMES[theme];
-}
-
-export function useResolvedTheme(themeMode: ThemeMode | undefined): ResolvedTheme {
-  const [prefersDark, setPrefersDark] = useState(getSystemPrefersDark);
+export function useResolvedTheme(themeId: string | undefined): ThemeDefinition {
+  const selectTheme = useThemeStore((s) => s.selectTheme);
+  const resolveSystemTheme = useThemeStore((s) => s.resolveSystemTheme);
+  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return;
+    if (themeId) {
+      selectTheme(themeId);
     }
+  }, [themeId, selectTheme]);
 
-    if (themeMode && themeMode !== "system") {
-      return;
-    }
+  useEffect(() => {
+    if (!themeId || themeId !== "system") return;
+    if (typeof window === "undefined") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = () => setPrefersDark(mediaQuery.matches);
-
-    handleChange();
+    const handleChange = () => resolveSystemTheme();
 
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
-  }, [themeMode]);
+  }, [themeId, resolveSystemTheme]);
 
-  return resolveThemeMode(themeMode, prefersDark);
+  return resolvedTheme;
 }
