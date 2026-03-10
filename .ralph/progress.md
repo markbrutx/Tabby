@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-03-10 11:58 - GIT-040: Add 'Open Git' action from terminal pane context
+Thread:
+Run: 20260310-012951-93839 (iteration 42)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-42.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-42.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 130ff65 feat: add Open Git View action to terminal pane header (GIT-040)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (467 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (312 tests)
+- Files changed:
+  - src/features/terminal/components/PaneHeader.tsx (added GitBranch button with onOpenGitView callback)
+  - src/features/terminal/components/PaneHeader.test.tsx (added 4 tests for git button visibility)
+  - src/features/terminal/components/OpenGitViewAction.test.tsx (new - 4 integration tests)
+  - src/features/workspace/components/SplitTreeRenderer.tsx (added onOpenGitView to context and PaneLeaf wiring)
+  - src/features/workspace/components/SplitTreeRenderer.test.tsx (updated defaultHandlers with onOpenGitView)
+  - src/App.tsx (added handleOpenGitView callback using splitPane with GitPaneSpec)
+- Added GitBranch icon button to terminal PaneHeader that splits horizontally with a Git pane
+- Button only visible when terminal has valid cwd and onOpenGitView is provided
+- Action uses splitPane workspace store action with GitPaneSpec targeting terminal's cwd
+- Git pane handles non-git-repo errors internally (shows error state in GitPane component)
+- **Learnings for future iterations:**
+  - PaneHeader props are threaded through SplitTreeCtx context, so adding new actions requires updating ctx interface + props + public component
+  - Git error handling for non-repo directories is already built into GitPane (no additional error handling needed at the action level)
+  - stopPropagation on header buttons prevents triggering pane focus events
+---
+
 ## 2026-03-10 11:52 - GIT-039: Add Git option to SplitPopup pane type selector
 Thread:
 Run: 20260310-012951-93839 (iteration 41)
