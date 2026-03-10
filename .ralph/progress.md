@@ -237,3 +237,37 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - All PaneRuntime struct literals in tests must be updated when adding new fields
   - cargo fmt must be run after editing Rust test code with long assertions
 ---
+
+## 2026-03-10 02:02 - GIT-008: Add Git DTOs to tabby-contracts
+Thread:
+Run: 20260310-012951-93839 (iteration 8)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-8.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-8.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 71f5f5b feat: add GitCommandDto and GitResultDto to tabby-contracts (GIT-008)
+- Post-commit status: clean
+- Verification:
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (all 172 Rust tests + 17 new DTO tests)
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+- Files changed:
+  - src-tauri/crates/tabby-contracts/Cargo.toml (added serde_json dev-dependency)
+  - src-tauri/crates/tabby-contracts/src/lib.rs (added git_dtos module and re-exports)
+  - src-tauri/crates/tabby-contracts/src/git_dtos.rs (new file: GitCommandDto, GitResultDto, supporting DTO types)
+  - src-tauri/Cargo.lock (updated)
+- What was implemented:
+  - PaneSpecDto::Git, RuntimeKindDto::Git, PaneRuntimeView.git_repo_path were already done in prior iterations
+  - Added GitCommandDto tagged enum with all 22 command variants (Status, Diff, Stage, Unstage, StageLines, Commit, Push, Pull, Fetch, Branches, CheckoutBranch, CreateBranch, DeleteBranch, MergeBranch, Log, Blame, StashPush, StashPop, StashList, StashDrop, DiscardChanges, RepoState)
+  - Added GitResultDto tagged enum with corresponding result variants
+  - Added supporting DTO types: FileStatusDto, FileStatusKindDto, DiffLineDto, DiffLineKindDto, DiffHunkDto, DiffContentDto, CommitInfoDto, BranchInfoDto, BlameEntryDto, StashEntryDto, GitRepoStateDto
+  - All DTOs derive Serialize, Deserialize, Debug, Clone, Type (specta)
+  - 17 comprehensive tests including serialization roundtrips and variant uniqueness verification
+- **Learnings for future iterations:**
+  - `rename_all = "camelCase"` on serde internally-tagged enums (`#[serde(tag = "kind")]`) only affects the tag discriminant values, NOT field names within struct variants. Fields remain snake_case unless explicitly renamed.
+  - Existing codebase pattern (WorkspaceCommandDto, RuntimeCommandDto) uses the same approach — tag values are camelCase, fields are snake_case in JSON.
+  - `cargo fmt` must be run from `src-tauri/` directory (needs Cargo.toml in CWD).
+---
