@@ -2,6 +2,8 @@ import { listen } from "@tauri-apps/api/event";
 import { commands, type Result } from "@/contracts/tauri-bindings";
 import type {
   BrowserSurfaceCommandDto,
+  GitCommandDto,
+  GitResultDto,
   PaneRuntimeView,
   RuntimeCommandDto,
   SettingsCommandDto,
@@ -41,10 +43,15 @@ export interface RuntimeClient {
   ) => Promise<UnlistenFn>;
 }
 
+export interface GitClient {
+  dispatch: (command: GitCommandDto) => Promise<GitResultDto>;
+}
+
 export interface AppShellClients {
   workspace: WorkspaceClient;
   settings: SettingsClient;
   runtime: RuntimeClient;
+  git: GitClient;
 }
 
 const WORKSPACE_PROJECTION_UPDATED_EVENT = "workspace_projection_updated";
@@ -125,6 +132,11 @@ export function createTauriShellClients(): AppShellClients {
           TERMINAL_OUTPUT_RECEIVED_EVENT,
           (event) => handler(event.payload),
         );
+      },
+    },
+    git: {
+      async dispatch(command) {
+        return unwrapResult(await commands.dispatchGitCommand(command));
       },
     },
   };

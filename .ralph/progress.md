@@ -776,3 +776,30 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - Domain model types for Git were added incrementally across GIT-019 to GIT-022; GIT-023 was mostly already complete
   - When a story's AC overlaps with prior work, verify each criterion individually before concluding
 ---
+
+## 2026-03-10 10:10 - GIT-024: Create features/git domain models
+Thread:
+Run: 20260310-012951-93839 (iteration 26)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-26.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-26.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 253ec26 feat: add TypeScript domain models for Git feature (GIT-024)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run typecheck -> PASS
+  - Command: bun run lint -> PASS
+  - Command: bun run test -> PASS (207 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (312 tests)
+- Files changed:
+  - src/features/git/domain/models.ts (new)
+- Created readonly TypeScript domain interfaces and union types for all Git data:
+  FileStatus, DiffContent, DiffHunk, DiffLine, CommitInfo, BranchInfo, BlameEntry, StashEntry, GitRepoState,
+  and union types FileStatusKind and DiffLineKind.
+  All types use `readonly` modifiers and `readonly` arrays for immutability.
+- **Learnings for future iterations:**
+  - Frontend domain models follow the pattern in runtime/domain/models.ts — readonly interfaces with JSDoc header
+  - Types mirror the DTO shapes from tauri-bindings.ts but without Dto suffix and with readonly arrays
+---
