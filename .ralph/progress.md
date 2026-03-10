@@ -1,5 +1,45 @@
 # Progress Log
 
+## 2026-03-10 11:15 - GIT-033: Create CommitPanel component
+Thread:
+Run: 20260310-012951-93839 (iteration 35)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-35.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-35.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: be4da2a feat: add CommitPanel component with amend support (GIT-033)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (394 tests, 26 suites)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (563 tests across all crates)
+- Files changed:
+  - src/features/git/components/CommitPanel.tsx (NEW)
+  - src/features/git/components/CommitPanel.test.tsx (NEW, 13 tests)
+  - src/features/git/components/GitPane.tsx (integrated CommitPanel)
+  - src/features/git/application/useGitPaneStore.ts (added commit + fetchLastCommitInfo actions)
+  - src-tauri/crates/tabby-contracts/src/git_dtos.rs (added amend field to Commit)
+  - src-tauri/src/application/commands.rs (added amend to GitCommand::Commit)
+  - src-tauri/src/application/ports.rs (added amend param to commit trait method)
+  - src-tauri/src/application/git_service.rs (threaded amend through)
+  - src-tauri/src/infrastructure/cli_git_adapter.rs (--amend flag support)
+  - src-tauri/src/mapping/dto_mappers.rs (amend mapping)
+  - src/contracts/tauri-bindings.ts (amend field in commit DTO)
+  - src/app-shell/clients/mockGitClient.test.ts (fixed for amend field)
+- What was implemented:
+  - CommitPanel component with textarea, commit button, staged count, amend checkbox, author display, Cmd+Enter shortcut, error display
+  - Full amend support through Rust backend: contracts → commands → ports → service → adapter → mappers
+  - Store actions: commit() and fetchLastCommitInfo() in useGitPaneStore
+  - CommitPanel uses callback props (not direct gitClient) to respect DTO boundary rules
+- **Learnings for future iterations:**
+  - DTO boundary checker enforces no snake_case fields in component files; always dispatch via store actions or application layer
+  - The `onFetchLastCommitInfo` pattern keeps components clean of transport concerns
+  - Amend requires changes across 7+ Rust files when adding a new field to a command DTO
+---
+
 ## 2026-03-10 11:00 - GIT-032: Add lightweight syntax highlighting to DiffViewer
 Thread:
 Run: 20260310-012951-93839 (iteration 34)
