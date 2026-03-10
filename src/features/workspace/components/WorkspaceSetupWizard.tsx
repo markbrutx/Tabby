@@ -2,49 +2,14 @@ import { GitBranch, Globe, Terminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
-import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain/models";
 import type { ProfileReadModel, SettingsReadModel } from "@/features/settings/domain/models";
 import type { PaneGroupConfig, SetupWizardConfig } from "@/features/workspace/store/types";
+import { makeDefaultGroup } from "@/features/workspace/domain/wizardDefaults";
 import { isFieldValuesValid } from "./PaneConfigurator";
 import { LayoutPreview } from "./LayoutPreview";
 import { PaneGroupRow, groupToFieldValues } from "./PaneGroupRow";
 
 const MAX_PANES = 9;
-
-function resolveDefaultProfileId(
-  settings: SettingsReadModel,
-  profiles: ProfileReadModel[],
-): string {
-  const configured = settings.defaultTerminalProfileId?.trim();
-  if (configured && profiles.some((profile) => profile.id === configured)) {
-    return configured;
-  }
-
-  return profiles.find((profile) => profile.id === "terminal")?.id
-    ?? profiles[0]?.id
-    ?? "terminal";
-}
-
-function makeDefaultGroup(
-  mode: PaneGroupConfig["mode"],
-  settings: SettingsReadModel,
-  profiles: ProfileReadModel[],
-): PaneGroupConfig {
-  switch (mode) {
-    case "terminal":
-      return {
-        mode: "terminal",
-        profileId: resolveDefaultProfileId(settings, profiles),
-        workingDirectory: settings.defaultWorkingDirectory || settings.lastWorkingDirectory || "",
-        customCommand: settings.defaultCustomCommand ?? "",
-        count: 1,
-      };
-    case "browser":
-      return { mode: "browser", url: DEFAULT_BROWSER_URL, count: 1 };
-    case "git":
-      return { mode: "git", workingDirectory: settings.defaultWorkingDirectory ?? "", count: 1 };
-  }
-}
 
 interface WorkspaceSetupWizardProps {
   profiles: ProfileReadModel[];

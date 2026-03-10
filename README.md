@@ -8,6 +8,25 @@
 
 Tabby gives you browser-style tabs, split-pane layouts, live terminal sessions, and per-pane launch profiles — all in one native app. Press `Cmd+T`, pick a layout, and start working across multiple terminals without losing context.
 
+<div align="center">
+  <br />
+  <b>Built-in Profiles & Integrations:</b><br /><br />
+  <img src="https://img.shields.io/badge/Terminal-2C2C2C?style=for-the-badge&logo=gnu-bash&logoColor=white" alt="Terminal" />
+  <img src="https://img.shields.io/badge/Claude_Code-D97757?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Code" />
+  <img src="https://img.shields.io/badge/Codex-2D7866?style=for-the-badge&logo=openai&logoColor=white" alt="Codex" />
+  <img src="https://img.shields.io/badge/Web_Browser-4285F4?style=for-the-badge&logo=safari&logoColor=white" alt="Browser" />
+  <img src="https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white" alt="Git" />
+  <br /><br />
+  <b>Powered by:</b><br /><br />
+  <img src="https://img.shields.io/badge/Tauri-FFC131?style=for-the-badge&logo=tauri&logoColor=white" alt="Tauri" />
+  <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust" />
+  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind" />
+  <img src="https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white" alt="Bun" />
+  <br /><br />
+</div>
+
 ## Why Tabby?
 
 - **One window, many terminals** — tabs hold independent workspace layouts, each with its own split configuration

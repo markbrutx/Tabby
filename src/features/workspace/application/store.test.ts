@@ -169,18 +169,6 @@ describe("createWorkspaceStore", () => {
     expect(store.getState().error).toBeNull();
   });
 
-  it("shows wizard tab when workspace has no tabs", async () => {
-    const deps = makeMockDeps();
-    const store = createWorkspaceStore(deps);
-
-    await store.getState().loadBootstrap(
-      makeWorkspaceReadModel({ tabs: [], activeTabId: "" }),
-    );
-
-    expect(store.getState().wizardTab).not.toBeNull();
-    expect(store.getState().wizardTab?.title).toBe("New Workspace");
-  });
-
   it("dispatches setActiveTab command and updates workspace state", async () => {
     const updatedView = makeWorkspaceView({ activeTabId: "t2" });
     const deps = makeMockDeps({
@@ -287,46 +275,6 @@ describe("createWorkspaceStore", () => {
     await closePromise;
 
     expect(store.getState().isWorking).toBe(false);
-  });
-
-  it("openSetupWizard creates a wizard tab", async () => {
-    const deps = makeMockDeps();
-    const store = createWorkspaceStore(deps);
-
-    await store.getState().loadBootstrap(makeWorkspaceReadModel());
-
-    expect(store.getState().wizardTab).toBeNull();
-
-    store.getState().openSetupWizard();
-
-    expect(store.getState().wizardTab).not.toBeNull();
-    expect(store.getState().wizardTab?.title).toBe("New Workspace");
-  });
-
-  it("closeSetupWizard clears wizard when tabs exist", async () => {
-    const deps = makeMockDeps();
-    const store = createWorkspaceStore(deps);
-
-    await store.getState().loadBootstrap(makeWorkspaceReadModel());
-
-    store.getState().openSetupWizard();
-    expect(store.getState().wizardTab).not.toBeNull();
-
-    store.getState().closeSetupWizard();
-    expect(store.getState().wizardTab).toBeNull();
-  });
-
-  it("closeSetupWizard keeps wizard when no tabs exist", async () => {
-    const deps = makeMockDeps();
-    const store = createWorkspaceStore(deps);
-
-    await store.getState().loadBootstrap(
-      makeWorkspaceReadModel({ tabs: [], activeTabId: "" }),
-    );
-    expect(store.getState().wizardTab).not.toBeNull();
-
-    store.getState().closeSetupWizard();
-    expect(store.getState().wizardTab).not.toBeNull();
   });
 
   it("createTabFromWizard dispatches openTab and calls onWizardComplete", async () => {

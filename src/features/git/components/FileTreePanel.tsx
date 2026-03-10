@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { FileStatus, FileStatusKind } from "@/features/git/domain/models";
+import { useFileTreeState } from "@/features/git/hooks/useFileTreeState";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -253,37 +254,10 @@ export function FileTreePanel({
   onDiscardChanges,
   onBlameFile,
 }: FileTreePanelProps) {
-  const [stagedExpanded, setStagedExpanded] = useState(true);
-  const [unstagedExpanded, setUnstagedExpanded] = useState(true);
-  const [discardTarget, setDiscardTarget] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent, filePath: string) => {
-      if (onBlameFile) {
-        setContextMenu({ x: e.clientX, y: e.clientY, filePath });
-      }
-    },
-    [onBlameFile],
-  );
-
-  const handleCloseContextMenu = useCallback(() => {
-    setContextMenu(null);
-  }, []);
+  const tree = useFileTreeState(!!onBlameFile);
 
   const stagedFiles = categorizeStagedFiles(files);
   const unstagedFiles = categorizeUnstagedFiles(files);
-
-  const handleConfirmDiscard = useCallback(() => {
-    if (discardTarget !== null) {
-      onDiscardChanges([discardTarget]);
-      setDiscardTarget(null);
-    }
-  }, [discardTarget, onDiscardChanges]);
-
-  const handleCancelDiscard = useCallback(() => {
-    setDiscardTarget(null);
-  }, []);
 
   if (files.length === 0) {
     return (
@@ -305,8 +279,8 @@ export function FileTreePanel({
         <SectionHeader
           title="Staged Changes"
           count={stagedFiles.length}
-          isExpanded={stagedExpanded}
-          onToggle={() => setStagedExpanded((prev) => !prev)}
+          isExpanded={tree.stagedExpanded}
+          onToggle={tree.toggleStaged}
           batchAction={
             stagedFiles.length > 0 ? (
               <button
@@ -321,14 +295,14 @@ export function FileTreePanel({
             ) : null
           }
         />
-        {stagedExpanded && stagedFiles.map((file) => (
+        {tree.stagedExpanded && stagedFiles.map((file) => (
           <FileEntry
             key={`staged-${file.path}`}
             file={file}
             statusKind={file.indexStatus}
             isSelected={selectedFile === file.path}
             onSelect={onSelectFile}
-            onContextMenu={handleContextMenu}
+            onContextMenu={tree.openContextMenu}
             actionButtons={
               <button
                 type="button"
@@ -349,8 +323,8 @@ export function FileTreePanel({
         <SectionHeader
           title="Changes"
           count={unstagedFiles.length}
-          isExpanded={unstagedExpanded}
-          onToggle={() => setUnstagedExpanded((prev) => !prev)}
+          isExpanded={tree.unstagedExpanded}
+          onToggle={tree.toggleUnstaged}
           batchAction={
             unstagedFiles.length > 0 ? (
               <button
@@ -365,14 +339,14 @@ export function FileTreePanel({
             ) : null
           }
         />
-        {unstagedExpanded && unstagedFiles.map((file) => (
+        {tree.unstagedExpanded && unstagedFiles.map((file) => (
           <FileEntry
             key={`unstaged-${file.path}`}
             file={file}
             statusKind={file.worktreeStatus}
             isSelected={selectedFile === file.path}
             onSelect={onSelectFile}
-            onContextMenu={handleContextMenu}
+            onContextMenu={tree.openContextMenu}
             actionButtons={
               <>
                 <button
@@ -387,7 +361,7 @@ export function FileTreePanel({
                 <button
                   type="button"
                   className="rounded px-1 text-xs text-red-400 hover:bg-red-900/30"
-                  onClick={() => setDiscardTarget(file.path)}
+                  onClick={() => tree.requestDiscard(file.path)}
                   title="Discard Changes"
                   data-testid="discard-button"
                 >
@@ -400,20 +374,20 @@ export function FileTreePanel({
       </div>
 
       {/* Discard confirmation dialog */}
-      {discardTarget !== null && (
+      {tree.discardTarget !== null && (
         <DiscardConfirm
-          filePath={discardTarget}
-          onConfirm={handleConfirmDiscard}
-          onCancel={handleCancelDiscard}
+          filePath={tree.discardTarget}
+          onConfirm={() => tree.confirmDiscard(onDiscardChanges)}
+          onCancel={tree.cancelDiscard}
         />
       )}
 
       {/* Context menu */}
-      {contextMenu !== null && onBlameFile && (
+      {tree.contextMenu !== null && onBlameFile && (
         <FileContextMenu
-          menu={contextMenu}
+          menu={tree.contextMenu}
           onBlame={onBlameFile}
-          onClose={handleCloseContextMenu}
+          onClose={tree.closeContextMenu}
         />
       )}
     </div>

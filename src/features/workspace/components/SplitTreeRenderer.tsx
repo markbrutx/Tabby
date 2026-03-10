@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import {
   Panel,
   PanelGroup,
@@ -9,20 +9,15 @@ import { RefreshCw } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PaneErrorState } from "@/components/PaneErrorState";
 import { Button } from "@/components/ui/Button";
-import { DEFAULT_BROWSER_URL } from "@/features/workspace/domain/models";
 import type {
   PaneSnapshotModel,
   TabSnapshotModel,
 } from "@/features/workspace/model/workspaceSnapshot";
 import type { SplitNode } from "@/features/workspace/domain/models";
 import type { ThemeDefinition } from "@/features/theme/domain/models";
-import { BrowserPane, type BrowserPaneHandle } from "@/features/browser/components/BrowserPane";
-import { BrowserToolbar } from "@/features/browser/components/BrowserToolbar";
-import { GitPane } from "@/features/git/components/GitPane";
-import { GitPaneHeader } from "@/features/git/components/GitPaneHeader";
-import { PaneHeader } from "@/features/terminal/components/PaneHeader";
-import { TerminalPane } from "@/features/terminal/components/TerminalPane";
 import type { GitClient } from "@/app-shell/clients";
+import { getPaneRenderer, type PaneRendererContext } from "@/features/workspace/paneRegistry";
+import { usePaneDragDrop } from "@/features/workspace/hooks/usePaneDragDrop";
 
 // ---------------------------------------------------------------------------
 // Context — holds cross-cutting state shared by all nodes in the tree
@@ -43,7 +38,7 @@ interface SplitTreeCtx {
   onToggleCollapse: (paneId: string) => void;
   dragSourceRef: React.MutableRefObject<string | null>;
   dragOverPaneId: string | null;
-  onDragOverChange: (paneId: string | null) => void;
+  buildDragProps: (paneId: string, onSwapPaneSlots: (a: string, b: string) => void) => import("@/features/workspace/paneRegistry").DragProps;
 }
 
 const TreeContext = createContext<SplitTreeCtx | null>(null);
@@ -82,7 +77,7 @@ function findPaneById(tab: TabSnapshotModel, paneId: string): PaneSnapshotModel 
 }
 
 // ---------------------------------------------------------------------------
-// PaneLeaf — renders a single pane (terminal or browser)
+// PaneLeaf — renders a single pane via the renderer registry
 // ---------------------------------------------------------------------------
 
 function PaneLeaf({ paneId }: { paneId: string }) {
@@ -91,57 +86,41 @@ function PaneLeaf({ paneId }: { paneId: string }) {
     tab, theme, visible, modalOpen,
     onFocus, onRestart, onClosePane, onSwapPaneSlots, onToggleCollapse,
     collapsedPaneIds,
-    dragSourceRef, dragOverPaneId, onDragOverChange,
+    dragSourceRef, buildDragProps,
   } = ctx;
 
   const isCollapsed = collapsedPaneIds.has(paneId);
-
   const pane = findPaneById(tab, paneId);
-  const browserPaneRef = useRef<BrowserPaneHandle | null>(null);
-  const isBrowser = pane?.paneKind === "browser";
-  const isGit = pane?.paneKind === "git";
+  const browserPaneRef = useRef(null);
 
   if (!pane) return null;
 
   const isActive = tab.activePaneId === pane.id;
-  const isDragOver = dragOverPaneId === pane.id;
   const isDragSource = dragSourceRef.current === pane.id;
 
-  const dragProps = {
-    draggable: true as const,
-    isDragOver,
-    onDragStart: (e: React.DragEvent) => {
-      dragSourceRef.current = pane.id;
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", pane.id);
-    },
-    onDragOver: (e: React.DragEvent) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    },
-    onDragEnter: (e: React.DragEvent) => {
-      e.preventDefault();
-      if (dragSourceRef.current && dragSourceRef.current !== pane.id) {
-        onDragOverChange(pane.id);
-      }
-    },
-    onDragLeave: () => {
-      if (dragOverPaneId === pane.id) {
-        onDragOverChange(null);
-      }
-    },
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault();
-      const sourceId = dragSourceRef.current;
-      if (sourceId && sourceId !== pane.id) {
-        onSwapPaneSlots(sourceId, pane.id);
-      }
-      dragSourceRef.current = null;
-      onDragOverChange(null);
-    },
-    onDragEnd: () => {
-      dragSourceRef.current = null;
-      onDragOverChange(null);
+  const dragProps = buildDragProps(pane.id, onSwapPaneSlots);
+
+  const renderer = getPaneRenderer(pane.paneKind);
+  if (!renderer) return null;
+
+  const rendererCtx: PaneRendererContext = {
+    pane,
+    tab,
+    theme,
+    isActive,
+    visible,
+    modalOpen,
+    isCollapsed,
+    paneCount: tab.panes.length,
+    onToggleCollapse: () => onToggleCollapse(pane.id),
+    onClose: () => onClosePane(pane.id),
+    onRestart: () => void onRestart(pane.id),
+    onFocus: () => void onFocus(tab.id, pane.id),
+    dragProps,
+    extras: {
+      gitClient: ctx.gitClient,
+      onOpenGitView: ctx.onOpenGitView,
+      browserPaneRef,
     },
   };
 
@@ -167,70 +146,13 @@ function PaneLeaf({ paneId }: { paneId: string }) {
       )}
     >
       <div className={`flex h-full flex-col ${isDragSource ? "opacity-50" : ""}`}>
-        {isBrowser ? (
-          <BrowserToolbar
-            url={pane.url ?? DEFAULT_BROWSER_URL}
-            isActive={isActive}
-            paneCount={tab.panes.length}
-            isCollapsed={isCollapsed}
-            onToggleCollapse={() => onToggleCollapse(pane.id)}
-            onNavigate={(url) => {
-              browserPaneRef.current?.navigate(url);
-            }}
-            onReload={() => {
-              browserPaneRef.current?.navigate(pane.url ?? DEFAULT_BROWSER_URL);
-            }}
-            onClose={() => onClosePane(pane.id)}
-            {...dragProps}
-          />
-        ) : isGit ? (
-          <GitPaneHeader
-            repoPath={pane.gitRepoPath ?? pane.cwd}
-            branch={null}
-            isActive={isActive}
-            paneCount={tab.panes.length}
-            isCollapsed={isCollapsed}
-            onToggleCollapse={() => onToggleCollapse(pane.id)}
-            onClose={() => onClosePane(pane.id)}
-            {...dragProps}
-          />
-        ) : (
-          <PaneHeader
-            profileLabel={pane.profileLabel}
-            cwd={pane.cwd}
-            isActive={isActive}
-            paneCount={tab.panes.length}
-            isCollapsed={isCollapsed}
-            onToggleCollapse={() => onToggleCollapse(pane.id)}
-            onClose={() => onClosePane(pane.id)}
-            onRestart={() => void onRestart(pane.id)}
-            onOpenGitView={pane.cwd ? () => ctx.onOpenGitView(pane.id, pane.cwd) : undefined}
-            {...dragProps}
-          />
-        )}
+        {renderer.renderHeader(rendererCtx)}
         {isCollapsed ? null : (
           <div
             className="min-h-0 flex-1"
-            onMouseDown={() => void onFocus(tab.id, pane.id)}
+            onMouseDown={rendererCtx.onFocus}
           >
-            {isBrowser ? (
-              <BrowserPane
-                ref={browserPaneRef}
-                pane={pane}
-                active={isActive}
-                visible={visible}
-                modalOpen={modalOpen}
-              />
-            ) : isGit ? (
-              <GitPane pane={pane} gitClient={ctx.gitClient} />
-            ) : (
-              <TerminalPane
-                pane={pane}
-                theme={theme}
-                active={isActive}
-                visible={visible}
-              />
-            )}
+            {renderer.renderContent(rendererCtx)}
           </div>
         )}
       </div>
@@ -365,12 +287,7 @@ export function SplitTreeRenderer({
   onOpenGitView,
   onToggleCollapse,
 }: SplitTreeRendererProps) {
-  const dragSourceRef = useRef<string | null>(null);
-  const [dragOverPaneId, setDragOverPaneId] = useState<string | null>(null);
-
-  const handleDragOverChange = useCallback((paneId: string | null) => {
-    setDragOverPaneId(paneId);
-  }, []);
+  const { dragSourceRef, dragOverPaneId, buildDragProps } = usePaneDragDrop();
 
   const ctx: SplitTreeCtx = useMemo(() => ({
     tab,
@@ -387,11 +304,11 @@ export function SplitTreeRenderer({
     onToggleCollapse,
     dragSourceRef,
     dragOverPaneId,
-    onDragOverChange: handleDragOverChange,
+    buildDragProps,
   }), [
     tab, theme, visible, modalOpen, gitClient, collapsedPaneIds,
     onFocus, onRestart, onClosePane, onSwapPaneSlots, onOpenGitView, onToggleCollapse,
-    dragSourceRef, dragOverPaneId, handleDragOverChange,
+    dragSourceRef, dragOverPaneId, buildDragProps,
   ]);
 
   return (

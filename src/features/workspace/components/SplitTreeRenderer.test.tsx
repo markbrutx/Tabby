@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import "@/features/paneRenderers";
 import { SplitTreeRenderer } from "./SplitTreeRenderer";
 import type { TabSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import type { GitClient } from "@/app-shell/clients";

@@ -17,20 +17,17 @@ import type {
 import { mapPaneSpecToDto, mapSplitNodeToDto, mapWorkspaceFromDto } from "@/features/workspace/application/snapshot-mappers";
 import { getLayoutVariants } from "@/features/workspace/layoutVariants";
 import type { WorkspaceClient } from "@/app-shell/clients";
-import type { SetupWizardConfig, WizardTab } from "@/features/workspace/store/types";
+import type { SetupWizardConfig } from "@/features/workspace/store/types";
 
 export interface WorkspaceStore {
   workspace: WorkspaceReadModel | null;
   error: string | null;
   isHydrating: boolean;
   isWorking: boolean;
-  wizardTab: WizardTab | null;
   beginBootstrap: () => void;
   loadBootstrap: (workspace: WorkspaceReadModel) => Promise<void>;
   setBootstrapError: (message: string) => void;
   createTabFromWizard: (config: SetupWizardConfig) => Promise<void>;
-  openSetupWizard: () => void;
-  closeSetupWizard: () => void;
   closeTab: (tabId: string) => Promise<void>;
   setActiveTab: (tabId: string) => Promise<void>;
   focusPane: (tabId: string, paneId: string) => Promise<void>;
@@ -53,14 +50,6 @@ type SetFn = (
     | ((state: WorkspaceStore) => Partial<WorkspaceStore>),
 ) => void;
 
-function makeWizardTab(workspace?: WorkspaceReadModel | null): WizardTab {
-  const nextIndex = (workspace?.tabs.length ?? 0) + 1;
-  return {
-    id: `__wizard_${Date.now()}__`,
-    title: "New Workspace",
-  };
-}
-
 async function runWorkspaceMutation(
   set: SetFn,
   mutation: () => Promise<WorkspaceView>,
@@ -74,7 +63,6 @@ async function runWorkspaceMutation(
       workspace,
       error: null,
       isWorking: false,
-      wizardTab: workspace.tabs.length === 0 ? makeWizardTab(workspace) : null,
       ...(onSuccess?.(workspace) ?? {}),
     });
   } catch (error) {
@@ -114,7 +102,6 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
     error: null,
     isHydrating: true,
     isWorking: false,
-    wizardTab: null,
 
     beginBootstrap() {
       set({ isHydrating: true, error: null });
@@ -125,23 +112,13 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
         workspaceListenersReady = deps.workspaceClient
           .listenProjectionUpdated((dto) => {
             const mapped = mapWorkspaceFromDto(dto);
-            set({
-              workspace: mapped,
-              error: null,
-              wizardTab: mapped.tabs.length === 0 ? makeWizardTab(mapped) : null,
-            });
+            set({ workspace: mapped, error: null });
           })
           .then(() => undefined);
       }
       await workspaceListenersReady;
 
-      const shouldShowWizard = workspace.tabs.length === 0;
-      set({
-        workspace,
-        error: null,
-        isHydrating: false,
-        wizardTab: shouldShowWizard ? makeWizardTab(workspace) : null,
-      });
+      set({ workspace, error: null, isHydrating: false });
     },
 
     setBootstrapError(message) {
@@ -193,18 +170,6 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
           return {};
         },
       );
-    },
-
-    openSetupWizard() {
-      set({ wizardTab: makeWizardTab(get().workspace) });
-    },
-
-    closeSetupWizard() {
-      const workspace = get().workspace;
-      if (workspace && workspace.tabs.length === 0) {
-        return;
-      }
-      set({ wizardTab: null });
     },
 
     async closeTab(tabId) {
@@ -289,11 +254,6 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps) {
     },
 
     async renameTab(tabId, title) {
-      const { wizardTab: currentWizard } = get();
-      if (currentWizard && tabId === currentWizard.id) {
-        set({ wizardTab: { ...currentWizard, title } });
-        return;
-      }
       await runWorkspaceMutation(set, () =>
         deps.workspaceClient.dispatch({
           kind: "renameTab",

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HelpCircle, Plus, Settings, X } from "lucide-react";
-import { ShortcutBadge } from "@/features/workspace/components/ShortcutBadge";
+import { ShortcutBadge } from "@/components/ShortcutBadge";
 import { isTauriRuntime } from "@/lib/runtime";
 
 interface TabEntry {

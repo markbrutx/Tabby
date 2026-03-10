@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
-import { ShortcutBadge } from "@/features/workspace/components/ShortcutBadge";
+import { ShortcutBadge } from "@/components/ShortcutBadge";
 
 interface ShortcutEntry {
   keys: string[];
