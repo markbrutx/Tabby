@@ -237,6 +237,7 @@ fn build_pty_command(working_directory: &str, startup_command: Option<&str>) -> 
         Some(cmd) => {
             let mut builder = CommandBuilder::new(&shell);
             builder.arg("-l");
+            builder.arg("-i");
             builder.arg("-c");
             builder.arg(format!("exec {cmd}"));
             builder
