@@ -857,28 +857,52 @@ impl GitOperationsPort for CliGitAdapter {
         Ok(())
     }
 
-    fn log(&self, _repo_path: &Path, _max_count: u32) -> Result<Vec<CommitInfo>, ShellError> {
-        todo!("GIT-014: log will be implemented in a follow-up story")
+    fn log(&self, repo_path: &Path, max_count: u32) -> Result<Vec<CommitInfo>, ShellError> {
+        // Custom format: fields separated by record-separator (0x1e), commits by group-separator (0x1d)
+        let format = "%H%x1e%h%x1e%an%x1e%ae%x1e%aI%x1e%s%x1e%P%x1d";
+        let output = self.run_git(
+            repo_path,
+            &[
+                "log",
+                &format!("--format={format}"),
+                &format!("-n{max_count}"),
+            ],
+        )?;
+        parse_log_output(&output)
     }
 
-    fn blame(&self, _repo_path: &Path, _file_path: &str) -> Result<Vec<BlameEntry>, ShellError> {
-        todo!("GIT-014: blame will be implemented in a follow-up story")
+    fn blame(&self, repo_path: &Path, file_path: &str) -> Result<Vec<BlameEntry>, ShellError> {
+        let output = self.run_git(repo_path, &["blame", "--porcelain", file_path])?;
+        parse_blame_porcelain(&output)
     }
 
-    fn stash_push(&self, _repo_path: &Path, _message: Option<&str>) -> Result<(), ShellError> {
-        todo!("GIT-014: stash_push will be implemented in a follow-up story")
+    fn stash_push(&self, repo_path: &Path, message: Option<&str>) -> Result<(), ShellError> {
+        match message {
+            Some(msg) => {
+                self.run_git(repo_path, &["stash", "push", "-m", msg])?;
+            }
+            None => {
+                self.run_git(repo_path, &["stash", "push"])?;
+            }
+        }
+        Ok(())
     }
 
-    fn stash_pop(&self, _repo_path: &Path) -> Result<(), ShellError> {
-        todo!("GIT-014: stash_pop will be implemented in a follow-up story")
+    fn stash_pop(&self, repo_path: &Path) -> Result<(), ShellError> {
+        self.run_git(repo_path, &["stash", "pop"])?;
+        Ok(())
     }
 
-    fn stash_list(&self, _repo_path: &Path) -> Result<Vec<StashEntry>, ShellError> {
-        todo!("GIT-014: stash_list will be implemented in a follow-up story")
+    fn stash_list(&self, repo_path: &Path) -> Result<Vec<StashEntry>, ShellError> {
+        // Format: index<RS>message<RS>date(ISO)<LF>
+        let output = self.run_git(repo_path, &["stash", "list", "--format=%gd%x1e%gs%x1e%aI"])?;
+        parse_stash_list_output(&output)
     }
 
-    fn stash_drop(&self, _repo_path: &Path, _stash_id: StashId) -> Result<(), ShellError> {
-        todo!("GIT-014: stash_drop will be implemented in a follow-up story")
+    fn stash_drop(&self, repo_path: &Path, stash_id: StashId) -> Result<(), ShellError> {
+        let stash_ref = format!("{stash_id}");
+        self.run_git(repo_path, &["stash", "drop", &stash_ref])?;
+        Ok(())
     }
 
     fn discard_changes(&self, repo_path: &Path, paths: &[&str]) -> Result<(), ShellError> {
@@ -925,9 +949,247 @@ impl GitOperationsPort for CliGitAdapter {
         Ok(())
     }
 
-    fn repo_state(&self, _repo_path: &Path) -> Result<GitRepositoryState, ShellError> {
-        todo!("GIT-014: repo_state will be implemented in a follow-up story")
+    fn repo_state(&self, repo_path: &Path) -> Result<GitRepositoryState, ShellError> {
+        // Get HEAD branch name (returns "HEAD" if detached)
+        let head_output = self.run_git(repo_path, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+        let head_ref = head_output.trim();
+        let is_detached = head_ref == "HEAD";
+        let head_branch = if is_detached {
+            None
+        } else {
+            BranchName::try_new(head_ref).ok()
+        };
+
+        // Check if working tree is clean
+        let status_output = self.run_git(repo_path, &["status", "--porcelain"])?;
+        let status_clean = status_output.trim().is_empty();
+
+        let repo_dir = tabby_kernel::WorkingDirectory::new(repo_path.to_string_lossy().as_ref())
+            .map_err(|e| ShellError::Io(format!("invalid repo path: {e}")))?;
+
+        Ok(GitRepositoryState::new(
+            repo_dir,
+            head_branch,
+            is_detached,
+            status_clean,
+        ))
     }
+}
+
+// ---------------------------------------------------------------------------
+// Log output parser
+// ---------------------------------------------------------------------------
+
+/// Parse git log output produced with `--format=%H%x1e%h%x1e%an%x1e%ae%x1e%aI%x1e%s%x1e%P%x1d`.
+///
+/// Commits are separated by group-separator (0x1d), fields within a commit by
+/// record-separator (0x1e).
+fn parse_log_output(output: &str) -> Result<Vec<CommitInfo>, ShellError> {
+    let trimmed = output.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut commits = Vec::new();
+    for record in trimmed.split('\x1d') {
+        let record = record.trim();
+        if record.is_empty() {
+            continue;
+        }
+        let fields: Vec<&str> = record.split('\x1e').collect();
+        if fields.len() < 6 {
+            return Err(ShellError::Io(format!(
+                "unexpected log record (expected 7 fields, got {}): {record}",
+                fields.len()
+            )));
+        }
+
+        let hash = CommitHash::try_new(fields[0].trim())
+            .map_err(|e| ShellError::Io(format!("invalid commit hash in log: {e}")))?;
+
+        let parent_hashes_str = if fields.len() > 6 {
+            fields[6].trim()
+        } else {
+            ""
+        };
+        let parent_hashes: Vec<CommitHash> = if parent_hashes_str.is_empty() {
+            Vec::new()
+        } else {
+            parent_hashes_str
+                .split(' ')
+                .filter(|s| !s.is_empty())
+                .map(|h| {
+                    CommitHash::try_new(h)
+                        .map_err(|e| ShellError::Io(format!("invalid parent hash in log: {e}")))
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
+
+        commits.push(CommitInfo::new(
+            hash,
+            fields[1].trim().to_string(),
+            fields[2].trim().to_string(),
+            fields[3].trim().to_string(),
+            fields[4].trim().to_string(),
+            fields[5].trim().to_string(),
+            parent_hashes,
+        ));
+    }
+
+    Ok(commits)
+}
+
+// ---------------------------------------------------------------------------
+// Blame porcelain parser
+// ---------------------------------------------------------------------------
+
+/// Parse `git blame --porcelain` output into `BlameEntry` blocks.
+///
+/// Porcelain format:
+/// ```text
+/// <hash> <orig_line> <final_line> <num_lines>
+/// author <name>
+/// author-time <epoch>
+/// ...
+/// \t<content line>
+/// ```
+/// Lines for the same commit are grouped into contiguous `BlameEntry` blocks.
+fn parse_blame_porcelain(output: &str) -> Result<Vec<BlameEntry>, ShellError> {
+    let trimmed = output.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // First pass: collect per-line blame info
+    struct LineBlame {
+        hash: String,
+        author: String,
+        date: String,
+        final_line: u32,
+        content: String,
+    }
+
+    let mut lines_info: Vec<LineBlame> = Vec::new();
+    let mut current_hash = String::new();
+    let mut current_author = String::new();
+    let mut current_date = String::new();
+    let mut current_final_line: u32 = 0;
+
+    for line in trimmed.lines() {
+        if let Some(stripped) = line.strip_prefix('\t') {
+            // Content line — finalize this blamed line
+            lines_info.push(LineBlame {
+                hash: current_hash.clone(),
+                author: current_author.clone(),
+                date: current_date.clone(),
+                final_line: current_final_line,
+                content: stripped.to_string(),
+            });
+        } else if let Some(rest) = line.strip_prefix("author ") {
+            current_author = rest.to_string();
+        } else if let Some(rest) = line.strip_prefix("author-time ") {
+            current_date = rest.to_string();
+        } else {
+            // Could be a header line: <hash> <orig_line> <final_line> [<num_lines>]
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 3 {
+                // Check if first token looks like a hex hash (at least 4 hex chars)
+                let maybe_hash = parts[0];
+                if maybe_hash.len() >= 4 && maybe_hash.chars().all(|c| c.is_ascii_hexdigit()) {
+                    current_hash = maybe_hash.to_lowercase();
+                    current_final_line = parts[2].parse::<u32>().unwrap_or(0);
+                }
+            }
+        }
+    }
+
+    // Second pass: group contiguous lines by commit hash
+    let mut entries: Vec<BlameEntry> = Vec::new();
+    for line_info in &lines_info {
+        let can_merge = entries.last().is_some_and(|last: &BlameEntry| {
+            last.hash().as_ref() == line_info.hash
+                && last.line_start() + last.line_count() == line_info.final_line
+        });
+
+        if can_merge {
+            // Merge into last entry: increment line_count, append content
+            let last = entries.last().expect("checked above");
+            let merged_content = if last.content().is_empty() {
+                line_info.content.clone()
+            } else {
+                format!("{}\n{}", last.content(), line_info.content)
+            };
+            let merged = BlameEntry::new(
+                CommitHash::try_new(&line_info.hash)
+                    .map_err(|e| ShellError::Io(format!("invalid blame hash: {e}")))?,
+                last.author().to_string(),
+                last.date().to_string(),
+                last.line_start(),
+                last.line_count() + 1,
+                merged_content,
+            );
+            let len = entries.len();
+            entries[len - 1] = merged;
+        } else {
+            let hash = CommitHash::try_new(&line_info.hash)
+                .map_err(|e| ShellError::Io(format!("invalid blame hash: {e}")))?;
+            entries.push(BlameEntry::new(
+                hash,
+                line_info.author.clone(),
+                line_info.date.clone(),
+                line_info.final_line,
+                1,
+                line_info.content.clone(),
+            ));
+        }
+    }
+
+    Ok(entries)
+}
+
+// ---------------------------------------------------------------------------
+// Stash list parser
+// ---------------------------------------------------------------------------
+
+/// Parse `git stash list --format=%gd%x1e%gs%x1e%aI` output.
+///
+/// Each line: `stash@{N}<RS>message<RS>date`
+fn parse_stash_list_output(output: &str) -> Result<Vec<StashEntry>, ShellError> {
+    let trimmed = output.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut entries = Vec::new();
+    for line in trimmed.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let fields: Vec<&str> = line.split('\x1e').collect();
+        if fields.len() < 3 {
+            return Err(ShellError::Io(format!(
+                "unexpected stash list format (expected 3 fields, got {}): {line}",
+                fields.len()
+            )));
+        }
+
+        // Parse index from "stash@{N}"
+        let gd = fields[0].trim();
+        let index: usize = gd
+            .strip_prefix("stash@{")
+            .and_then(|s| s.strip_suffix('}'))
+            .and_then(|n| n.parse().ok())
+            .ok_or_else(|| ShellError::Io(format!("invalid stash ref format: {gd}")))?;
+
+        entries.push(StashEntry::new(
+            StashId::new(index),
+            fields[1].trim().to_string(),
+            fields[2].trim().to_string(),
+        ));
+    }
+
+    Ok(entries)
 }
 
 #[cfg(test)]
@@ -1843,5 +2105,162 @@ index abc..def 100644
     #[test]
     fn parse_tracking_info_large_numbers() {
         assert_eq!(parse_tracking_info("ahead 999, behind 500"), (999, 500));
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_log_output tests (GIT-019)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_log_output_single_commit() {
+        let output = "abc123def456abc123def456abc123def456abc1\x1eabc123d\x1eAlice\x1ealice@example.com\x1e2026-03-10T01:00:00+00:00\x1efeat: initial commit\x1e1111111111111111111111111111111111111111\x1d";
+        let result = parse_log_output(output).expect("should parse single commit");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].short_hash(), "abc123d");
+        assert_eq!(result[0].author_name(), "Alice");
+        assert_eq!(result[0].author_email(), "alice@example.com");
+        assert_eq!(result[0].message(), "feat: initial commit");
+        assert_eq!(result[0].parent_hashes().len(), 1);
+    }
+
+    #[test]
+    fn parse_log_output_multiple_commits() {
+        let output = format!(
+            "{hash1}\x1eabc1\x1eAlice\x1ea@b.com\x1e2026-03-10\x1efirst\x1e{parent}\x1d\
+             {hash2}\x1edef2\x1eBob\x1eb@c.com\x1e2026-03-09\x1esecond\x1e{hash1}\x1d",
+            hash1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            hash2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            parent = "cccccccccccccccccccccccccccccccccccccccc",
+        );
+        let result = parse_log_output(&output).expect("should parse multiple commits");
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].author_name(), "Alice");
+        assert_eq!(result[1].author_name(), "Bob");
+    }
+
+    #[test]
+    fn parse_log_output_root_commit_no_parents() {
+        let output = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\x1eaaaa\x1eAlice\x1ea@b.com\x1e2026-01-01\x1einit\x1e\x1d";
+        let result = parse_log_output(output).expect("should parse root commit");
+        assert_eq!(result.len(), 1);
+        assert!(result[0].parent_hashes().is_empty());
+    }
+
+    #[test]
+    fn parse_log_output_merge_commit_two_parents() {
+        let parent1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let parent2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let output = format!(
+            "cccccccccccccccccccccccccccccccccccccccc\x1ecccc\x1eAlice\x1ea@b.com\x1e2026-01-01\x1emerge\x1e{parent1} {parent2}\x1d"
+        );
+        let result = parse_log_output(&output).expect("should parse merge commit");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].parent_hashes().len(), 2);
+    }
+
+    #[test]
+    fn parse_log_output_empty() {
+        let result = parse_log_output("").expect("should handle empty");
+        assert!(result.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_blame_porcelain tests (GIT-019)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_blame_porcelain_single_block() {
+        let output = "\
+deadbeefdeadbeefdeadbeefdeadbeefdeadbeef 1 1 3
+author Alice
+author-mail <alice@example.com>
+author-time 1709856000
+author-tz +0000
+committer Alice
+committer-mail <alice@example.com>
+committer-time 1709856000
+committer-tz +0000
+summary initial commit
+filename src/main.rs
+\tfn main() {
+deadbeefdeadbeefdeadbeefdeadbeefdeadbeef 2 2
+\t    println!(\"hello\");
+deadbeefdeadbeefdeadbeefdeadbeefdeadbeef 3 3
+\t}";
+        let result = parse_blame_porcelain(output).expect("should parse blame");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].author(), "Alice");
+        assert_eq!(result[0].line_start(), 1);
+        assert_eq!(result[0].line_count(), 3);
+        assert!(result[0].content().contains("fn main()"));
+        assert!(result[0].content().contains("println!"));
+    }
+
+    #[test]
+    fn parse_blame_porcelain_two_commits() {
+        let hash_a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let hash_b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let output = format!(
+            "\
+{hash_a} 1 1 1
+author Alice
+author-time 1709856000
+filename file.rs
+\tline one
+{hash_b} 2 2 1
+author Bob
+author-time 1709856100
+filename file.rs
+\tline two"
+        );
+        let result = parse_blame_porcelain(&output).expect("should parse two commits");
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].author(), "Alice");
+        assert_eq!(result[0].line_start(), 1);
+        assert_eq!(result[0].line_count(), 1);
+        assert_eq!(result[1].author(), "Bob");
+        assert_eq!(result[1].line_start(), 2);
+        assert_eq!(result[1].line_count(), 1);
+    }
+
+    #[test]
+    fn parse_blame_porcelain_empty() {
+        let result = parse_blame_porcelain("").expect("should handle empty");
+        assert!(result.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_stash_list_output tests (GIT-019)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_stash_list_single_entry() {
+        let output =
+            "stash@{0}\x1eWIP on main: abc1234 feat: something\x1e2026-03-10T01:00:00+00:00\n";
+        let result = parse_stash_list_output(output).expect("should parse single stash");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].index(), StashId::new(0));
+        assert_eq!(result[0].message(), "WIP on main: abc1234 feat: something");
+    }
+
+    #[test]
+    fn parse_stash_list_multiple_entries() {
+        let output = "\
+stash@{0}\x1eWIP on main\x1e2026-03-10T01:00:00+00:00
+stash@{1}\x1efix: save work\x1e2026-03-09T12:00:00+00:00
+stash@{2}\x1erefactor\x1e2026-03-08T08:00:00+00:00
+";
+        let result = parse_stash_list_output(output).expect("should parse multiple stashes");
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].index(), StashId::new(0));
+        assert_eq!(result[1].index(), StashId::new(1));
+        assert_eq!(result[2].index(), StashId::new(2));
+        assert_eq!(result[2].message(), "refactor");
+    }
+
+    #[test]
+    fn parse_stash_list_empty() {
+        let result = parse_stash_list_output("").expect("should handle empty");
+        assert!(result.is_empty());
     }
 }

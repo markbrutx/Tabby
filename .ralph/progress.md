@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-03-10 09:43 - GIT-018: Implement push, pull, fetch, branch operations
+Thread:
+Run: 20260310-012951-93839 (iteration 20)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-20.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-20.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: b307fa0 feat: implement push, pull, fetch, branch operations (GIT-018)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (545 tests, 0 failures)
+- Files changed:
+  - src-tauri/src/application/ports.rs (added start_point and force params)
+  - src-tauri/src/application/commands.rs (added start_point and force fields)
+  - src-tauri/src/application/git_service.rs (updated dispatch + mock tests)
+  - src-tauri/src/infrastructure/cli_git_adapter.rs (implemented 9 operations + 18 tests)
+  - src-tauri/src/mapping/dto_mappers.rs (pass start_point/force through mapping)
+- Implemented push, pull, fetch remote operations via git CLI
+- Implemented branches() with git branch -vv --format parsing
+- Implemented checkout_branch, create_branch (with optional start_point), delete_branch (with force flag), merge_branch
+- Added parse_branch_list and parse_tracking_info functions with 18 unit tests
+- Updated port trait, command enums, service dispatch, mapping layer, and mock port
+- **Learnings for future iterations:**
+  - The git branch --format flag with %(upstream:track,nobracket) cleanly provides ahead/behind without complex regex
+  - Detached HEAD shows as "(HEAD detached at ...)" in branch list, needs explicit filtering
+  - The DTO layer already had start_point/force fields; port trait and commands just needed updating to match
+---
+
 ## 2026-03-10 09:35 - GIT-017: Implement stage, unstage, commit, discard operations
 Thread:
 Run: 20260310-012951-93839 (iteration 19)
