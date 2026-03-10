@@ -743,3 +743,36 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - stop_runtime and restart_runtime already had Git support via RuntimeKind::Git match arm from prior work
   - Mock test infrastructure (build_service pattern) made adding Git lifecycle tests straightforward
 ---
+
+## 2026-03-10 10:08 - GIT-023: Add Git types to frontend workspace and runtime domain models
+Thread:
+Run: 20260310-012951-93839 (iteration 25)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-25.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-25.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 4b47364 feat: add Git kind coverage to runtime snapshot mapper tests (GIT-023)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (207 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (563 tests)
+- Files changed:
+  - src/features/runtime/application/snapshot-mappers.test.ts
+- What was implemented:
+  - All acceptance criteria were already satisfied by prior iterations (GIT-019 through GIT-022):
+    - GitPaneSpec interface exists in features/workspace/domain/models.ts
+    - PaneSpec union includes { kind: 'git', workingDirectory: string }
+    - RuntimeKind type includes 'git' literal
+    - RuntimeReadModel has gitRepoPath?: string field
+    - Snapshot mapper (mapRuntimeFromDto) maps gitRepoPath from DTO
+    - TypeScript compiles (typecheck passes)
+    - No runtime behavior change
+  - Added "git" kind to the exhaustive status × kind test matrix in snapshot-mappers.test.ts, covering gitRepoPath mapping
+- **Learnings for future iterations:**
+  - Domain model types for Git were added incrementally across GIT-019 to GIT-022; GIT-023 was mostly already complete
+  - When a story's AC overlaps with prior work, verify each criterion individually before concluding
+---
