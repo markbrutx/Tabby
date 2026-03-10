@@ -21,6 +21,8 @@ workbench/
 .codex/
 .ralph/
 AGENTS.md
+CLAUDE.md
+spec.md
 
 # Local environment overrides
 .env
