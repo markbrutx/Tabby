@@ -26,7 +26,7 @@ interface HighlightedContentProps {
   readonly language: string | null;
 }
 
-export function HighlightedContent({ content, language }: HighlightedContentProps) {
+function HighlightedContent({ content, language }: HighlightedContentProps) {
   const tokens = useMemo(() => tokenizeLine(content, language), [content, language]);
 
   if (tokens.length === 1 && tokens[0].type === "plain") {

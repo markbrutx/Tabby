@@ -22,7 +22,7 @@ import { StashPanel } from "./StashPanel";
 // Props
 // ---------------------------------------------------------------------------
 
-export interface GitPaneProps {
+interface GitPaneProps {
   readonly pane: PaneSnapshotModel;
   readonly gitClient: GitClient;
 }

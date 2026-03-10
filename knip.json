@@ -1,7 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "ignore": [
-    "src/contracts/tauri-bindings.ts"
+    "src/contracts/tauri-bindings.ts",
+    "docs/**"
   ],
   "ignoreDependencies": [
     "@tailwindcss/vite",

@@ -5,9 +5,8 @@ import type { DiffViewMode, DiffViewerProps } from "./diff/diffTypes";
 import { UnifiedRenderer } from "./diff/UnifiedRenderer";
 import { SplitRenderer } from "./diff/SplitRenderer";
 
-// Re-export types and helpers for existing consumers
-export type { DiffViewMode, StagingCallbacks, DiffViewerProps } from "./diff/diffTypes";
-export { lineKey, hunkLineRanges } from "@/features/git/domain/stagingHelpers";
+// Re-export types for existing consumers
+export type { StagingCallbacks } from "./diff/diffTypes";
 
 // ---------------------------------------------------------------------------
 // Small presentational sub-components

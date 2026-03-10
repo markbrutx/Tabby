@@ -77,7 +77,7 @@ export interface GitPaneState {
 // Factory
 // ---------------------------------------------------------------------------
 
-export interface GitPaneStoreDeps {
+interface GitPaneStoreDeps {
   readonly gitClient: GitClient;
   readonly paneId: string;
 }

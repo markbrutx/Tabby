@@ -55,10 +55,6 @@ export function getTerminalTheme(kind: ThemeKind): ITheme {
   return TERMINAL_THEMES[kind];
 }
 
-export function applyResolvedTheme(theme: ThemeDefinition): void {
-  applyTheme(theme);
-}
-
 export function useResolvedTheme(themeId: string | undefined): ThemeDefinition {
   const selectTheme = useThemeStore((s) => s.selectTheme);
   const resolveSystemTheme = useThemeStore((s) => s.resolveSystemTheme);

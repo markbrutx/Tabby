@@ -45,7 +45,7 @@ function resolveThemeFromList(
   return findThemeById(themes, themeId) ?? getMidnight();
 }
 
-export interface ThemeState {
+interface ThemeState {
   readonly themes: readonly ThemeDefinition[];
   readonly activeThemeId: string;
   readonly resolvedTheme: ThemeDefinition;

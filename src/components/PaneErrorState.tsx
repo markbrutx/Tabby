@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { AlertOctagon } from "lucide-react";
 
-export interface PaneErrorStateProps {
+interface PaneErrorStateProps {
     title?: string;
     message: string;
     action?: ReactNode;

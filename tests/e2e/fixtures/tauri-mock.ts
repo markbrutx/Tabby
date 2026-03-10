@@ -8,7 +8,7 @@
  * Supports terminal, browser, and git pane types.
  */
 
-export interface TauriMockOptions {
+interface TauriMockOptions {
   initialPanes?: Array<{
     kind: "terminal" | "browser" | "git";
     profileId?: string;
