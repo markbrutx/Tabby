@@ -14,8 +14,8 @@ mod tests {
 
     use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
     use tabby_workspace::{
-        spec_from_content, BrowserPaneSpec, BrowserUrl, PaneId, PaneSpec, TabLayoutStrategy,
-        TerminalPaneSpec, WorkspaceDomainEvent, WorkspaceSession,
+        spec_from_content, BrowserPaneSpec, BrowserUrl, GitPaneSpec, PaneId, PaneSpec,
+        TabLayoutStrategy, TerminalPaneSpec, WorkspaceDomainEvent, WorkspaceSession,
     };
 
     use crate::application::runtime_observation_receiver::RuntimeObservationReceiver;
@@ -39,6 +39,12 @@ mod tests {
     fn browser_spec(url: &str) -> PaneSpec {
         PaneSpec::Browser(BrowserPaneSpec {
             initial_url: BrowserUrl::new(url),
+        })
+    }
+
+    fn git_spec(cwd: &str) -> PaneSpec {
+        PaneSpec::Git(GitPaneSpec {
+            working_directory: String::from(cwd),
         })
     }
 
@@ -79,9 +85,12 @@ mod tests {
                     let session = self.next_session_id("browser");
                     reg.register_browser(&pid, session, browser.initial_url.clone())
                 }
-                PaneSpec::Git(_) => {
-                    // Git panes do not have a runtime process yet.
-                    return;
+                PaneSpec::Git(git_spec) => {
+                    let session = self.next_session_id("git");
+                    let repo_path =
+                        tabby_kernel::WorkingDirectory::new(&git_spec.working_directory)
+                            .expect("test working directory should be valid");
+                    reg.register_git(&pid, session, repo_path)
                 }
             };
             self.emit_projection(runtime.pane_id.as_ref(), runtime.status);
@@ -827,6 +836,211 @@ mod tests {
             service.snapshot().len(),
             0,
             "all runtimes should be cleaned up"
+        );
+    }
+
+    // =======================================================================
+    // Git pane lifecycle tests (GIT-013)
+    // =======================================================================
+
+    #[test]
+    fn git_pane_added_registers_git_runtime() {
+        let service = TestRuntimeService::new();
+        service.start_runtime("pane-g", &git_spec("/repos/project"));
+
+        assert_eq!(service.snapshot().len(), 1);
+        assert_eq!(
+            service.registry_get_kind("pane-g"),
+            Some(RuntimeKind::Git),
+            "Git pane should register a Git runtime"
+        );
+        assert_eq!(
+            service.registry_get_status("pane-g"),
+            Some(RuntimeStatus::Running),
+        );
+    }
+
+    #[test]
+    fn git_pane_removed_stops_runtime() {
+        let service = TestRuntimeService::new();
+        service.start_runtime("pane-g", &git_spec("/repos/project"));
+        assert_eq!(service.snapshot().len(), 1);
+
+        service.stop_runtime("pane-g");
+
+        assert_eq!(
+            service.snapshot().len(),
+            0,
+            "Git runtime should be removed after stop"
+        );
+        let projections = service.projections();
+        assert!(
+            projections
+                .iter()
+                .any(|(id, status)| id == "pane-g" && *status == RuntimeStatus::Exited),
+            "Exited projection should be emitted for stopped Git pane"
+        );
+    }
+
+    #[test]
+    fn replace_terminal_with_git_stops_old_starts_new() {
+        let service = TestRuntimeService::new();
+        let mut workspace = WorkspaceSession::default();
+
+        let events = workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(tabby_workspace::layout::LayoutPreset::OneByOne),
+                vec![terminal_spec("/tmp")],
+            )
+            .expect("open tab");
+        apply_events(&service, events);
+
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+        assert_eq!(
+            service.registry_get_kind(pane_id.as_ref()),
+            Some(RuntimeKind::Terminal)
+        );
+
+        let replace_events = workspace
+            .replace_pane_spec(&pane_id, git_spec("/repos/project"))
+            .expect("replace spec");
+        apply_events(&service, replace_events);
+
+        assert_eq!(
+            service.registry_get_kind(pane_id.as_ref()),
+            Some(RuntimeKind::Git),
+            "pane should now be a Git runtime"
+        );
+        assert_eq!(
+            service.registry_get_status(pane_id.as_ref()),
+            Some(RuntimeStatus::Running)
+        );
+        assert_eq!(service.snapshot().len(), 1);
+    }
+
+    #[test]
+    fn replace_git_with_terminal_stops_old_starts_new() {
+        let service = TestRuntimeService::new();
+        let mut workspace = WorkspaceSession::default();
+
+        let events = workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(tabby_workspace::layout::LayoutPreset::OneByOne),
+                vec![git_spec("/repos/project")],
+            )
+            .expect("open tab");
+        apply_events(&service, events);
+
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+        assert_eq!(
+            service.registry_get_kind(pane_id.as_ref()),
+            Some(RuntimeKind::Git)
+        );
+
+        let replace_events = workspace
+            .replace_pane_spec(&pane_id, terminal_spec("/tmp"))
+            .expect("replace spec");
+        apply_events(&service, replace_events);
+
+        assert_eq!(
+            service.registry_get_kind(pane_id.as_ref()),
+            Some(RuntimeKind::Terminal),
+            "pane should now be a Terminal runtime"
+        );
+        assert_eq!(service.snapshot().len(), 1);
+    }
+
+    #[test]
+    fn replace_git_with_browser_stops_old_starts_new() {
+        let service = TestRuntimeService::new();
+        let mut workspace = WorkspaceSession::default();
+
+        let events = workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(tabby_workspace::layout::LayoutPreset::OneByOne),
+                vec![git_spec("/repos/project")],
+            )
+            .expect("open tab");
+        apply_events(&service, events);
+
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+        assert_eq!(
+            service.registry_get_kind(pane_id.as_ref()),
+            Some(RuntimeKind::Git)
+        );
+
+        let replace_events = workspace
+            .replace_pane_spec(&pane_id, browser_spec("https://example.com"))
+            .expect("replace spec");
+        apply_events(&service, replace_events);
+
+        assert_eq!(
+            service.registry_get_kind(pane_id.as_ref()),
+            Some(RuntimeKind::Browser),
+            "pane should now be a Browser runtime"
+        );
+        assert_eq!(service.snapshot().len(), 1);
+    }
+
+    #[test]
+    fn close_tab_with_git_pane_stops_git_runtime() {
+        let service = TestRuntimeService::new();
+        let mut workspace = WorkspaceSession::default();
+
+        let events = workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(tabby_workspace::layout::LayoutPreset::OneByTwo),
+                vec![terminal_spec("/tmp"), git_spec("/repos/project")],
+            )
+            .expect("open tab");
+        apply_events(&service, events);
+
+        assert_eq!(service.snapshot().len(), 2);
+
+        let tab_id = workspace.tabs[0].tab_id.clone();
+        let git_pane = workspace.tabs[0].panes[1].pane_id.clone();
+
+        let close_events = workspace.close_tab(&tab_id).expect("close tab");
+        apply_events(&service, close_events);
+
+        assert_eq!(
+            service.snapshot().len(),
+            0,
+            "all runtimes including Git should be stopped"
+        );
+
+        let projections = service.projections();
+        assert!(
+            projections
+                .iter()
+                .any(|(id, status)| id == git_pane.as_ref() && *status == RuntimeStatus::Exited),
+            "Git pane must have Exited projection after close_tab"
+        );
+    }
+
+    #[test]
+    fn git_pane_added_via_workspace_event_registers_runtime() {
+        let service = TestRuntimeService::new();
+        let mut workspace = WorkspaceSession::default();
+
+        let events = workspace
+            .open_tab(
+                TabLayoutStrategy::Preset(tabby_workspace::layout::LayoutPreset::OneByOne),
+                vec![git_spec("/repos/project")],
+            )
+            .expect("open tab");
+        apply_events(&service, events);
+
+        let pane_id = workspace.tabs[0].panes[0].pane_id.clone();
+        assert_eq!(service.snapshot().len(), 1);
+        assert_eq!(
+            service.registry_get_kind(pane_id.as_ref()),
+            Some(RuntimeKind::Git),
+            "Git pane opened via workspace should register Git runtime"
+        );
+        assert_eq!(
+            service.registry_get_status(pane_id.as_ref()),
+            Some(RuntimeStatus::Running)
         );
     }
 

@@ -79,6 +79,7 @@ impl RuntimeCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tabby_kernel::WorkingDirectory;
     use tabby_runtime::{RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
     use tabby_workspace::{BrowserUrl, PaneContentDefinition, PaneContentId, PaneId, TabId};
 
@@ -95,6 +96,13 @@ mod tests {
         PaneContentDefinition::browser(
             PaneContentId::from(uuid::Uuid::new_v4().to_string()),
             BrowserUrl::new(url),
+        )
+    }
+
+    fn git_content(working_directory: &str) -> PaneContentDefinition {
+        PaneContentDefinition::git(
+            PaneContentId::from(uuid::Uuid::new_v4().to_string()),
+            working_directory,
         )
     }
 
@@ -706,8 +714,14 @@ mod tests {
                                 browser.initial_url.clone(),
                             );
                         }
-                        tabby_workspace::PaneSpec::Git(_) => {
-                            // Git panes do not have a runtime process yet.
+                        tabby_workspace::PaneSpec::Git(git_spec) => {
+                            let repo_path = WorkingDirectory::new(&git_spec.working_directory)
+                                .expect("test working directory");
+                            registry.register_git(
+                                pane_id,
+                                RuntimeSessionId::from(format!("git-{}", pane_id)),
+                                repo_path,
+                            );
                         }
                     }
                 }
@@ -742,5 +756,233 @@ mod tests {
         assert!(pane_2.is_some());
         let pane_2 = pane_2.expect("already asserted some");
         assert!(matches!(pane_2.kind, RuntimeKind::Browser));
+    }
+
+    // --- Git pane coordinator tests (GIT-013) ---
+
+    #[test]
+    fn spec_from_content_converts_git_content_to_git_spec() {
+        let content = git_content("/repos/project");
+        let spec = spec_from_content(&content);
+        match spec {
+            tabby_workspace::PaneSpec::Git(git_spec) => {
+                assert_eq!(git_spec.working_directory, "/repos/project");
+            }
+            other => panic!("expected PaneSpec::Git, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn pane_added_git_is_runtime_relevant() {
+        let event = WorkspaceDomainEvent::PaneAdded {
+            pane_id: PaneId::from(String::from("pane-g")),
+            content: git_content("/repos/project"),
+        };
+        assert!(
+            event.is_runtime_relevant(),
+            "PaneAdded with Git content must be runtime-relevant"
+        );
+    }
+
+    #[test]
+    fn pane_added_git_registers_runtime() {
+        let mut registry = RuntimeRegistry::default();
+
+        let pane_id = pid("pane-g");
+        let content = git_content("/repos/project");
+        let spec = spec_from_content(&content);
+
+        if let tabby_workspace::PaneSpec::Git(git_spec) = spec {
+            let repo_path = WorkingDirectory::new(&git_spec.working_directory)
+                .expect("valid working directory");
+            let runtime = registry.register_git(
+                &pane_id,
+                RuntimeSessionId::from(String::from("git-session-1")),
+                repo_path,
+            );
+
+            assert_eq!(runtime.pane_id, pane_id);
+            assert!(matches!(runtime.kind, RuntimeKind::Git));
+            assert!(matches!(runtime.status, RuntimeStatus::Running));
+        } else {
+            panic!("expected Git spec");
+        }
+        assert_eq!(registry.snapshot().len(), 1);
+    }
+
+    #[test]
+    fn pane_removed_git_stops_runtime() {
+        let mut registry = RuntimeRegistry::default();
+        let repo_path = WorkingDirectory::new("/repos/project").expect("valid working directory");
+        registry.register_git(&pid("pane-g"), sid("git-1"), repo_path);
+        assert_eq!(registry.snapshot().len(), 1);
+
+        let removed = registry.remove(&pid("pane-g"));
+        assert!(removed.is_some(), "Git runtime should be removable");
+        let removed = removed.expect("already asserted");
+        assert!(matches!(removed.kind, RuntimeKind::Git));
+        assert_eq!(registry.snapshot().len(), 0);
+    }
+
+    #[test]
+    fn pane_content_changed_terminal_to_git_stops_old_starts_new() {
+        let mut registry = RuntimeRegistry::default();
+
+        // Start with terminal
+        registry.register_terminal(&pid("pane-1"), sid("pty-1"));
+        assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Terminal));
+
+        // Simulate PaneContentChanged: terminal → git
+        let removed = registry.remove(&pid("pane-1"));
+        assert!(removed.is_some());
+
+        let new_content = git_content("/repos/project");
+        let spec = spec_from_content(&new_content);
+        if let tabby_workspace::PaneSpec::Git(git_spec) = spec {
+            let repo_path = WorkingDirectory::new(&git_spec.working_directory)
+                .expect("valid working directory");
+            let runtime = registry.register_git(&pid("pane-1"), sid("git-new"), repo_path);
+            assert!(matches!(runtime.kind, RuntimeKind::Git));
+        }
+
+        assert_eq!(registry.snapshot().len(), 1);
+        assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Git));
+    }
+
+    #[test]
+    fn pane_content_changed_git_to_terminal_stops_old_starts_new() {
+        let mut registry = RuntimeRegistry::default();
+
+        // Start with git
+        let repo_path = WorkingDirectory::new("/repos/project").expect("valid working directory");
+        registry.register_git(&pid("pane-1"), sid("git-1"), repo_path);
+        assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Git));
+
+        // Simulate PaneContentChanged: git → terminal
+        let removed = registry.remove(&pid("pane-1"));
+        assert!(removed.is_some());
+
+        let runtime = registry.register_terminal(&pid("pane-1"), sid("pty-new"));
+        assert!(matches!(runtime.kind, RuntimeKind::Terminal));
+
+        assert_eq!(registry.snapshot().len(), 1);
+        assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Terminal));
+    }
+
+    #[test]
+    fn pane_content_changed_git_to_browser_stops_old_starts_new() {
+        let mut registry = RuntimeRegistry::default();
+
+        let repo_path = WorkingDirectory::new("/repos/project").expect("valid working directory");
+        registry.register_git(&pid("pane-1"), sid("git-1"), repo_path);
+
+        // Simulate PaneContentChanged: git → browser
+        let removed = registry.remove(&pid("pane-1"));
+        assert!(removed.is_some());
+
+        let runtime = registry.register_browser(
+            &pid("pane-1"),
+            sid("browser-new"),
+            BrowserUrl::new("https://example.com"),
+        );
+        assert!(matches!(runtime.kind, RuntimeKind::Browser));
+        assert_eq!(registry.snapshot().len(), 1);
+    }
+
+    #[test]
+    fn multiple_events_with_git_processed_sequentially() {
+        let mut registry = RuntimeRegistry::default();
+
+        let events = vec![
+            WorkspaceDomainEvent::PaneAdded {
+                pane_id: PaneId::from(String::from("pane-1")),
+                content: terminal_content("default"),
+            },
+            WorkspaceDomainEvent::PaneAdded {
+                pane_id: PaneId::from(String::from("pane-2")),
+                content: git_content("/repos/project"),
+            },
+            WorkspaceDomainEvent::PaneAdded {
+                pane_id: PaneId::from(String::from("pane-3")),
+                content: browser_content("https://example.com"),
+            },
+        ];
+
+        for event in &events {
+            if let WorkspaceDomainEvent::PaneAdded { pane_id, content } = event {
+                let spec = spec_from_content(content);
+                match spec {
+                    tabby_workspace::PaneSpec::Terminal(_) => {
+                        registry.register_terminal(
+                            pane_id,
+                            RuntimeSessionId::from(format!("pty-{}", pane_id)),
+                        );
+                    }
+                    tabby_workspace::PaneSpec::Browser(browser) => {
+                        registry.register_browser(
+                            pane_id,
+                            RuntimeSessionId::from(format!("browser-{}", pane_id)),
+                            browser.initial_url.clone(),
+                        );
+                    }
+                    tabby_workspace::PaneSpec::Git(git_spec) => {
+                        let repo_path = WorkingDirectory::new(&git_spec.working_directory)
+                            .expect("test working directory");
+                        registry.register_git(
+                            pane_id,
+                            RuntimeSessionId::from(format!("git-{}", pane_id)),
+                            repo_path,
+                        );
+                    }
+                }
+            }
+        }
+
+        assert_eq!(
+            registry.snapshot().len(),
+            3,
+            "three runtimes should be registered"
+        );
+
+        let pane_1 = registry.get(&pid("pane-1"));
+        assert!(matches!(
+            pane_1.map(|r| r.kind),
+            Some(RuntimeKind::Terminal)
+        ));
+
+        let pane_2 = registry.get(&pid("pane-2"));
+        assert!(matches!(pane_2.map(|r| r.kind), Some(RuntimeKind::Git)));
+
+        let pane_3 = registry.get(&pid("pane-3"));
+        assert!(matches!(pane_3.map(|r| r.kind), Some(RuntimeKind::Browser)));
+    }
+
+    #[test]
+    fn full_lifecycle_git_pane_add_replace_remove() {
+        let mut registry = RuntimeRegistry::default();
+
+        // Phase 1: Add git pane
+        let repo_path = WorkingDirectory::new("/repos/project").expect("valid working directory");
+        registry.register_git(&pid("pane-g"), sid("git-1"), repo_path);
+        assert_eq!(registry.snapshot().len(), 1);
+        assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Git));
+
+        // Phase 2: Replace git → terminal (PaneContentChanged)
+        registry.remove(&pid("pane-g"));
+        registry.register_terminal(&pid("pane-g"), sid("pty-1"));
+        assert_eq!(registry.snapshot().len(), 1);
+        assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Terminal));
+
+        // Phase 3: Replace terminal → git (PaneContentChanged)
+        registry.remove(&pid("pane-g"));
+        let repo_path = WorkingDirectory::new("/repos/other").expect("valid working directory");
+        registry.register_git(&pid("pane-g"), sid("git-2"), repo_path);
+        assert_eq!(registry.snapshot().len(), 1);
+        assert!(matches!(registry.snapshot()[0].kind, RuntimeKind::Git));
+
+        // Phase 4: Remove git pane (PaneRemoved)
+        let removed = registry.remove(&pid("pane-g"));
+        assert!(removed.is_some());
+        assert_eq!(registry.snapshot().len(), 0);
     }
 }
