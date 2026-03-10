@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { emit, listen } from "@tauri-apps/api/event";
 import { RecoveryScreen } from "@/components/RecoveryScreen";
 import { TitleBarDragRegion } from "@/components/TitleBarDragRegion";
 import { ConfirmDialog } from "@/features/workspace/components/ConfirmDialog";
@@ -19,7 +18,6 @@ import type { SetupWizardConfig } from "@/features/workspace/store/types";
 import { applyResolvedTheme, useResolvedTheme } from "@/features/workspace/theme";
 import { useWorkspaceShortcuts } from "@/features/workspace/useWorkspaceShortcuts";
 import { buildWorkspaceSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
-import { isTauriRuntime } from "@/lib/runtime";
 
 function App() {
   const {
@@ -118,37 +116,6 @@ function App() {
   const handleCloseShortcuts = useCallback(() => setShortcutsOpen(false), []);
 
   useTauriMenuEvents(handleOpenSettings);
-
-  const closeHandlerRef = useRef<() => void>();
-  closeHandlerRef.current = () => {
-    if (isHydrating || !workspaceModel) {
-      void emit("quit-confirmed");
-    } else {
-      confirmDialog.requestQuitApp();
-    }
-  };
-
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-
-    void listen("app-close-requested", () => {
-      closeHandlerRef.current?.();
-    }).then((fn) => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
 
   const handleSplitRight = useCallback(
     (paneId: string) => setSplitPopup({ paneId, direction: "horizontal" }),

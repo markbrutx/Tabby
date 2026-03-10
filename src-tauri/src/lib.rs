@@ -12,7 +12,7 @@ pub use cli::CliArgs;
 use std::sync::Arc;
 
 use specta_typescript::Typescript;
-use tauri::{Emitter, Listener, Manager, Wry};
+use tauri::{Manager, Wry};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 use tracing::{error, warn};
 use tracing_subscriber::EnvFilter;
@@ -111,18 +111,7 @@ pub fn run(cli_args: CliArgs) {
         .plugin(tauri_plugin_store::Builder::default().build())
         .menu(menu::build_menu)
         .on_menu_event(|app_handle, event| menu::handle_menu_event(app_handle, &event))
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.emit("app-close-requested", ());
-            }
-        })
         .setup(move |app| {
-            let exit_handle = app.handle().clone();
-            app.listen("quit-confirmed", move |_| {
-                exit_handle.exit(0);
-            });
-
             let app_handle = app.handle().clone();
             let shell = Arc::new(AppShell::new(app_handle.clone(), cli_args.clone()).map_err(
                 |error| -> Box<dyn std::error::Error> {

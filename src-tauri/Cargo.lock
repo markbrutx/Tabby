@@ -3601,7 +3601,7 @@ dependencies = [
 
 [[package]]
 name = "tabby"
-version = "0.0.3"
+version = "0.1.0"
 dependencies = [
  "clap",
  "portable-pty",

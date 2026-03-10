@@ -1,6 +1,6 @@
 [package]
 name = "tabby"
-version = "0.0.3"
+version = "0.1.0"
 description = "Tabby terminal workspace"
 authors = ["markbrutx"]
 edition = "2021"
