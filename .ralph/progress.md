@@ -202,3 +202,38 @@ Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-it
   - When verifying already-complete stories, still run all quality gates to confirm nothing regressed
   - PRD story overlap: future stories should check if work was already done by preceding stories
 ---
+
+## 2026-03-10 01:55 - GIT-007: Add RuntimeKind::Git and register_git to tabby-runtime
+Thread:
+Run: 20260310-012951-93839 (iteration 7)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-7.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-7.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 4d105f1 feat: add RuntimeKind::Git and register_git to tabby-runtime (GIT-007)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (406 tests)
+- Files changed:
+  - src-tauri/crates/tabby-runtime/src/lib.rs (RuntimeKind::Git, git_repo_path field, register_git method, 4 unit tests)
+  - src-tauri/crates/tabby-contracts/src/lib.rs (RuntimeKindDto::Git, git_repo_path in PaneRuntimeView)
+  - src-tauri/src/mapping/dto_mappers.rs (Git variant in runtime_kind_to_dto, git_repo_path mapping)
+  - src-tauri/src/application/runtime_service.rs (Git arm in kill match, test fixes)
+  - src/contracts/tauri-bindings.ts (RuntimeKindDto + PaneRuntimeView updates)
+  - src/features/runtime/domain/models.ts (RuntimeKind + RuntimeReadModel updates)
+  - src/features/runtime/application/snapshot-mappers.ts (gitRepoPath mapping)
+  - src/features/runtime/application/snapshot-mappers.test.ts (gitRepoPath in factory)
+  - src/features/runtime/application/store.test.ts (gitRepoPath in factories + expectations)
+  - src/app-shell/AppBootstrapCoordinator.test.ts (gitRepoPath in mock data)
+  - src/features/browser/hooks/useBrowserWebview.test.tsx (gitRepoPath in mock data)
+- What was implemented: Added RuntimeKind::Git variant, git_repo_path: Option<WorkingDirectory> to PaneRuntime, register_git() method to RuntimeRegistry. Propagated changes through contracts, DTO mappers, frontend models, and all test files.
+- **Learnings for future iterations:**
+  - Adding a new RuntimeKind requires updates across 5 layers: domain crate, contracts, mappers, frontend bindings, frontend domain models
+  - All PaneRuntime struct literals in tests must be updated when adding new fields
+  - cargo fmt must be run after editing Rust test code with long assertions
+---
