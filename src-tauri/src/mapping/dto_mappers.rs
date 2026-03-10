@@ -1,8 +1,17 @@
+use std::path::PathBuf;
+
 use tabby_contracts::{
-    LayoutPresetDto, PaneRuntimeView, PaneSpecDto, PaneView, ProfileCatalogView, ProfileView,
-    RuntimeCommandDto, RuntimeKindDto, RuntimeStatusDto, SettingsCommandDto, SettingsView,
-    SplitDirectionDto, SplitNodeDto, TabView, ThemeModeDto, WorkspaceBootstrapView,
-    WorkspaceCommandDto, WorkspaceView,
+    BlameEntryDto, BranchInfoDto, CommitInfoDto, DiffContentDto, DiffHunkDto, DiffLineDto,
+    DiffLineKindDto, FileStatusDto, FileStatusKindDto, GitCommandDto, GitRepoStateDto,
+    GitResultDto, LayoutPresetDto, PaneRuntimeView, PaneSpecDto, PaneView, ProfileCatalogView,
+    ProfileView, RuntimeCommandDto, RuntimeKindDto, RuntimeStatusDto, SettingsCommandDto,
+    SettingsView, SplitDirectionDto, SplitNodeDto, StashEntryDto, TabView, ThemeModeDto,
+    WorkspaceBootstrapView, WorkspaceCommandDto, WorkspaceView,
+};
+use tabby_git::value_objects::{BranchName, RemoteName, StashId};
+use tabby_git::{
+    BlameEntry, BranchInfo, CommitInfo, DiffContent, DiffHunk, DiffLine, DiffLineKind, FileStatus,
+    FileStatusKind, GitRepositoryState, StashEntry,
 };
 use tabby_runtime::{PaneRuntime, RuntimeKind, RuntimeStatus};
 use tabby_settings::{
@@ -13,9 +22,10 @@ use tabby_workspace::layout::{LayoutPreset, SplitDirection, SplitNode};
 use tabby_workspace::{PaneContentDefinition, PaneId, PaneSpec, TabId, WorkspaceSession};
 
 use crate::application::commands::{
-    CloseTabCommand, OpenTabCommand, ReplacePaneSpecCommand, RuntimeCommand, SettingsCommand,
-    SplitPaneCommand, UpdateSettingsCommand, WorkspaceCommand,
+    CloseTabCommand, GitCommand, GitResult, OpenTabCommand, ReplacePaneSpecCommand, RuntimeCommand,
+    SettingsCommand, SplitPaneCommand, UpdateSettingsCommand, WorkspaceCommand,
 };
+use crate::shell::error::ShellError;
 
 // ---------------------------------------------------------------------------
 // Domain → DTO (outbound / projections)
@@ -343,6 +353,281 @@ pub fn runtime_command_from_dto(dto: RuntimeCommandDto) -> RuntimeCommand {
 }
 
 // ---------------------------------------------------------------------------
+// Git: DTO → Domain (inbound / commands)
+// ---------------------------------------------------------------------------
+
+/// Maps a `GitCommandDto` (transport) into a `GitCommand` (domain).
+///
+/// The `repo_path` is resolved externally (e.g. from the pane's working directory)
+/// because `GitCommandDto` carries only a `pane_id`.
+#[allow(dead_code)]
+pub fn git_command_from_dto(
+    dto: GitCommandDto,
+    repo_path: PathBuf,
+) -> Result<GitCommand, ShellError> {
+    let cmd = match dto {
+        GitCommandDto::Status { .. } => GitCommand::Status { repo_path },
+        GitCommandDto::Diff { staged, .. } => GitCommand::Diff { repo_path, staged },
+        GitCommandDto::Stage { paths, .. } => GitCommand::Stage { repo_path, paths },
+        GitCommandDto::Unstage { paths, .. } => GitCommand::Unstage { repo_path, paths },
+        GitCommandDto::StageLines {
+            path, line_ranges, ..
+        } => {
+            let parsed = line_ranges
+                .iter()
+                .map(|r| parse_line_range(r))
+                .collect::<Result<Vec<_>, _>>()?;
+            GitCommand::StageLines {
+                repo_path,
+                file_path: path,
+                line_ranges: parsed,
+            }
+        }
+        GitCommandDto::Commit { message, .. } => GitCommand::Commit { repo_path, message },
+        GitCommandDto::Push { remote, branch, .. } => {
+            let remote = remote_name_or_default(remote.as_deref())?;
+            let branch = branch_name_required(branch.as_deref(), "Push requires a branch name")?;
+            GitCommand::Push {
+                repo_path,
+                remote,
+                branch,
+            }
+        }
+        GitCommandDto::Pull { remote, branch, .. } => {
+            let remote = remote_name_or_default(remote.as_deref())?;
+            let branch = branch_name_required(branch.as_deref(), "Pull requires a branch name")?;
+            GitCommand::Pull {
+                repo_path,
+                remote,
+                branch,
+            }
+        }
+        GitCommandDto::Fetch { remote, .. } => {
+            let remote = remote_name_or_default(remote.as_deref())?;
+            GitCommand::Fetch { repo_path, remote }
+        }
+        GitCommandDto::Branches { .. } => GitCommand::Branches { repo_path },
+        GitCommandDto::CheckoutBranch { name, .. } => {
+            let branch =
+                BranchName::try_new(&name).map_err(|e| ShellError::Validation(e.to_string()))?;
+            GitCommand::CheckoutBranch { repo_path, branch }
+        }
+        GitCommandDto::CreateBranch { name, .. } => {
+            let branch =
+                BranchName::try_new(&name).map_err(|e| ShellError::Validation(e.to_string()))?;
+            GitCommand::CreateBranch { repo_path, branch }
+        }
+        GitCommandDto::DeleteBranch { name, .. } => {
+            let branch =
+                BranchName::try_new(&name).map_err(|e| ShellError::Validation(e.to_string()))?;
+            GitCommand::DeleteBranch { repo_path, branch }
+        }
+        GitCommandDto::MergeBranch { name, .. } => {
+            let branch =
+                BranchName::try_new(&name).map_err(|e| ShellError::Validation(e.to_string()))?;
+            GitCommand::MergeBranch { repo_path, branch }
+        }
+        GitCommandDto::Log { max_count, .. } => GitCommand::Log {
+            repo_path,
+            max_count: max_count.unwrap_or(50),
+        },
+        GitCommandDto::Blame { path, .. } => GitCommand::Blame {
+            repo_path,
+            file_path: path,
+        },
+        GitCommandDto::StashPush { message, .. } => GitCommand::StashPush { repo_path, message },
+        GitCommandDto::StashPop { .. } => GitCommand::StashPop { repo_path },
+        GitCommandDto::StashList { .. } => GitCommand::StashList { repo_path },
+        GitCommandDto::StashDrop { index, .. } => GitCommand::StashDrop {
+            repo_path,
+            stash_id: StashId::new(index),
+        },
+        GitCommandDto::DiscardChanges { paths, .. } => {
+            GitCommand::DiscardChanges { repo_path, paths }
+        }
+        GitCommandDto::RepoState { .. } => GitCommand::RepoState { repo_path },
+    };
+    Ok(cmd)
+}
+
+// ---------------------------------------------------------------------------
+// Git: Domain → DTO (outbound / results)
+// ---------------------------------------------------------------------------
+
+/// Maps a `GitResult` (domain) into a `GitResultDto` (transport).
+#[allow(dead_code)]
+pub fn git_result_to_dto(result: GitResult) -> GitResultDto {
+    match result {
+        GitResult::Status(files) => GitResultDto::Status {
+            files: files.iter().map(file_status_to_dto).collect(),
+        },
+        GitResult::Diff(diffs) => GitResultDto::Diff {
+            diffs: diffs.iter().map(diff_content_to_dto).collect(),
+        },
+        GitResult::Stage => GitResultDto::Stage,
+        GitResult::Unstage => GitResultDto::Unstage,
+        GitResult::StageLines => GitResultDto::StageLines,
+        GitResult::Commit(info) => GitResultDto::Commit {
+            hash: info.short_hash().to_string(),
+        },
+        GitResult::Push => GitResultDto::Push,
+        GitResult::Pull => GitResultDto::Pull,
+        GitResult::Fetch => GitResultDto::Fetch,
+        GitResult::Branches(branches) => GitResultDto::Branches {
+            branches: branches.iter().map(branch_info_to_dto).collect(),
+        },
+        GitResult::CheckoutBranch => GitResultDto::CheckoutBranch,
+        GitResult::CreateBranch => GitResultDto::CreateBranch,
+        GitResult::DeleteBranch => GitResultDto::DeleteBranch,
+        GitResult::MergeBranch => GitResultDto::MergeBranch {
+            message: String::new(),
+        },
+        GitResult::Log(commits) => GitResultDto::Log {
+            commits: commits.iter().map(commit_info_to_dto).collect(),
+        },
+        GitResult::Blame(entries) => GitResultDto::Blame {
+            entries: entries.iter().map(blame_entry_to_dto).collect(),
+        },
+        GitResult::StashPush => GitResultDto::StashPush,
+        GitResult::StashPop => GitResultDto::StashPop,
+        GitResult::StashList(entries) => GitResultDto::StashList {
+            entries: entries.iter().map(stash_entry_to_dto).collect(),
+        },
+        GitResult::StashDrop => GitResultDto::StashDrop,
+        GitResult::DiscardChanges => GitResultDto::DiscardChanges,
+        GitResult::RepoState(state) => GitResultDto::RepoState {
+            state: git_repo_state_to_dto(&state),
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Git type mappers: Domain → DTO
+// ---------------------------------------------------------------------------
+
+#[allow(dead_code)]
+pub fn file_status_to_dto(status: &FileStatus) -> FileStatusDto {
+    FileStatusDto {
+        path: status.path().to_string(),
+        old_path: status.old_path().map(|s| s.to_string()),
+        index_status: file_status_kind_to_dto(status.index_status()),
+        worktree_status: file_status_kind_to_dto(status.worktree_status()),
+    }
+}
+
+#[allow(dead_code)]
+pub fn file_status_kind_to_dto(kind: FileStatusKind) -> FileStatusKindDto {
+    match kind {
+        FileStatusKind::Modified => FileStatusKindDto::Modified,
+        FileStatusKind::Added => FileStatusKindDto::Added,
+        FileStatusKind::Deleted => FileStatusKindDto::Deleted,
+        FileStatusKind::Renamed => FileStatusKindDto::Renamed,
+        FileStatusKind::Copied => FileStatusKindDto::Copied,
+        FileStatusKind::Untracked => FileStatusKindDto::Untracked,
+        FileStatusKind::Ignored => FileStatusKindDto::Ignored,
+        FileStatusKind::Conflicted => FileStatusKindDto::Conflicted,
+    }
+}
+
+#[allow(dead_code)]
+pub fn diff_content_to_dto(diff: &DiffContent) -> DiffContentDto {
+    DiffContentDto {
+        file_path: diff.file_path().to_string(),
+        old_path: diff.old_path().map(|s| s.to_string()),
+        hunks: diff.hunks().iter().map(diff_hunk_to_dto).collect(),
+        is_binary: diff.is_binary(),
+        file_mode_change: diff.file_mode_change().map(|s| s.to_string()),
+    }
+}
+
+#[allow(dead_code)]
+pub fn diff_hunk_to_dto(hunk: &DiffHunk) -> DiffHunkDto {
+    DiffHunkDto {
+        old_start: hunk.old_start(),
+        old_count: hunk.old_count(),
+        new_start: hunk.new_start(),
+        new_count: hunk.new_count(),
+        header: hunk.header().to_string(),
+        lines: hunk.lines().iter().map(diff_line_to_dto).collect(),
+    }
+}
+
+#[allow(dead_code)]
+pub fn diff_line_to_dto(line: &DiffLine) -> DiffLineDto {
+    DiffLineDto {
+        kind: diff_line_kind_to_dto(line.kind()),
+        old_line_no: line.old_line_no(),
+        new_line_no: line.new_line_no(),
+        content: line.content().to_string(),
+    }
+}
+
+#[allow(dead_code)]
+pub fn diff_line_kind_to_dto(kind: DiffLineKind) -> DiffLineKindDto {
+    match kind {
+        DiffLineKind::Context => DiffLineKindDto::Context,
+        DiffLineKind::Addition => DiffLineKindDto::Addition,
+        DiffLineKind::Deletion => DiffLineKindDto::Deletion,
+        DiffLineKind::HunkHeader => DiffLineKindDto::HunkHeader,
+    }
+}
+
+#[allow(dead_code)]
+pub fn commit_info_to_dto(info: &CommitInfo) -> CommitInfoDto {
+    CommitInfoDto {
+        hash: info.hash().to_string(),
+        short_hash: info.short_hash().to_string(),
+        author_name: info.author_name().to_string(),
+        author_email: info.author_email().to_string(),
+        date: info.date().to_string(),
+        message: info.message().to_string(),
+        parent_hashes: info.parent_hashes().iter().map(|h| h.to_string()).collect(),
+    }
+}
+
+#[allow(dead_code)]
+pub fn branch_info_to_dto(branch: &BranchInfo) -> BranchInfoDto {
+    BranchInfoDto {
+        name: branch.name().as_ref().to_string(),
+        is_current: branch.is_current(),
+        upstream: branch.upstream().map(|s| s.to_string()),
+        ahead: branch.ahead(),
+        behind: branch.behind(),
+    }
+}
+
+#[allow(dead_code)]
+pub fn blame_entry_to_dto(entry: &BlameEntry) -> BlameEntryDto {
+    BlameEntryDto {
+        hash: entry.hash().to_string(),
+        author: entry.author().to_string(),
+        date: entry.date().to_string(),
+        line_start: entry.line_start(),
+        line_count: entry.line_count(),
+        content: entry.content().to_string(),
+    }
+}
+
+#[allow(dead_code)]
+pub fn stash_entry_to_dto(entry: &StashEntry) -> StashEntryDto {
+    StashEntryDto {
+        index: entry.index().index(),
+        message: entry.message().to_string(),
+        date: entry.date().to_string(),
+    }
+}
+
+#[allow(dead_code)]
+pub fn git_repo_state_to_dto(state: &GitRepositoryState) -> GitRepoStateDto {
+    GitRepoStateDto {
+        repo_path: state.repo_path().as_str().to_string(),
+        head_branch: state.head_branch().map(|b| b.as_ref().to_string()),
+        is_detached: state.is_detached(),
+        status_clean: state.status_clean(),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Internal conversion helpers
 // ---------------------------------------------------------------------------
 
@@ -409,6 +694,38 @@ fn runtime_status_to_dto(value: RuntimeStatus) -> RuntimeStatusDto {
         RuntimeStatus::Exited => RuntimeStatusDto::Exited,
         RuntimeStatus::Failed => RuntimeStatusDto::Failed,
     }
+}
+
+/// Parse a line-range string like `"10-20"` into a `(u32, u32)` tuple.
+#[allow(dead_code)]
+fn parse_line_range(s: &str) -> Result<(u32, u32), ShellError> {
+    let parts: Vec<&str> = s.splitn(2, '-').collect();
+    if parts.len() != 2 {
+        return Err(ShellError::Validation(format!(
+            "Invalid line range '{s}': expected format 'start-end'"
+        )));
+    }
+    let start: u32 = parts[0]
+        .parse()
+        .map_err(|_| ShellError::Validation(format!("Invalid line range start in '{s}'")))?;
+    let end: u32 = parts[1]
+        .parse()
+        .map_err(|_| ShellError::Validation(format!("Invalid line range end in '{s}'")))?;
+    Ok((start, end))
+}
+
+/// Resolve an optional remote name to a `RemoteName`, defaulting to `"origin"`.
+#[allow(dead_code)]
+fn remote_name_or_default(name: Option<&str>) -> Result<RemoteName, ShellError> {
+    let raw = name.unwrap_or("origin");
+    RemoteName::try_new(raw).map_err(|e| ShellError::Validation(e.to_string()))
+}
+
+/// Resolve an optional branch name, returning an error with `context` if `None`.
+#[allow(dead_code)]
+fn branch_name_required(name: Option<&str>, context: &str) -> Result<BranchName, ShellError> {
+    let raw = name.ok_or_else(|| ShellError::Validation(context.to_string()))?;
+    BranchName::try_new(raw).map_err(|e| ShellError::Validation(e.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -1051,5 +1368,505 @@ mod tests {
         assert!(view.workspace.tabs.is_empty());
         assert_eq!(view.profile_catalog.terminal_profiles.len(), 1);
         assert!(view.runtime_projections.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Git DTO mapping tests
+    // -----------------------------------------------------------------------
+
+    fn test_repo() -> PathBuf {
+        PathBuf::from("/tmp/test-repo")
+    }
+
+    // -- git_command_from_dto -----------------------------------------------
+
+    #[test]
+    fn git_command_from_dto_status() {
+        let dto = GitCommandDto::Status {
+            pane_id: "p1".to_string(),
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::Status { repo_path } => assert_eq!(repo_path, test_repo()),
+            other => panic!("Expected Status, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_diff() {
+        let dto = GitCommandDto::Diff {
+            pane_id: "p1".to_string(),
+            path: Some("file.rs".to_string()),
+            staged: true,
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::Diff { repo_path, staged } => {
+                assert_eq!(repo_path, test_repo());
+                assert!(staged);
+            }
+            other => panic!("Expected Diff, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_stage() {
+        let dto = GitCommandDto::Stage {
+            pane_id: "p1".to_string(),
+            paths: vec!["a.rs".to_string(), "b.rs".to_string()],
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::Stage { paths, .. } => {
+                assert_eq!(paths, vec!["a.rs", "b.rs"]);
+            }
+            other => panic!("Expected Stage, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_stage_lines_parses_ranges() {
+        let dto = GitCommandDto::StageLines {
+            pane_id: "p1".to_string(),
+            path: "file.rs".to_string(),
+            line_ranges: vec!["1-5".to_string(), "10-20".to_string()],
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::StageLines {
+                file_path,
+                line_ranges,
+                ..
+            } => {
+                assert_eq!(file_path, "file.rs");
+                assert_eq!(line_ranges, vec![(1, 5), (10, 20)]);
+            }
+            other => panic!("Expected StageLines, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_stage_lines_rejects_bad_range() {
+        let dto = GitCommandDto::StageLines {
+            pane_id: "p1".to_string(),
+            path: "f.rs".to_string(),
+            line_ranges: vec!["bad".to_string()],
+        };
+        let err = git_command_from_dto(dto, test_repo()).expect_err("should reject");
+        assert!(err.to_string().contains("line range"));
+    }
+
+    #[test]
+    fn git_command_from_dto_commit() {
+        let dto = GitCommandDto::Commit {
+            pane_id: "p1".to_string(),
+            message: "feat: hello".to_string(),
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::Commit { message, .. } => assert_eq!(message, "feat: hello"),
+            other => panic!("Expected Commit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_push_with_remote_and_branch() {
+        let dto = GitCommandDto::Push {
+            pane_id: "p1".to_string(),
+            remote: Some("upstream".to_string()),
+            branch: Some("main".to_string()),
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::Push { remote, branch, .. } => {
+                assert_eq!(remote.as_ref(), "upstream");
+                assert_eq!(branch.as_ref(), "main");
+            }
+            other => panic!("Expected Push, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_push_defaults_remote_to_origin() {
+        let dto = GitCommandDto::Push {
+            pane_id: "p1".to_string(),
+            remote: None,
+            branch: Some("main".to_string()),
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::Push { remote, .. } => assert_eq!(remote.as_ref(), "origin"),
+            other => panic!("Expected Push, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_push_requires_branch() {
+        let dto = GitCommandDto::Push {
+            pane_id: "p1".to_string(),
+            remote: None,
+            branch: None,
+        };
+        let err = git_command_from_dto(dto, test_repo()).expect_err("should reject");
+        assert!(err.to_string().contains("branch"));
+    }
+
+    #[test]
+    fn git_command_from_dto_fetch_defaults_remote() {
+        let dto = GitCommandDto::Fetch {
+            pane_id: "p1".to_string(),
+            remote: None,
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::Fetch { remote, .. } => assert_eq!(remote.as_ref(), "origin"),
+            other => panic!("Expected Fetch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_checkout_branch() {
+        let dto = GitCommandDto::CheckoutBranch {
+            pane_id: "p1".to_string(),
+            name: "feature/test".to_string(),
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::CheckoutBranch { branch, .. } => {
+                assert_eq!(branch.as_ref(), "feature/test");
+            }
+            other => panic!("Expected CheckoutBranch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_log_defaults_max_count() {
+        let dto = GitCommandDto::Log {
+            pane_id: "p1".to_string(),
+            max_count: None,
+            path: None,
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::Log { max_count, .. } => assert_eq!(max_count, 50),
+            other => panic!("Expected Log, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_command_from_dto_stash_drop() {
+        let dto = GitCommandDto::StashDrop {
+            pane_id: "p1".to_string(),
+            index: 3,
+        };
+        let cmd = git_command_from_dto(dto, test_repo()).expect("should map");
+        match cmd {
+            GitCommand::StashDrop { stash_id, .. } => assert_eq!(stash_id.index(), 3),
+            other => panic!("Expected StashDrop, got {other:?}"),
+        }
+    }
+
+    // -- FileStatus → FileStatusDto -----------------------------------------
+
+    #[test]
+    fn file_status_to_dto_maps_all_fields() {
+        let status = FileStatus::new(
+            "src/main.rs",
+            Some("src/old.rs".to_string()),
+            FileStatusKind::Renamed,
+            FileStatusKind::Modified,
+        );
+        let dto = file_status_to_dto(&status);
+        assert_eq!(dto.path, "src/main.rs");
+        assert_eq!(dto.old_path.as_deref(), Some("src/old.rs"));
+        assert_eq!(dto.index_status, FileStatusKindDto::Renamed);
+        assert_eq!(dto.worktree_status, FileStatusKindDto::Modified);
+    }
+
+    #[test]
+    fn file_status_kind_to_dto_maps_all_variants() {
+        let pairs = [
+            (FileStatusKind::Modified, FileStatusKindDto::Modified),
+            (FileStatusKind::Added, FileStatusKindDto::Added),
+            (FileStatusKind::Deleted, FileStatusKindDto::Deleted),
+            (FileStatusKind::Renamed, FileStatusKindDto::Renamed),
+            (FileStatusKind::Copied, FileStatusKindDto::Copied),
+            (FileStatusKind::Untracked, FileStatusKindDto::Untracked),
+            (FileStatusKind::Ignored, FileStatusKindDto::Ignored),
+            (FileStatusKind::Conflicted, FileStatusKindDto::Conflicted),
+        ];
+        for (domain, expected_dto) in pairs {
+            assert_eq!(file_status_kind_to_dto(domain), expected_dto);
+        }
+    }
+
+    // -- DiffContent → DiffContentDto ---------------------------------------
+
+    #[test]
+    fn diff_content_to_dto_maps_complete_diff() {
+        use tabby_git::{DiffContent, DiffHunk, DiffLine, DiffLineKind};
+
+        let line = DiffLine::new(DiffLineKind::Addition, None, Some(1), "new line");
+        let hunk = DiffHunk::new(0, 0, 1, 1, "@@ -0,0 +1,1 @@", vec![line]);
+        let diff = DiffContent::new(
+            "src/lib.rs",
+            Some("src/old_lib.rs".to_string()),
+            vec![hunk],
+            false,
+            Some("100644 -> 100755".to_string()),
+        );
+
+        let dto = diff_content_to_dto(&diff);
+        assert_eq!(dto.file_path, "src/lib.rs");
+        assert_eq!(dto.old_path.as_deref(), Some("src/old_lib.rs"));
+        assert!(!dto.is_binary);
+        assert_eq!(dto.file_mode_change.as_deref(), Some("100644 -> 100755"));
+        assert_eq!(dto.hunks.len(), 1);
+        assert_eq!(dto.hunks[0].old_start, 0);
+        assert_eq!(dto.hunks[0].new_count, 1);
+        assert_eq!(dto.hunks[0].lines.len(), 1);
+        assert_eq!(dto.hunks[0].lines[0].kind, DiffLineKindDto::Addition);
+        assert_eq!(dto.hunks[0].lines[0].content, "new line");
+    }
+
+    // -- CommitInfo → CommitInfoDto -----------------------------------------
+
+    #[test]
+    fn commit_info_to_dto_maps_all_fields() {
+        use tabby_git::value_objects::CommitHash;
+
+        let hash = CommitHash::try_new("abc123def456").expect("valid");
+        let parent = CommitHash::try_new("1111aaaa").expect("valid");
+        let info = CommitInfo::new(
+            hash,
+            "abc123d".to_string(),
+            "Alice".to_string(),
+            "alice@test.com".to_string(),
+            "2026-03-10".to_string(),
+            "feat: test".to_string(),
+            vec![parent],
+        );
+        let dto = commit_info_to_dto(&info);
+        assert_eq!(dto.hash, "abc123def456");
+        assert_eq!(dto.short_hash, "abc123d");
+        assert_eq!(dto.author_name, "Alice");
+        assert_eq!(dto.author_email, "alice@test.com");
+        assert_eq!(dto.message, "feat: test");
+        assert_eq!(dto.parent_hashes, vec!["1111aaaa"]);
+    }
+
+    // -- BranchInfo → BranchInfoDto -----------------------------------------
+
+    #[test]
+    fn branch_info_to_dto_maps_all_fields() {
+        let branch = BranchInfo::new(
+            BranchName::try_new("main").expect("valid"),
+            true,
+            Some("origin/main".to_string()),
+            3,
+            1,
+        );
+        let dto = branch_info_to_dto(&branch);
+        assert_eq!(dto.name, "main");
+        assert!(dto.is_current);
+        assert_eq!(dto.upstream.as_deref(), Some("origin/main"));
+        assert_eq!(dto.ahead, 3);
+        assert_eq!(dto.behind, 1);
+    }
+
+    // -- BlameEntry → BlameEntryDto -----------------------------------------
+
+    #[test]
+    fn blame_entry_to_dto_maps_all_fields() {
+        use tabby_git::value_objects::CommitHash;
+
+        let entry = BlameEntry::new(
+            CommitHash::try_new("deadbeef").expect("valid"),
+            "Alice".to_string(),
+            "2026-03-10".to_string(),
+            1,
+            5,
+            "fn main() {}".to_string(),
+        );
+        let dto = blame_entry_to_dto(&entry);
+        assert_eq!(dto.hash, "deadbeef");
+        assert_eq!(dto.author, "Alice");
+        assert_eq!(dto.line_start, 1);
+        assert_eq!(dto.line_count, 5);
+    }
+
+    // -- StashEntry → StashEntryDto -----------------------------------------
+
+    #[test]
+    fn stash_entry_to_dto_maps_all_fields() {
+        let entry = StashEntry::new(
+            StashId::new(2),
+            "WIP on main".to_string(),
+            "2026-03-10".to_string(),
+        );
+        let dto = stash_entry_to_dto(&entry);
+        assert_eq!(dto.index, 2);
+        assert_eq!(dto.message, "WIP on main");
+        assert_eq!(dto.date, "2026-03-10");
+    }
+
+    // -- GitRepositoryState → GitRepoStateDto -------------------------------
+
+    #[test]
+    fn git_repo_state_to_dto_maps_all_fields() {
+        let state = GitRepositoryState::new(
+            WorkingDirectory::new("/home/user/project").expect("valid"),
+            Some(BranchName::try_new("main").expect("valid")),
+            false,
+            true,
+        );
+        let dto = git_repo_state_to_dto(&state);
+        assert_eq!(dto.repo_path, "/home/user/project");
+        assert_eq!(dto.head_branch.as_deref(), Some("main"));
+        assert!(!dto.is_detached);
+        assert!(dto.status_clean);
+    }
+
+    #[test]
+    fn git_repo_state_to_dto_detached_head() {
+        let state = GitRepositoryState::new(
+            WorkingDirectory::new("/repo").expect("valid"),
+            None,
+            true,
+            false,
+        );
+        let dto = git_repo_state_to_dto(&state);
+        assert!(dto.head_branch.is_none());
+        assert!(dto.is_detached);
+        assert!(!dto.status_clean);
+    }
+
+    // -- git_result_to_dto round-trip tests ---------------------------------
+
+    #[test]
+    fn git_result_to_dto_status_maps_file_statuses() {
+        let files = vec![FileStatus::new(
+            "README.md",
+            None,
+            FileStatusKind::Modified,
+            FileStatusKind::Modified,
+        )];
+        let dto = git_result_to_dto(GitResult::Status(files));
+        match dto {
+            GitResultDto::Status { files } => {
+                assert_eq!(files.len(), 1);
+                assert_eq!(files[0].path, "README.md");
+            }
+            other => panic!("Expected Status, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_result_to_dto_unit_variants() {
+        assert!(matches!(
+            git_result_to_dto(GitResult::Stage),
+            GitResultDto::Stage
+        ));
+        assert!(matches!(
+            git_result_to_dto(GitResult::Unstage),
+            GitResultDto::Unstage
+        ));
+        assert!(matches!(
+            git_result_to_dto(GitResult::Push),
+            GitResultDto::Push
+        ));
+        assert!(matches!(
+            git_result_to_dto(GitResult::Pull),
+            GitResultDto::Pull
+        ));
+        assert!(matches!(
+            git_result_to_dto(GitResult::Fetch),
+            GitResultDto::Fetch
+        ));
+        assert!(matches!(
+            git_result_to_dto(GitResult::CheckoutBranch),
+            GitResultDto::CheckoutBranch
+        ));
+        assert!(matches!(
+            git_result_to_dto(GitResult::DiscardChanges),
+            GitResultDto::DiscardChanges
+        ));
+    }
+
+    #[test]
+    fn git_result_to_dto_commit_uses_short_hash() {
+        use tabby_git::value_objects::CommitHash;
+
+        let info = CommitInfo::new(
+            CommitHash::try_new("abc1234def5678").expect("valid"),
+            "abc1234".to_string(),
+            "Test".to_string(),
+            "test@test.com".to_string(),
+            "2026-03-10".to_string(),
+            "feat: test".to_string(),
+            vec![],
+        );
+        let dto = git_result_to_dto(GitResult::Commit(info));
+        match dto {
+            GitResultDto::Commit { hash } => assert_eq!(hash, "abc1234"),
+            other => panic!("Expected Commit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_result_to_dto_branches() {
+        let branches = vec![BranchInfo::new(
+            BranchName::try_new("develop").expect("valid"),
+            false,
+            None,
+            0,
+            0,
+        )];
+        let dto = git_result_to_dto(GitResult::Branches(branches));
+        match dto {
+            GitResultDto::Branches { branches } => {
+                assert_eq!(branches.len(), 1);
+                assert_eq!(branches[0].name, "develop");
+            }
+            other => panic!("Expected Branches, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_result_to_dto_repo_state() {
+        let state = GitRepositoryState::new(
+            WorkingDirectory::new("/repo").expect("valid"),
+            Some(BranchName::try_new("main").expect("valid")),
+            false,
+            true,
+        );
+        let dto = git_result_to_dto(GitResult::RepoState(state));
+        match dto {
+            GitResultDto::RepoState { state } => {
+                assert_eq!(state.repo_path, "/repo");
+                assert!(state.status_clean);
+            }
+            other => panic!("Expected RepoState, got {other:?}"),
+        }
+    }
+
+    // -- parse_line_range helper tests --------------------------------------
+
+    #[test]
+    fn parse_line_range_valid() {
+        assert_eq!(parse_line_range("1-5").expect("valid"), (1, 5));
+        assert_eq!(parse_line_range("0-100").expect("valid"), (0, 100));
+    }
+
+    #[test]
+    fn parse_line_range_invalid_format() {
+        assert!(parse_line_range("bad").is_err());
+        assert!(parse_line_range("1:5").is_err());
+    }
+
+    #[test]
+    fn parse_line_range_invalid_numbers() {
+        assert!(parse_line_range("abc-5").is_err());
+        assert!(parse_line_range("1-xyz").is_err());
     }
 }
