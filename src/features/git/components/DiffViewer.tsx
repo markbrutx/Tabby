@@ -14,9 +14,18 @@ const OVERSCAN_COUNT = 10;
 
 export type DiffViewMode = "unified" | "split";
 
+export interface StagingCallbacks {
+  readonly onStageLines: (filePath: string, lineRanges: string[]) => void;
+  readonly onUnstageLines: (filePath: string, lineRanges: string[]) => void;
+  readonly onStageHunk: (filePath: string, hunkIndex: number) => void;
+  readonly onUnstageHunk: (filePath: string, hunkIndex: number) => void;
+}
+
 export interface DiffViewerProps {
   readonly diffContent: DiffContent | null;
   readonly mode?: DiffViewMode;
+  readonly staging?: StagingCallbacks;
+  readonly stagedLines?: ReadonlySet<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -26,24 +35,67 @@ export interface DiffViewerProps {
 interface HunkHeaderRow {
   readonly type: "hunkHeader";
   readonly header: string;
+  readonly hunkIndex: number;
 }
 
 interface DiffLineRow {
   readonly type: "line";
   readonly line: DiffLine;
+  readonly hunkIndex: number;
 }
 
 type DiffRow = HunkHeaderRow | DiffLineRow;
 
 function flattenHunks(hunks: readonly DiffHunk[]): readonly DiffRow[] {
   const rows: DiffRow[] = [];
-  for (const hunk of hunks) {
-    rows.push({ type: "hunkHeader", header: hunk.header });
+  for (let hunkIndex = 0; hunkIndex < hunks.length; hunkIndex++) {
+    const hunk = hunks[hunkIndex];
+    rows.push({ type: "hunkHeader", header: hunk.header, hunkIndex });
     for (const line of hunk.lines) {
-      rows.push({ type: "line", line });
+      rows.push({ type: "line", line, hunkIndex });
     }
   }
   return rows;
+}
+
+// ---------------------------------------------------------------------------
+// Staging helpers
+// ---------------------------------------------------------------------------
+
+export function lineKey(line: DiffLine): string {
+  if (line.kind === "addition") return `add:${line.newLineNo}`;
+  if (line.kind === "deletion") return `del:${line.oldLineNo}`;
+  return `ctx:${line.oldLineNo}:${line.newLineNo}`;
+}
+
+function lineRange(line: DiffLine): string {
+  if (line.kind === "addition" && line.newLineNo !== null) {
+    return `${line.newLineNo}-${line.newLineNo}`;
+  }
+  if (line.kind === "deletion" && line.oldLineNo !== null) {
+    return `${line.oldLineNo}-${line.oldLineNo}`;
+  }
+  return "";
+}
+
+export function hunkLineRanges(hunk: DiffHunk): string[] {
+  const ranges: string[] = [];
+  for (const line of hunk.lines) {
+    const r = lineRange(line);
+    if (r !== "" && (line.kind === "addition" || line.kind === "deletion")) {
+      ranges.push(r);
+    }
+  }
+  return ranges;
+}
+
+function isHunkFullyStaged(hunk: DiffHunk, stagedLines: ReadonlySet<string>): boolean {
+  for (const line of hunk.lines) {
+    if (line.kind === "addition" || line.kind === "deletion") {
+      if (!stagedLines.has(lineKey(line))) return false;
+    }
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,6 +105,7 @@ function flattenHunks(hunks: readonly DiffHunk[]): readonly DiffRow[] {
 interface SplitHunkHeaderRow {
   readonly type: "hunkHeader";
   readonly header: string;
+  readonly hunkIndex: number;
 }
 
 interface SplitLineRow {
@@ -60,6 +113,7 @@ interface SplitLineRow {
   readonly lineNo: number | null;
   readonly content: string;
   readonly kind: "context" | "addition" | "deletion" | "blank";
+  readonly sourceLineKey: string | null;
 }
 
 type SplitRow = SplitHunkHeaderRow | SplitLineRow;
@@ -72,8 +126,9 @@ interface SplitPair {
 function buildSplitRows(hunks: readonly DiffHunk[]): readonly SplitPair[] {
   const pairs: SplitPair[] = [];
 
-  for (const hunk of hunks) {
-    const headerRow: SplitHunkHeaderRow = { type: "hunkHeader", header: hunk.header };
+  for (let hunkIndex = 0; hunkIndex < hunks.length; hunkIndex++) {
+    const hunk = hunks[hunkIndex];
+    const headerRow: SplitHunkHeaderRow = { type: "hunkHeader", header: hunk.header, hunkIndex };
     pairs.push({ left: headerRow, right: headerRow });
 
     const lines = hunk.lines;
@@ -82,13 +137,13 @@ function buildSplitRows(hunks: readonly DiffHunk[]): readonly SplitPair[] {
       const line = lines[i];
 
       if (line.kind === "context") {
+        const key = lineKey(line);
         pairs.push({
-          left: { type: "line", lineNo: line.oldLineNo, content: line.content, kind: "context" },
-          right: { type: "line", lineNo: line.newLineNo, content: line.content, kind: "context" },
+          left: { type: "line", lineNo: line.oldLineNo, content: line.content, kind: "context", sourceLineKey: key },
+          right: { type: "line", lineNo: line.newLineNo, content: line.content, kind: "context", sourceLineKey: key },
         });
         i++;
       } else if (line.kind === "deletion") {
-        // Collect consecutive deletions then pair with consecutive additions
         const deletions: DiffLine[] = [];
         while (i < lines.length && lines[i].kind === "deletion") {
           deletions.push(lines[i]);
@@ -106,22 +161,20 @@ function buildSplitRows(hunks: readonly DiffHunk[]): readonly SplitPair[] {
           const add = additions[j];
           pairs.push({
             left: del
-              ? { type: "line", lineNo: del.oldLineNo, content: del.content, kind: "deletion" }
-              : { type: "line", lineNo: null, content: "", kind: "blank" },
+              ? { type: "line", lineNo: del.oldLineNo, content: del.content, kind: "deletion", sourceLineKey: lineKey(del) }
+              : { type: "line", lineNo: null, content: "", kind: "blank", sourceLineKey: null },
             right: add
-              ? { type: "line", lineNo: add.newLineNo, content: add.content, kind: "addition" }
-              : { type: "line", lineNo: null, content: "", kind: "blank" },
+              ? { type: "line", lineNo: add.newLineNo, content: add.content, kind: "addition", sourceLineKey: lineKey(add) }
+              : { type: "line", lineNo: null, content: "", kind: "blank", sourceLineKey: null },
           });
         }
       } else if (line.kind === "addition") {
-        // Standalone addition (no preceding deletion)
         pairs.push({
-          left: { type: "line", lineNo: null, content: "", kind: "blank" },
-          right: { type: "line", lineNo: line.newLineNo, content: line.content, kind: "addition" },
+          left: { type: "line", lineNo: null, content: "", kind: "blank", sourceLineKey: null },
+          right: { type: "line", lineNo: line.newLineNo, content: line.content, kind: "addition", sourceLineKey: lineKey(line) },
         });
         i++;
       } else {
-        // hunkHeader lines shouldn't appear here, skip
         i++;
       }
     }
@@ -213,7 +266,13 @@ function FileModeChange({ mode }: { readonly mode: string }) {
   );
 }
 
-function HunkHeaderCell({ header }: { readonly header: string }) {
+interface HunkHeaderCellProps {
+  readonly header: string;
+  readonly isStaged?: boolean;
+  readonly onStageHunk?: () => void;
+}
+
+function HunkHeaderCell({ header, isStaged, onStageHunk }: HunkHeaderCellProps) {
   return (
     <div
       className="flex bg-blue-900/20"
@@ -225,25 +284,56 @@ function HunkHeaderCell({ header }: { readonly header: string }) {
       <span className="flex-1 px-2 text-blue-300">
         {header}
       </span>
+      {onStageHunk !== undefined && (
+        <button
+          type="button"
+          className="mr-2 shrink-0 rounded px-2 py-0.5 text-xs text-blue-300 hover:bg-blue-900/30"
+          onClick={onStageHunk}
+          data-testid="stage-hunk-btn"
+        >
+          {isStaged ? "Unstage Hunk" : "Stage Hunk"}
+        </button>
+      )}
     </div>
   );
 }
 
 interface DiffLineCellProps {
   readonly line: DiffLine;
+  readonly isStaged?: boolean;
+  readonly onToggleStage?: () => void;
 }
 
-function DiffLineCell({ line }: DiffLineCellProps) {
+function DiffLineCell({ line, isStaged, onToggleStage }: DiffLineCellProps) {
   const lineClass = getLineClassName(line.kind);
+  const isStageable = line.kind === "addition" || line.kind === "deletion";
   const gutterBg =
     line.kind === "addition"
       ? "bg-green-900/15"
       : line.kind === "deletion"
         ? "bg-red-900/15"
         : "";
+  const stagedHighlight = isStaged ? " bg-yellow-900/20" : "";
 
   return (
-    <div className={`flex ${lineClass}`} data-testid="diff-line">
+    <div className={`flex ${lineClass}${stagedHighlight}`} data-testid="diff-line">
+      {/* Staging gutter */}
+      {onToggleStage !== undefined && (
+        <button
+          type="button"
+          className={`w-[24px] shrink-0 select-none border-r border-[var(--color-border)] text-center text-xs ${
+            isStageable
+              ? "cursor-pointer hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+              : "cursor-default text-transparent"
+          } ${gutterBg}`}
+          onClick={isStageable ? onToggleStage : undefined}
+          disabled={!isStageable}
+          data-testid="stage-line-btn"
+          aria-label={isStaged ? "Unstage line" : "Stage line"}
+        >
+          {isStageable ? (isStaged ? "✓" : "+") : ""}
+        </button>
+      )}
       <span
         className={`w-[50px] shrink-0 select-none border-r border-[var(--color-border)] px-1 text-right text-[var(--color-text-soft)] ${gutterBg}`}
         data-testid="line-no-old"
@@ -267,7 +357,13 @@ function DiffLineCell({ line }: DiffLineCellProps) {
 // Split mode sub-components
 // ---------------------------------------------------------------------------
 
-function SplitHunkHeader({ header }: { readonly header: string }) {
+interface SplitHunkHeaderProps {
+  readonly header: string;
+  readonly isStaged?: boolean;
+  readonly onStageHunk?: () => void;
+}
+
+function SplitHunkHeader({ header, isStaged, onStageHunk }: SplitHunkHeaderProps) {
   return (
     <div
       className="flex bg-blue-900/20"
@@ -279,21 +375,55 @@ function SplitHunkHeader({ header }: { readonly header: string }) {
       <span className="flex-1 px-2 text-blue-300">
         {header}
       </span>
+      {onStageHunk !== undefined && (
+        <button
+          type="button"
+          className="mr-2 shrink-0 rounded px-2 py-0.5 text-xs text-blue-300 hover:bg-blue-900/30"
+          onClick={onStageHunk}
+          data-testid="stage-hunk-btn"
+        >
+          {isStaged ? "Unstage Hunk" : "Stage Hunk"}
+        </button>
+      )}
     </div>
   );
 }
 
-function SplitLineCell({ row }: { readonly row: SplitLineRow }) {
+interface SplitLineCellProps {
+  readonly row: SplitLineRow;
+  readonly isStaged?: boolean;
+  readonly onToggleStage?: () => void;
+}
+
+function SplitLineCell({ row, isStaged, onToggleStage }: SplitLineCellProps) {
   const lineClass = getSplitLineClassName(row.kind);
+  const isStageable = row.kind === "addition" || row.kind === "deletion";
   const gutterBg =
     row.kind === "addition"
       ? "bg-green-900/15"
       : row.kind === "deletion"
         ? "bg-red-900/15"
         : "";
+  const stagedHighlight = isStaged ? " bg-yellow-900/20" : "";
 
   return (
-    <div className={`flex ${lineClass}`} data-testid="split-line">
+    <div className={`flex ${lineClass}${stagedHighlight}`} data-testid="split-line">
+      {onToggleStage !== undefined && (
+        <button
+          type="button"
+          className={`w-[24px] shrink-0 select-none border-r border-[var(--color-border)] text-center text-xs ${
+            isStageable
+              ? "cursor-pointer hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+              : "cursor-default text-transparent"
+          } ${gutterBg}`}
+          onClick={isStageable ? onToggleStage : undefined}
+          disabled={!isStageable}
+          data-testid="stage-line-btn"
+          aria-label={isStaged ? "Unstage line" : "Stage line"}
+        >
+          {isStageable ? (isStaged ? "✓" : "+") : ""}
+        </button>
+      )}
       <span
         className={`w-[50px] shrink-0 select-none border-r border-[var(--color-border)] px-1 text-right text-[var(--color-text-soft)] ${gutterBg}`}
         data-testid="split-line-no"
@@ -414,9 +544,13 @@ function useSyncScroll(
 
 interface UnifiedRendererProps {
   readonly rows: readonly DiffRow[];
+  readonly filePath: string;
+  readonly hunks: readonly DiffHunk[];
+  readonly staging?: StagingCallbacks;
+  readonly stagedLines?: ReadonlySet<string>;
 }
 
-function UnifiedRenderer({ rows }: UnifiedRendererProps) {
+function UnifiedRenderer({ rows, filePath, hunks, staging, stagedLines }: UnifiedRendererProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { handleScroll, totalHeight, startIdx, endIdx } = useVirtualScroll(
     rows.length,
@@ -445,9 +579,36 @@ function UnifiedRenderer({ rows }: UnifiedRendererProps) {
               }}
             >
               {row.type === "hunkHeader" ? (
-                <HunkHeaderCell header={row.header} />
+                <HunkHeaderCell
+                  header={row.header}
+                  isStaged={stagedLines !== undefined && hunks[row.hunkIndex] !== undefined && isHunkFullyStaged(hunks[row.hunkIndex], stagedLines)}
+                  onStageHunk={staging !== undefined ? () => {
+                    const hunk = hunks[row.hunkIndex];
+                    if (hunk === undefined) return;
+                    const fullyStaged = stagedLines !== undefined && isHunkFullyStaged(hunk, stagedLines);
+                    if (fullyStaged) {
+                      staging.onUnstageHunk(filePath, row.hunkIndex);
+                    } else {
+                      staging.onStageHunk(filePath, row.hunkIndex);
+                    }
+                  } : undefined}
+                />
               ) : (
-                <DiffLineCell line={row.line} />
+                <DiffLineCell
+                  line={row.line}
+                  isStaged={stagedLines !== undefined && stagedLines.has(lineKey(row.line))}
+                  onToggleStage={staging !== undefined ? () => {
+                    const key = lineKey(row.line);
+                    const staged = stagedLines !== undefined && stagedLines.has(key);
+                    const range = lineRange(row.line);
+                    if (range === "") return;
+                    if (staged) {
+                      staging.onUnstageLines(filePath, [range]);
+                    } else {
+                      staging.onStageLines(filePath, [range]);
+                    }
+                  } : undefined}
+                />
               )}
             </div>
           );
@@ -463,9 +624,13 @@ function UnifiedRenderer({ rows }: UnifiedRendererProps) {
 
 interface SplitRendererProps {
   readonly pairs: readonly SplitPair[];
+  readonly filePath: string;
+  readonly hunks: readonly DiffHunk[];
+  readonly staging?: StagingCallbacks;
+  readonly stagedLines?: ReadonlySet<string>;
 }
 
-function SplitRenderer({ pairs }: SplitRendererProps) {
+function SplitRenderer({ pairs, filePath, hunks, staging, stagedLines }: SplitRendererProps) {
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
   const { onLeftScroll, onRightScroll } = useSyncScroll(leftRef, rightRef);
@@ -509,9 +674,39 @@ function SplitRenderer({ pairs }: SplitRendererProps) {
                 }}
               >
                 {pair.left.type === "hunkHeader" ? (
-                  <SplitHunkHeader header={pair.left.header} />
+                  <SplitHunkHeader
+                    header={pair.left.header}
+                    isStaged={stagedLines !== undefined && hunks[pair.left.hunkIndex] !== undefined && isHunkFullyStaged(hunks[pair.left.hunkIndex], stagedLines)}
+                    onStageHunk={staging !== undefined ? () => {
+                      const hIdx = (pair.left as SplitHunkHeaderRow).hunkIndex;
+                      const hunk = hunks[hIdx];
+                      if (hunk === undefined) return;
+                      const fullyStaged = stagedLines !== undefined && isHunkFullyStaged(hunk, stagedLines);
+                      if (fullyStaged) {
+                        staging.onUnstageHunk(filePath, hIdx);
+                      } else {
+                        staging.onStageHunk(filePath, hIdx);
+                      }
+                    } : undefined}
+                  />
                 ) : (
-                  <SplitLineCell row={pair.left} />
+                  <SplitLineCell
+                    row={pair.left}
+                    isStaged={stagedLines !== undefined && pair.left.sourceLineKey !== null && stagedLines.has(pair.left.sourceLineKey)}
+                    onToggleStage={staging !== undefined && pair.left.sourceLineKey !== null ? () => {
+                      const key = (pair.left as SplitLineRow).sourceLineKey;
+                      if (key === null) return;
+                      const staged = stagedLines !== undefined && stagedLines.has(key);
+                      const row = pair.left as SplitLineRow;
+                      const range = row.lineNo !== null ? `${row.lineNo}-${row.lineNo}` : "";
+                      if (range === "") return;
+                      if (staged) {
+                        staging.onUnstageLines(filePath, [range]);
+                      } else {
+                        staging.onStageLines(filePath, [range]);
+                      }
+                    } : undefined}
+                  />
                 )}
               </div>
             );
@@ -543,7 +738,23 @@ function SplitRenderer({ pairs }: SplitRendererProps) {
                 {pair.right.type === "hunkHeader" ? (
                   <SplitHunkHeader header={pair.right.header} />
                 ) : (
-                  <SplitLineCell row={pair.right} />
+                  <SplitLineCell
+                    row={pair.right}
+                    isStaged={stagedLines !== undefined && pair.right.sourceLineKey !== null && stagedLines.has(pair.right.sourceLineKey)}
+                    onToggleStage={staging !== undefined && pair.right.sourceLineKey !== null ? () => {
+                      const key = (pair.right as SplitLineRow).sourceLineKey;
+                      if (key === null) return;
+                      const staged = stagedLines !== undefined && stagedLines.has(key);
+                      const row = pair.right as SplitLineRow;
+                      const range = row.lineNo !== null ? `${row.lineNo}-${row.lineNo}` : "";
+                      if (range === "") return;
+                      if (staged) {
+                        staging.onUnstageLines(filePath, [range]);
+                      } else {
+                        staging.onStageLines(filePath, [range]);
+                      }
+                    } : undefined}
+                  />
                 )}
               </div>
             );
@@ -558,7 +769,7 @@ function SplitRenderer({ pairs }: SplitRendererProps) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function DiffViewer({ diffContent, mode: initialMode }: DiffViewerProps) {
+export function DiffViewer({ diffContent, mode: initialMode, staging, stagedLines }: DiffViewerProps) {
   const [mode, setMode] = useState<DiffViewMode>(initialMode ?? "unified");
 
   // Sync with prop changes
@@ -606,9 +817,21 @@ export function DiffViewer({ diffContent, mode: initialMode }: DiffViewerProps) 
       {hasNoLines ? (
         <EmptyState />
       ) : mode === "unified" ? (
-        <UnifiedRenderer rows={unifiedRows} />
+        <UnifiedRenderer
+          rows={unifiedRows}
+          filePath={diffContent.filePath}
+          hunks={diffContent.hunks}
+          staging={staging}
+          stagedLines={stagedLines}
+        />
       ) : (
-        <SplitRenderer pairs={splitPairs} />
+        <SplitRenderer
+          pairs={splitPairs}
+          filePath={diffContent.filePath}
+          hunks={diffContent.hunks}
+          staging={staging}
+          stagedLines={stagedLines}
+        />
       )}
     </div>
   );

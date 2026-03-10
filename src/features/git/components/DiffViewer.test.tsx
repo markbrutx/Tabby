@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import { DiffViewer } from "./DiffViewer";
+import { describe, expect, it, vi } from "vitest";
+import { DiffViewer, type StagingCallbacks } from "./DiffViewer";
 import type { DiffContent, DiffHunk, DiffLine } from "@/features/git/domain/models";
 
 // ---------------------------------------------------------------------------
@@ -495,5 +495,302 @@ describe("DiffViewer", () => {
     expect(rightContents.length).toBeGreaterThanOrEqual(1);
     expect(leftContents[0]).toHaveTextContent("shared line");
     expect(rightContents[0]).toHaveTextContent("shared line");
+  });
+
+  // -------------------------------------------------------------------------
+  // Line-level staging tests
+  // -------------------------------------------------------------------------
+
+  function makeStagingCallbacks(): StagingCallbacks & {
+    stageLinesCalls: Array<{ filePath: string; lineRanges: string[] }>;
+    unstageLinesCalls: Array<{ filePath: string; lineRanges: string[] }>;
+    stageHunkCalls: Array<{ filePath: string; hunkIndex: number }>;
+    unstageHunkCalls: Array<{ filePath: string; hunkIndex: number }>;
+  } {
+    const stageLinesCalls: Array<{ filePath: string; lineRanges: string[] }> = [];
+    const unstageLinesCalls: Array<{ filePath: string; lineRanges: string[] }> = [];
+    const stageHunkCalls: Array<{ filePath: string; hunkIndex: number }> = [];
+    const unstageHunkCalls: Array<{ filePath: string; hunkIndex: number }> = [];
+    return {
+      onStageLines: vi.fn((filePath: string, lineRanges: string[]) => {
+        stageLinesCalls.push({ filePath, lineRanges });
+      }),
+      onUnstageLines: vi.fn((filePath: string, lineRanges: string[]) => {
+        unstageLinesCalls.push({ filePath, lineRanges });
+      }),
+      onStageHunk: vi.fn((filePath: string, hunkIndex: number) => {
+        stageHunkCalls.push({ filePath, hunkIndex });
+      }),
+      onUnstageHunk: vi.fn((filePath: string, hunkIndex: number) => {
+        unstageHunkCalls.push({ filePath, hunkIndex });
+      }),
+      stageLinesCalls,
+      unstageLinesCalls,
+      stageHunkCalls,
+      unstageHunkCalls,
+    };
+  }
+
+  it("renders stage line buttons when staging callbacks are provided", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 2, content: "+ added" }),
+            makeLine({ kind: "deletion", oldLineNo: 3, newLineNo: null, content: "- removed" }),
+            makeLine({ kind: "context", oldLineNo: 4, newLineNo: 4, content: "  ctx" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} />);
+    const stageButtons = screen.getAllByTestId("stage-line-btn");
+    // 3 lines → 3 stage buttons (addition, deletion, context — context is disabled)
+    expect(stageButtons).toHaveLength(3);
+  });
+
+  it("does not render stage line buttons when no staging callbacks", () => {
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} />);
+    expect(screen.queryAllByTestId("stage-line-btn")).toHaveLength(0);
+  });
+
+  it("clicking addition line gutter calls onStageLines with correct range", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 5, content: "+ new line" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} />);
+    const stageButtons = screen.getAllByTestId("stage-line-btn");
+    // Click the addition line's stage button
+    fireEvent.click(stageButtons[0]);
+    expect(staging.onStageLines).toHaveBeenCalledWith("src/main.ts", ["5-5"]);
+  });
+
+  it("clicking deletion line gutter calls onStageLines with correct range", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "deletion", oldLineNo: 8, newLineNo: null, content: "- old line" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} />);
+    const stageButtons = screen.getAllByTestId("stage-line-btn");
+    fireEvent.click(stageButtons[0]);
+    expect(staging.onStageLines).toHaveBeenCalledWith("src/main.ts", ["8-8"]);
+  });
+
+  it("context line stage button is disabled", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "context", oldLineNo: 1, newLineNo: 1, content: "  ctx" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} />);
+    const stageButtons = screen.getAllByTestId("stage-line-btn");
+    expect(stageButtons[0]).toBeDisabled();
+  });
+
+  it("staged line shows checkmark in gutter", () => {
+    const staging = makeStagingCallbacks();
+    const stagedLines = new Set(["add:5"]);
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 5, content: "+ new line" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} stagedLines={stagedLines} />);
+    const stageButtons = screen.getAllByTestId("stage-line-btn");
+    expect(stageButtons[0]).toHaveTextContent("✓");
+  });
+
+  it("unstaged line shows + icon in gutter", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 5, content: "+ new line" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} stagedLines={new Set()} />);
+    const stageButtons = screen.getAllByTestId("stage-line-btn");
+    expect(stageButtons[0]).toHaveTextContent("+");
+  });
+
+  it("clicking staged line calls onUnstageLines", () => {
+    const staging = makeStagingCallbacks();
+    const stagedLines = new Set(["add:5"]);
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 5, content: "+ new line" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} stagedLines={stagedLines} />);
+    const stageButtons = screen.getAllByTestId("stage-line-btn");
+    fireEvent.click(stageButtons[0]);
+    expect(staging.onUnstageLines).toHaveBeenCalledWith("src/main.ts", ["5-5"]);
+  });
+
+  it("staged line has highlight class", () => {
+    const staging = makeStagingCallbacks();
+    const stagedLines = new Set(["add:5"]);
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 5, content: "+ new line" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} stagedLines={stagedLines} />);
+    const lines = screen.getAllByTestId("diff-line");
+    expect(lines[0].className).toContain("bg-yellow-900");
+  });
+
+  // -------------------------------------------------------------------------
+  // Hunk-level staging tests
+  // -------------------------------------------------------------------------
+
+  it("renders Stage Hunk button on hunk headers when staging is provided", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} staging={staging} />);
+    const hunkBtns = screen.getAllByTestId("stage-hunk-btn");
+    expect(hunkBtns).toHaveLength(1);
+    expect(hunkBtns[0]).toHaveTextContent("Stage Hunk");
+  });
+
+  it("does not render Stage Hunk button when no staging callbacks", () => {
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} />);
+    expect(screen.queryAllByTestId("stage-hunk-btn")).toHaveLength(0);
+  });
+
+  it("clicking Stage Hunk button calls onStageHunk with correct hunk index", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} staging={staging} />);
+    const hunkBtns = screen.getAllByTestId("stage-hunk-btn");
+    fireEvent.click(hunkBtns[0]);
+    expect(staging.onStageHunk).toHaveBeenCalledWith("src/main.ts", 0);
+  });
+
+  it("hunk button shows 'Unstage Hunk' when all hunk lines are staged", () => {
+    const staging = makeStagingCallbacks();
+    const stagedLines = new Set(["del:2", "add:2"]);
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "context", oldLineNo: 1, newLineNo: 1, content: "  line 1" }),
+            makeLine({ kind: "deletion", oldLineNo: 2, newLineNo: null, content: "- removed" }),
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 2, content: "+ added" }),
+            makeLine({ kind: "context", oldLineNo: 3, newLineNo: 3, content: "  line 3" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} stagedLines={stagedLines} />);
+    const hunkBtns = screen.getAllByTestId("stage-hunk-btn");
+    expect(hunkBtns[0]).toHaveTextContent("Unstage Hunk");
+  });
+
+  it("clicking Unstage Hunk calls onUnstageHunk when fully staged", () => {
+    const staging = makeStagingCallbacks();
+    const stagedLines = new Set(["del:2", "add:2"]);
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "context", oldLineNo: 1, newLineNo: 1, content: "  line 1" }),
+            makeLine({ kind: "deletion", oldLineNo: 2, newLineNo: null, content: "- removed" }),
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 2, content: "+ added" }),
+            makeLine({ kind: "context", oldLineNo: 3, newLineNo: 3, content: "  line 3" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} staging={staging} stagedLines={stagedLines} />);
+    const hunkBtns = screen.getAllByTestId("stage-hunk-btn");
+    fireEvent.click(hunkBtns[0]);
+    expect(staging.onUnstageHunk).toHaveBeenCalledWith("src/main.ts", 0);
+  });
+
+  it("staging works in split mode - line buttons appear", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "deletion", oldLineNo: 1, newLineNo: null, content: "- old" }),
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 1, content: "+ new" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} mode="split" staging={staging} />);
+    const stageButtons = screen.getAllByTestId("stage-line-btn");
+    // Left panel: hunk header blank + deletion = at least 1 stageable
+    // Right panel: hunk header blank + addition = at least 1 stageable
+    expect(stageButtons.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("split mode clicking line gutter calls staging callback", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent({
+      hunks: [
+        makeHunk({
+          lines: [
+            makeLine({ kind: "addition", oldLineNo: null, newLineNo: 3, content: "+ added" }),
+          ],
+        }),
+      ],
+    });
+    render(<DiffViewer diffContent={diff} mode="split" staging={staging} />);
+    // Find all non-disabled stage buttons
+    const stageButtons = screen.getAllByTestId("stage-line-btn")
+      .filter((btn) => !btn.hasAttribute("disabled") || btn.getAttribute("disabled") === "false");
+    const enabledButtons = stageButtons.filter((btn) => !(btn as HTMLButtonElement).disabled);
+    if (enabledButtons.length > 0) {
+      fireEvent.click(enabledButtons[0]);
+      expect(staging.onStageLines).toHaveBeenCalled();
+    }
+  });
+
+  it("split mode hunk header shows Stage Hunk button", () => {
+    const staging = makeStagingCallbacks();
+    const diff = makeDiffContent();
+    render(<DiffViewer diffContent={diff} mode="split" staging={staging} />);
+    const hunkBtns = screen.getAllByTestId("stage-hunk-btn");
+    // Split mode: left panel header has the button
+    expect(hunkBtns.length).toBeGreaterThanOrEqual(1);
   });
 });

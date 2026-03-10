@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-03-10 10:43 - GIT-030: Add split (side-by-side) mode to DiffViewer
+Thread:
+Run: 20260310-012951-93839 (iteration 32)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-32.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-32.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 3480a03 feat: add split (side-by-side) mode to DiffViewer with synchronized scrolling (GIT-030)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (304 tests, 31 DiffViewer tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (563 tests)
+- Files changed:
+  - src/features/git/components/DiffViewer.tsx
+  - src/features/git/components/DiffViewer.test.tsx
+- Implemented split (side-by-side) mode for DiffViewer:
+  - Added `mode` prop: 'unified' | 'split' (defaults to 'unified')
+  - Mode toggle button in diff header switches between modes
+  - Split mode: left panel shows old file (deletions in red), right panel shows new file (additions in green)
+  - Line alignment: deletions paired with additions, blank lines inserted for unmatched lines
+  - Synchronized scrolling between left and right panels via `useSyncScroll` hook
+  - Virtual scrolling works in both modes
+  - 16 new tests covering: toggle behavior, two-column rendering, color coding, blank line insertion, virtual scrolling in split mode, scroll sync containers, context line duplication
+- **Learnings for future iterations:**
+  - Split diff alignment requires collecting consecutive deletion/addition blocks and pairing them
+  - Synchronized scrolling needs a guard (`scrollingRef`) to prevent infinite scroll loops
+  - Virtual scrolling in split mode can share one scroll calculation for both panels since rows are aligned
+---
+
 ## 2026-03-10 10:38 - GIT-029: Create DiffViewer component — unified mode
 Thread:
 Run: 20260310-012951-93839 (iteration 31)

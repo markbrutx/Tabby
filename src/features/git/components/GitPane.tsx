@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { StoreApi, UseBoundStore } from "zustand";
 import type { PaneSnapshotModel } from "@/features/workspace/model/workspaceSnapshot";
 import type { GitClient } from "@/app-shell/clients";
@@ -8,7 +8,7 @@ import {
   type GitPaneState,
 } from "@/features/git/application/useGitPaneStore";
 import { FileTreePanel } from "./FileTreePanel";
-import { DiffViewer } from "./DiffViewer";
+import { DiffViewer, type StagingCallbacks } from "./DiffViewer";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -91,6 +91,18 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
   const stageFiles = store((s) => s.stageFiles);
   const unstageFiles = store((s) => s.unstageFiles);
   const discardChanges = store((s) => s.discardChanges);
+  const stageLines = store((s) => s.stageLines);
+  const unstageLines = store((s) => s.unstageLines);
+  const stageHunk = store((s) => s.stageHunk);
+  const unstageHunk = store((s) => s.unstageHunk);
+  const stagedLinesSet = store((s) => s.stagedLines);
+
+  const stagingCallbacks: StagingCallbacks = useMemo(() => ({
+    onStageLines: (filePath: string, lineRanges: string[]) => void stageLines(filePath, lineRanges),
+    onUnstageLines: (filePath: string, lineRanges: string[]) => void unstageLines(filePath, lineRanges),
+    onStageHunk: (filePath: string, hunkIndex: number) => void stageHunk(filePath, hunkIndex),
+    onUnstageHunk: (filePath: string, hunkIndex: number) => void unstageHunk(filePath, hunkIndex),
+  }), [stageLines, unstageLines, stageHunk, unstageHunk]);
 
   useEffect(() => {
     void refreshStatus();
@@ -165,7 +177,7 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
             className="min-h-0 flex-1"
             data-testid="git-diff-area"
           >
-            <DiffViewer diffContent={diffContent} />
+            <DiffViewer diffContent={diffContent} staging={stagingCallbacks} stagedLines={stagedLinesSet} />
           </div>
 
           {/* Bottom — commit area */}
