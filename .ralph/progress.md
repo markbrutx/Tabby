@@ -1,5 +1,39 @@
 # Progress Log
 
+## 2026-03-10 09:57 - GIT-020: Wire CliGitAdapter and GitApplicationService into AppShell
+Thread:
+Run: 20260310-012951-93839 (iteration 22)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-22.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-22.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 3bcb589 feat: wire CliGitAdapter and GitApplicationService into AppShell (GIT-020)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (203 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (305 tests)
+  - Command: cargo check --workspace -> PASS
+- Files changed:
+  - src-tauri/src/shell/mod.rs (AppShell struct + new() + dispatch_git_command)
+  - src-tauri/src/application/runtime_service.rs (repo_path_for_pane method)
+  - src-tauri/src/mapping/dto_mappers.rs (extract_git_pane_id, removed dead_code allows)
+  - src-tauri/src/infrastructure/mod.rs (removed unused_imports allow)
+- What was implemented:
+  - AppShell struct gained git_service: GitApplicationService field
+  - AppShell::new() creates CliGitAdapter and injects into GitApplicationService
+  - dispatch_git_command() method resolves repo path from runtime (git_repo_path/terminal_cwd) or workspace pane spec, then delegates to git_service
+  - RuntimeApplicationService gained repo_path_for_pane() for path resolution
+  - extract_git_pane_id() helper extracts pane_id from any GitCommandDto variant
+- **Learnings for future iterations:**
+  - BrowserPaneSpec has no working_directory field (only initial_url), must handle None case in fallback path resolution
+  - repo_path resolution follows priority: git_repo_path > terminal_cwd > workspace pane spec working_directory
+  - All git DTO mapper functions had #[allow(dead_code)] since they weren't wired yet; now reachable through dispatch_git_command
+---
+
 ## 2026-03-10 09:50 - GIT-019: Implement log, blame, stash, repo_state operations
 Thread:
 Run: 20260310-012951-93839 (iteration 21)

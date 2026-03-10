@@ -44,6 +44,14 @@ async dispatchBrowserSurfaceCommand(command: BrowserSurfaceCommandDto) : Promise
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async dispatchGitCommand(command: GitCommandDto) : Promise<Result<GitResultDto, ShellError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("dispatch_git_command", { command }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -57,8 +65,20 @@ async dispatchBrowserSurfaceCommand(command: BrowserSurfaceCommandDto) : Promise
 
 /** user-defined types **/
 
+export type BlameEntryDto = { hash: string; author: string; date: string; lineStart: number; lineCount: number; content: string }
+export type BranchInfoDto = { name: string; isCurrent: boolean; upstream: string | null; ahead: number; behind: number }
 export type BrowserSurfaceBoundsDto = { x: number; y: number; width: number; height: number }
 export type BrowserSurfaceCommandDto = { kind: "ensure"; pane_id: string; url: string; bounds: BrowserSurfaceBoundsDto } | { kind: "setBounds"; pane_id: string; bounds: BrowserSurfaceBoundsDto } | { kind: "setVisible"; pane_id: string; visible: boolean } | { kind: "close"; pane_id: string }
+export type CommitInfoDto = { hash: string; shortHash: string; authorName: string; authorEmail: string; date: string; message: string; parentHashes: string[] }
+export type DiffContentDto = { filePath: string; oldPath: string | null; hunks: DiffHunkDto[]; isBinary: boolean; fileModeChange: string | null }
+export type DiffHunkDto = { oldStart: number; oldCount: number; newStart: number; newCount: number; header: string; lines: DiffLineDto[] }
+export type DiffLineDto = { kind: DiffLineKindDto; oldLineNo: number | null; newLineNo: number | null; content: string }
+export type DiffLineKindDto = "context" | "addition" | "deletion" | "hunkHeader"
+export type FileStatusDto = { path: string; oldPath: string | null; indexStatus: FileStatusKindDto; worktreeStatus: FileStatusKindDto }
+export type FileStatusKindDto = "modified" | "added" | "deleted" | "renamed" | "copied" | "untracked" | "ignored" | "conflicted"
+export type GitCommandDto = { kind: "status"; pane_id: string } | { kind: "diff"; pane_id: string; path: string | null; staged: boolean } | { kind: "stage"; pane_id: string; paths: string[] } | { kind: "unstage"; pane_id: string; paths: string[] } | { kind: "stageLines"; pane_id: string; path: string; line_ranges: string[] } | { kind: "commit"; pane_id: string; message: string } | { kind: "push"; pane_id: string; remote: string | null; branch: string | null } | { kind: "pull"; pane_id: string; remote: string | null; branch: string | null } | { kind: "fetch"; pane_id: string; remote: string | null } | { kind: "branches"; pane_id: string } | { kind: "checkoutBranch"; pane_id: string; name: string } | { kind: "createBranch"; pane_id: string; name: string; start_point: string | null } | { kind: "deleteBranch"; pane_id: string; name: string; force: boolean } | { kind: "mergeBranch"; pane_id: string; name: string } | { kind: "log"; pane_id: string; max_count: number | null; path: string | null } | { kind: "blame"; pane_id: string; path: string } | { kind: "stashPush"; pane_id: string; message: string | null } | { kind: "stashPop"; pane_id: string; index: number | null } | { kind: "stashList"; pane_id: string } | { kind: "stashDrop"; pane_id: string; index: number } | { kind: "discardChanges"; pane_id: string; paths: string[] } | { kind: "repoState"; pane_id: string }
+export type GitRepoStateDto = { repoPath: string; headBranch: string | null; isDetached: boolean; statusClean: boolean }
+export type GitResultDto = { kind: "status"; files: FileStatusDto[] } | { kind: "diff"; diffs: DiffContentDto[] } | { kind: "stage" } | { kind: "unstage" } | { kind: "stageLines" } | { kind: "commit"; hash: string } | { kind: "push" } | { kind: "pull" } | { kind: "fetch" } | { kind: "branches"; branches: BranchInfoDto[] } | { kind: "checkoutBranch" } | { kind: "createBranch" } | { kind: "deleteBranch" } | { kind: "mergeBranch"; message: string } | { kind: "log"; commits: CommitInfoDto[] } | { kind: "blame"; entries: BlameEntryDto[] } | { kind: "stashPush" } | { kind: "stashPop" } | { kind: "stashList"; entries: StashEntryDto[] } | { kind: "stashDrop" } | { kind: "discardChanges" } | { kind: "repoState"; state: GitRepoStateDto }
 export type LayoutPresetDto = "1x1" | "1x2" | "2x2" | "2x3" | "3x3"
 export type PaneRuntimeView = { paneId: string; runtimeSessionId: string | null; kind: RuntimeKindDto; status: RuntimeStatusDto; lastError: string | null; browserLocation: string | null; terminalCwd: string | null; gitRepoPath: string | null }
 export type PaneSpecDto = { kind: "terminal"; launch_profile_id: string; working_directory: string; command_override: string | null } | { kind: "browser"; initial_url: string } | { kind: "git"; working_directory: string }
@@ -75,6 +95,7 @@ export type SettingsView = { defaultLayout: LayoutPresetDto; defaultTerminalProf
 export type ShellError = { Validation: string } | { State: string } | { NotFound: string } | { Pty: string } | { Io: string } | { Store: string } | { Serialization: string }
 export type SplitDirectionDto = "horizontal" | "vertical"
 export type SplitNodeDto = { type: "pane"; paneId: string } | { type: "split"; direction: SplitDirectionDto; ratio: number; first: SplitNodeDto; second: SplitNodeDto }
+export type StashEntryDto = { index: number; message: string; date: string }
 export type TabView = { tabId: string; title: string; layout: SplitNodeDto; panes: PaneView[]; activePaneId: string }
 export type TerminalOutputEvent = { paneId: string; runtimeSessionId: string; chunk: string }
 export type ThemeModeDto = "system" | "dawn" | "midnight"

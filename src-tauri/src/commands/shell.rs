@@ -3,8 +3,8 @@ use std::sync::Arc;
 use tauri::State;
 
 use tabby_contracts::{
-    BrowserSurfaceCommandDto, RuntimeCommandDto, SettingsCommandDto, SettingsView,
-    WorkspaceBootstrapView, WorkspaceCommandDto, WorkspaceView,
+    BrowserSurfaceCommandDto, GitCommandDto, GitResultDto, RuntimeCommandDto, SettingsCommandDto,
+    SettingsView, WorkspaceBootstrapView, WorkspaceCommandDto, WorkspaceView,
 };
 
 use crate::shell::error::ShellError;
@@ -52,4 +52,13 @@ pub fn dispatch_browser_surface_command(
     command: BrowserSurfaceCommandDto,
 ) -> Result<(), ShellError> {
     state.dispatch_browser_surface_command(command)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn dispatch_git_command(
+    state: State<'_, Arc<AppShell>>,
+    command: GitCommandDto,
+) -> Result<GitResultDto, ShellError> {
+    state.dispatch_git_command(command)
 }

@@ -102,7 +102,7 @@ pub struct BlameEntryDto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct StashEntryDto {
-    pub index: usize,
+    pub index: u32,
     pub message: String,
     pub date: String,
 }
@@ -198,14 +198,14 @@ pub enum GitCommandDto {
     },
     StashPop {
         pane_id: String,
-        index: Option<usize>,
+        index: Option<u32>,
     },
     StashList {
         pane_id: String,
     },
     StashDrop {
         pane_id: String,
-        index: usize,
+        index: u32,
     },
     DiscardChanges {
         pane_id: String,

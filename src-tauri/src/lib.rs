@@ -18,11 +18,11 @@ use tracing::{error, warn};
 use tracing_subscriber::EnvFilter;
 
 use tabby_contracts::{
-    BrowserSurfaceBoundsDto, BrowserSurfaceCommandDto, LayoutPresetDto, PaneRuntimeView,
-    PaneSpecDto, ProfileCatalogView, RuntimeCommandDto, RuntimeStatusChangedEvent,
-    SettingsCommandDto, SettingsProjectionUpdatedEvent, SettingsView, SplitDirectionDto,
-    SplitNodeDto, TerminalOutputEvent, WorkspaceBootstrapView, WorkspaceCommandDto,
-    WorkspaceProjectionUpdatedEvent, WorkspaceView,
+    BrowserSurfaceBoundsDto, BrowserSurfaceCommandDto, GitCommandDto, GitResultDto,
+    LayoutPresetDto, PaneRuntimeView, PaneSpecDto, ProfileCatalogView, RuntimeCommandDto,
+    RuntimeStatusChangedEvent, SettingsCommandDto, SettingsProjectionUpdatedEvent, SettingsView,
+    SplitDirectionDto, SplitNodeDto, TerminalOutputEvent, WorkspaceBootstrapView,
+    WorkspaceCommandDto, WorkspaceProjectionUpdatedEvent, WorkspaceView,
 };
 
 use crate::shell::AppShell;
@@ -41,6 +41,7 @@ fn specta_builder() -> SpectaBuilder<Wry> {
             commands::shell::dispatch_settings_command,
             commands::shell::dispatch_runtime_command,
             commands::shell::dispatch_browser_surface_command,
+            commands::shell::dispatch_git_command,
         ])
         .typ::<WorkspaceBootstrapView>()
         .typ::<WorkspaceCommandDto>()
@@ -55,6 +56,8 @@ fn specta_builder() -> SpectaBuilder<Wry> {
         .typ::<TerminalOutputEvent>()
         .typ::<BrowserSurfaceCommandDto>()
         .typ::<BrowserSurfaceBoundsDto>()
+        .typ::<GitCommandDto>()
+        .typ::<GitResultDto>()
         .typ::<PaneSpecDto>()
         .typ::<ProfileCatalogView>()
         .typ::<SplitNodeDto>()

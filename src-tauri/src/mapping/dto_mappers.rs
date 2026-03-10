@@ -482,7 +482,7 @@ pub fn git_command_from_dto(
         GitCommandDto::StashList { .. } => GitCommand::StashList { repo_path },
         GitCommandDto::StashDrop { index, .. } => GitCommand::StashDrop {
             repo_path,
-            stash_id: StashId::new(index),
+            stash_id: StashId::new(index as usize),
         },
         GitCommandDto::DiscardChanges { paths, .. } => {
             GitCommand::DiscardChanges { repo_path, paths }
@@ -652,7 +652,7 @@ pub fn blame_entry_to_dto(entry: &BlameEntry) -> BlameEntryDto {
 #[allow(dead_code)]
 pub fn stash_entry_to_dto(entry: &StashEntry) -> StashEntryDto {
     StashEntryDto {
-        index: entry.index().index(),
+        index: entry.index().index() as u32,
         message: entry.message().to_string(),
         date: entry.date().to_string(),
     }
