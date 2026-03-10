@@ -1,5 +1,33 @@
 # Progress Log
 
+## 2026-03-10 10:20 - GIT-026: Update workspace snapshot builder for Git panes
+Thread:
+Run: 20260310-012951-93839 (iteration 28)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-28.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-28.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 9da386a feat: add gitRepoPath to workspace snapshot builder for Git panes (GIT-026)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (246 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (312 tests)
+- Files changed:
+  - src/features/workspace/model/workspaceSnapshot.ts
+  - src/features/workspace/model/workspaceSnapshot.test.ts (new)
+- Added optional `gitRepoPath?: string` field to PaneSnapshotModel
+- Updated buildWorkspaceSnapshotModel to populate gitRepoPath from runtime (preferred) or spec fallback for git panes
+- Added 7 unit tests covering: null workspace, terminal/browser/git pane snapshots, runtime vs spec fallback, mixed pane types
+- **Learnings for future iterations:**
+  - RuntimeReadModel already had `gitRepoPath` field from GIT-023, so the builder can prefer runtime data over spec data
+  - ProfileReadModel requires `description` field — test fixtures must include it
+  - `.ralph/` is gitignored — cannot stage those files
+---
+
 ## 2026-03-10 10:15 - GIT-025: Create GitClient transport and mock for browser dev
 Thread:
 Run: 20260310-012951-93839 (iteration 27)
