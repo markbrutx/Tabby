@@ -1,5 +1,33 @@
 # Progress Log
 
+## 2026-03-10 11:52 - GIT-039: Add Git option to SplitPopup pane type selector
+Thread:
+Run: 20260310-012951-93839 (iteration 41)
+Run log: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-41.log
+Run summary: /Users/markbrutx/pet/Tabby/.ralph/runs/run-20260310-012951-93839-iter-41.md
+- Guardrails reviewed: yes
+- No-commit run: false
+- Commit: 3e2b1c0 feat: add Git option to SplitPopup pane type selector (GIT-039)
+- Post-commit status: clean
+- Verification:
+  - Command: bun run lint -> PASS
+  - Command: bun run typecheck -> PASS
+  - Command: bun run test -> PASS (459 tests)
+  - Command: cargo fmt --all --check -> PASS
+  - Command: cargo clippy --workspace --all-targets --all-features -- -D warnings -> PASS
+  - Command: cargo test --workspace -> PASS (312 tests)
+- Files changed:
+  - src/features/workspace/components/SplitPopup.tsx
+  - src/features/workspace/components/SplitPopup.test.tsx
+- Added Git as third mode option in SplitPopup alongside Terminal and Browser
+- Git mode shows working directory input with folder picker, defaulting to current pane's cwd
+- Confirm produces PaneSpec with kind: 'git' and selected working directory
+- Added 5 component tests: Git option visible, selecting Git shows directory input, confirm produces correct spec, defaults to git mode when defaultSpec is git, cancel returns without changes
+- **Learnings for future iterations:**
+  - GitPaneSpec already existed in domain models, just needed UI integration
+  - Separate gitCwd state avoids conflicts with terminal cwd state
+---
+
 ## 2026-03-10 11:48 - GIT-038: Add GitPane to SplitTreeRenderer
 Thread:
 Run: 20260310-012951-93839 (iteration 40)
