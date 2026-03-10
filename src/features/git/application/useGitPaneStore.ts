@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { GitClient } from "@/app-shell/clients";
 import type {
+  BranchInfo,
   CommitInfo,
   DiffContent,
   FileStatus,
@@ -23,6 +24,8 @@ export interface GitPaneState {
   readonly loading: boolean;
   readonly error: string | null;
   readonly stagedLines: ReadonlySet<string>;
+  readonly branches: readonly BranchInfo[];
+  readonly branchesLoading: boolean;
 
   refreshStatus: () => Promise<void>;
   selectFile: (filePath: string | null) => Promise<void>;
@@ -36,6 +39,10 @@ export interface GitPaneState {
   unstageHunk: (filePath: string, hunkIndex: number) => Promise<void>;
   commit: (message: string, amend: boolean) => Promise<void>;
   fetchLastCommitInfo: () => Promise<CommitInfo | null>;
+  listBranches: () => Promise<void>;
+  checkoutBranch: (name: string) => Promise<void>;
+  createBranch: (name: string, startPoint: string | null) => Promise<void>;
+  deleteBranch: (name: string, force: boolean) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +66,8 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
     loading: true,
     error: null,
     stagedLines: new Set<string>(),
+    branches: [],
+    branchesLoading: false,
 
     async refreshStatus() {
       set({ loading: true, error: null });
@@ -278,6 +287,75 @@ export function createGitPaneStore(deps: GitPaneStoreDeps) {
         };
       }
       return null;
+    },
+
+    async listBranches() {
+      set({ branchesLoading: true });
+      try {
+        const result = await gitClient.dispatch({
+          kind: "branches",
+          pane_id: paneId,
+        });
+        if (result.kind === "branches") {
+          set({ branches: result.branches, branchesLoading: false });
+        } else {
+          set({ branchesLoading: false });
+        }
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to list branches";
+        set({ error: message, branchesLoading: false });
+      }
+    },
+
+    async checkoutBranch(name: string) {
+      try {
+        await gitClient.dispatch({
+          kind: "checkoutBranch",
+          pane_id: paneId,
+          name,
+        });
+        // Refresh branches and repo state after checkout
+        await Promise.all([get().listBranches(), get().refreshStatus()]);
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to checkout branch";
+        set({ error: message });
+      }
+    },
+
+    async createBranch(name: string, startPoint: string | null) {
+      try {
+        await gitClient.dispatch({
+          kind: "createBranch",
+          pane_id: paneId,
+          name,
+          start_point: startPoint,
+        });
+        // Refresh branches and repo state after creation
+        await Promise.all([get().listBranches(), get().refreshStatus()]);
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to create branch";
+        set({ error: message });
+      }
+    },
+
+    async deleteBranch(name: string, force: boolean) {
+      try {
+        await gitClient.dispatch({
+          kind: "deleteBranch",
+          pane_id: paneId,
+          name,
+          force,
+        });
+        // Refresh branches after deletion
+        await get().listBranches();
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to delete branch";
+        set({ error: message });
+      }
     },
   }));
 }

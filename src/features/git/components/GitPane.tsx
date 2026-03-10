@@ -10,6 +10,7 @@ import {
 import { FileTreePanel } from "./FileTreePanel";
 import { DiffViewer, type StagingCallbacks } from "./DiffViewer";
 import { CommitPanel } from "./CommitPanel";
+import { BranchSelector } from "./BranchSelector";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -99,6 +100,12 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
   const stagedLinesSet = store((s) => s.stagedLines);
   const commitAction = store((s) => s.commit);
   const fetchLastCommitInfo = store((s) => s.fetchLastCommitInfo);
+  const branches = store((s) => s.branches);
+  const branchesLoading = store((s) => s.branchesLoading);
+  const listBranches = store((s) => s.listBranches);
+  const checkoutBranch = store((s) => s.checkoutBranch);
+  const createBranch = store((s) => s.createBranch);
+  const deleteBranch = store((s) => s.deleteBranch);
 
   const stagingCallbacks: StagingCallbacks = useMemo(() => ({
     onStageLines: (filePath: string, lineRanges: string[]) => void stageLines(filePath, lineRanges),
@@ -110,6 +117,12 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
   useEffect(() => {
     void refreshStatus();
   }, [refreshStatus]);
+
+  useEffect(() => {
+    if (activeView === "branches") {
+      void listBranches();
+    }
+  }, [activeView, listBranches]);
 
   if (loading) {
     return (
@@ -157,45 +170,60 @@ export function GitPane({ pane, gitClient }: GitPaneProps) {
         </div>
       </div>
 
-      {/* Main layout: file list | diff | commit area */}
+      {/* Main layout */}
       <div className="flex min-h-0 flex-1">
-        {/* Left panel — file tree */}
-        <div
-          className="flex w-56 flex-col border-r border-[var(--color-border)]"
-          data-testid="git-file-list"
-        >
-          <FileTreePanel
-            files={files}
-            selectedFile={selectedFile}
-            onSelectFile={(path) => void selectFile(path)}
-            onStageFiles={(paths) => void stageFiles(paths)}
-            onUnstageFiles={(paths) => void unstageFiles(paths)}
-            onDiscardChanges={(paths) => void discardChanges(paths)}
-          />
-        </div>
-
-        {/* Center — diff content */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div
-            className="min-h-0 flex-1"
-            data-testid="git-diff-area"
-          >
-            <DiffViewer diffContent={diffContent} staging={stagingCallbacks} stagedLines={stagedLinesSet} />
-          </div>
-
-          {/* Bottom — commit area */}
-          <div
-            className="border-t border-[var(--color-border)] p-3"
-            data-testid="git-commit-area"
-          >
-            <CommitPanel
-              files={files}
-              onCommit={commitAction}
-              onFetchLastCommitInfo={fetchLastCommitInfo}
-              onCommitSuccess={async () => { await refreshStatus(); }}
+        {activeView === "branches" ? (
+          <div className="flex min-w-0 flex-1 flex-col" data-testid="git-branches-view">
+            <BranchSelector
+              branches={branches}
+              loading={branchesLoading}
+              onCheckout={checkoutBranch}
+              onCreateBranch={createBranch}
+              onDeleteBranch={deleteBranch}
+              onRefresh={listBranches}
             />
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Left panel — file tree */}
+            <div
+              className="flex w-56 flex-col border-r border-[var(--color-border)]"
+              data-testid="git-file-list"
+            >
+              <FileTreePanel
+                files={files}
+                selectedFile={selectedFile}
+                onSelectFile={(path) => void selectFile(path)}
+                onStageFiles={(paths) => void stageFiles(paths)}
+                onUnstageFiles={(paths) => void unstageFiles(paths)}
+                onDiscardChanges={(paths) => void discardChanges(paths)}
+              />
+            </div>
+
+            {/* Center — diff content */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div
+                className="min-h-0 flex-1"
+                data-testid="git-diff-area"
+              >
+                <DiffViewer diffContent={diffContent} staging={stagingCallbacks} stagedLines={stagedLinesSet} />
+              </div>
+
+              {/* Bottom — commit area */}
+              <div
+                className="border-t border-[var(--color-border)] p-3"
+                data-testid="git-commit-area"
+              >
+                <CommitPanel
+                  files={files}
+                  onCommit={commitAction}
+                  onFetchLastCommitInfo={fetchLastCommitInfo}
+                  onCommitSuccess={async () => { await refreshStatus(); }}
+                />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
