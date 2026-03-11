@@ -417,4 +417,112 @@ mod tests {
         assert_eq!(diff.hunks()[0].old_start(), 1);
         assert_eq!(diff.hunks()[1].old_start(), 50);
     }
+
+    // -- DiffLineKind additional -------------------------------------------
+
+    #[test]
+    fn diff_line_kind_copy() {
+        let kind = DiffLineKind::Addition;
+        let copy = kind;
+        assert_eq!(kind, copy);
+    }
+
+    #[test]
+    fn diff_line_kind_hash_in_hashset() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(DiffLineKind::Addition);
+        set.insert(DiffLineKind::Addition); // duplicate
+        set.insert(DiffLineKind::Deletion);
+        assert_eq!(set.len(), 2);
+    }
+
+    // -- DiffLine additional -----------------------------------------------
+
+    #[test]
+    fn diff_line_empty_content() {
+        let line = DiffLine::new(DiffLineKind::Context, Some(1), Some(1), "");
+        assert_eq!(line.content(), "");
+    }
+
+    #[test]
+    fn diff_line_large_line_numbers() {
+        let line = DiffLine::new(
+            DiffLineKind::Context,
+            Some(u32::MAX),
+            Some(u32::MAX),
+            "code",
+        );
+        assert_eq!(line.old_line_no(), Some(u32::MAX));
+        assert_eq!(line.new_line_no(), Some(u32::MAX));
+    }
+
+    #[test]
+    fn diff_line_debug() {
+        let line = DiffLine::new(DiffLineKind::Addition, None, Some(5), "hello");
+        let debug = format!("{line:?}");
+        assert!(debug.contains("Addition"));
+        assert!(debug.contains("hello"));
+    }
+
+    // -- DiffHunk additional -----------------------------------------------
+
+    #[test]
+    fn diff_hunk_many_lines() {
+        let lines: Vec<DiffLine> = (1..=10)
+            .map(|i| DiffLine::new(DiffLineKind::Context, Some(i), Some(i), "line"))
+            .collect();
+        let hunk = DiffHunk::new(1, 10, 1, 10, "@@ -1,10 +1,10 @@", lines);
+        assert_eq!(hunk.lines().len(), 10);
+    }
+
+    #[test]
+    fn diff_hunk_debug() {
+        let hunk = DiffHunk::new(1, 0, 1, 1, "@@ -1,0 +1,1 @@", vec![]);
+        let debug = format!("{hunk:?}");
+        assert!(debug.contains("old_start"));
+    }
+
+    #[test]
+    fn diff_hunk_zero_start() {
+        let hunk = DiffHunk::new(0, 0, 0, 0, "@@ -0,0 +0,0 @@", vec![]);
+        assert_eq!(hunk.old_start(), 0);
+        assert_eq!(hunk.new_start(), 0);
+    }
+
+    // -- DiffContent additional --------------------------------------------
+
+    #[test]
+    fn diff_content_empty_file_path() {
+        let diff = DiffContent::new("", None, vec![], false, None);
+        assert_eq!(diff.file_path(), "");
+    }
+
+    #[test]
+    fn diff_content_no_mode_change() {
+        let diff = DiffContent::new("file.rs", None, vec![], false, None);
+        assert!(diff.file_mode_change().is_none());
+    }
+
+    #[test]
+    fn diff_content_old_path_none_vs_some() {
+        let with_old = DiffContent::new("new.rs", Some("old.rs".to_string()), vec![], false, None);
+        let without_old = DiffContent::new("new.rs", None, vec![], false, None);
+        assert_ne!(with_old, without_old);
+    }
+
+    #[test]
+    fn diff_content_binary_has_no_hunks() {
+        // Binary files should not have parseable hunks
+        let diff = DiffContent::new("data.bin", None, vec![], true, None);
+        assert!(diff.is_binary());
+        assert!(diff.hunks().is_empty());
+    }
+
+    #[test]
+    fn diff_content_debug() {
+        let diff = DiffContent::new("test.rs", None, vec![], false, None);
+        let debug = format!("{diff:?}");
+        assert!(debug.contains("test.rs"));
+    }
 }

@@ -397,4 +397,316 @@ mod tests {
         let swapped = swap_panes(&tree, &pid("p1"), &pid("p2")).expect("swap should succeed");
         assert_eq!(collect_pane_ids(&swapped), vec![pid("p2"), pid("p1")]);
     }
+
+    // -------------------------------------------------------------------------
+    // tree_from_count: all valid counts
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn tree_from_count_one_pane_is_single_leaf() {
+        let tree = tree_from_count(&ids(1)).expect("count 1 should succeed");
+        let found = collect_pane_ids(&tree);
+        assert_eq!(found, vec![pid("p1")]);
+    }
+
+    #[test]
+    fn tree_from_count_two_panes() {
+        let tree = tree_from_count(&ids(2)).expect("count 2");
+        assert_eq!(collect_pane_ids(&tree).len(), 2);
+    }
+
+    #[test]
+    fn tree_from_count_three_panes() {
+        let tree = tree_from_count(&ids(3)).expect("count 3");
+        assert_eq!(collect_pane_ids(&tree).len(), 3);
+    }
+
+    #[test]
+    fn tree_from_count_five_panes() {
+        let tree = tree_from_count(&ids(5)).expect("count 5");
+        assert_eq!(collect_pane_ids(&tree).len(), 5);
+    }
+
+    #[test]
+    fn tree_from_count_six_panes() {
+        let tree = tree_from_count(&ids(6)).expect("count 6");
+        assert_eq!(collect_pane_ids(&tree).len(), 6);
+    }
+
+    #[test]
+    fn tree_from_count_seven_panes() {
+        let tree = tree_from_count(&ids(7)).expect("count 7");
+        assert_eq!(collect_pane_ids(&tree).len(), 7);
+    }
+
+    #[test]
+    fn tree_from_count_eight_panes() {
+        let tree = tree_from_count(&ids(8)).expect("count 8");
+        assert_eq!(collect_pane_ids(&tree).len(), 8);
+    }
+
+    #[test]
+    fn tree_from_count_nine_panes() {
+        let tree = tree_from_count(&ids(9)).expect("count 9");
+        assert_eq!(collect_pane_ids(&tree).len(), 9);
+    }
+
+    #[test]
+    fn tree_from_count_zero_panes_returns_error() {
+        let result = tree_from_count(&ids(0));
+        assert!(result.is_err(), "zero panes should produce an error");
+    }
+
+    #[test]
+    fn tree_from_count_ten_panes_returns_error() {
+        let result = tree_from_count(&ids(10));
+        assert!(result.is_err(), "10 panes should produce an error");
+    }
+
+    #[test]
+    fn tree_from_count_preserves_all_pane_ids_in_order() {
+        let input = ids(4);
+        let tree = tree_from_count(&input).expect("count 4");
+        let found = collect_pane_ids(&tree);
+        assert_eq!(found, input, "pane IDs should appear in insertion order");
+    }
+
+    // -------------------------------------------------------------------------
+    // tree_from_preset: all presets
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn tree_from_preset_one_by_one_single_leaf() {
+        let tree = super::tree_from_preset(LayoutPreset::OneByOne, &ids(1));
+        assert_eq!(collect_pane_ids(&tree), vec![pid("p1")]);
+    }
+
+    #[test]
+    fn tree_from_preset_one_by_two_two_panes() {
+        let tree = super::tree_from_preset(LayoutPreset::OneByTwo, &ids(2));
+        let found = collect_pane_ids(&tree);
+        assert_eq!(found.len(), 2);
+        assert_eq!(found, vec![pid("p1"), pid("p2")]);
+    }
+
+    #[test]
+    fn tree_from_preset_two_by_two_four_panes() {
+        let tree = super::tree_from_preset(LayoutPreset::TwoByTwo, &ids(4));
+        let found = collect_pane_ids(&tree);
+        assert_eq!(found.len(), 4);
+    }
+
+    #[test]
+    fn tree_from_preset_two_by_three_six_panes() {
+        let tree = super::tree_from_preset(LayoutPreset::TwoByThree, &ids(6));
+        assert_eq!(collect_pane_ids(&tree).len(), 6);
+    }
+
+    #[test]
+    fn tree_from_preset_three_by_three_nine_panes() {
+        let tree = super::tree_from_preset(LayoutPreset::ThreeByThree, &ids(9));
+        assert_eq!(collect_pane_ids(&tree).len(), 9);
+    }
+
+    // -------------------------------------------------------------------------
+    // split_pane
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn split_pane_on_nonexistent_target_returns_none() {
+        let tree = tree_from_count(&ids(1)).expect("single pane");
+        let result = split_pane(&tree, &pid("nonexistent"), SplitDirection::Horizontal, &pid("new"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn split_pane_vertical_direction() {
+        let tree = super::tree_from_preset(LayoutPreset::OneByOne, &ids(1));
+        let split = split_pane(&tree, &pid("p1"), SplitDirection::Vertical, &pid("p2"))
+            .expect("vertical split should succeed");
+        match &split {
+            super::SplitNode::Split { direction, .. } => {
+                assert_eq!(*direction, SplitDirection::Vertical);
+            }
+            _ => panic!("expected Split node"),
+        }
+        assert_eq!(collect_pane_ids(&split), vec![pid("p1"), pid("p2")]);
+    }
+
+    #[test]
+    fn split_pane_nested_tree_finds_target_in_second_branch() {
+        // Build a 2-pane tree first, then split the second pane
+        let tree = tree_from_count(&ids(2)).expect("two panes");
+        let extended = split_pane(&tree, &pid("p2"), SplitDirection::Horizontal, &pid("p3"))
+            .expect("split p2 in nested tree");
+        assert_eq!(collect_pane_ids(&extended).len(), 3);
+    }
+
+    // -------------------------------------------------------------------------
+    // close_pane
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn close_pane_last_pane_returns_none_tree() {
+        let tree = super::tree_from_preset(LayoutPreset::OneByOne, &ids(1));
+        let result = close_pane(&tree, &pid("p1")).expect("target found");
+        assert!(result.is_none(), "closing last pane should return None tree");
+    }
+
+    #[test]
+    fn close_pane_nonexistent_target_returns_none_outer() {
+        let tree = tree_from_count(&ids(2)).expect("two panes");
+        let result = close_pane(&tree, &pid("not-in-tree"));
+        assert!(result.is_none(), "target not in tree should return None outer");
+    }
+
+    #[test]
+    fn close_pane_first_in_two_pane_tree_leaves_second() {
+        let tree = tree_from_count(&ids(2)).expect("two panes");
+        let remaining = close_pane(&tree, &pid("p1"))
+            .expect("target found")
+            .expect("tree remains");
+        assert_eq!(collect_pane_ids(&remaining), vec![pid("p2")]);
+    }
+
+    #[test]
+    fn close_pane_second_in_two_pane_tree_leaves_first() {
+        let tree = tree_from_count(&ids(2)).expect("two panes");
+        let remaining = close_pane(&tree, &pid("p2"))
+            .expect("target found")
+            .expect("tree remains");
+        assert_eq!(collect_pane_ids(&remaining), vec![pid("p1")]);
+    }
+
+    // -------------------------------------------------------------------------
+    // swap_panes
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn swap_panes_with_first_id_not_in_tree_returns_none() {
+        let tree = tree_from_count(&ids(2)).expect("two panes");
+        let result = swap_panes(&tree, &pid("ghost"), &pid("p2"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn swap_panes_with_second_id_not_in_tree_returns_none() {
+        let tree = tree_from_count(&ids(2)).expect("two panes");
+        let result = swap_panes(&tree, &pid("p1"), &pid("ghost"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn swap_panes_in_three_pane_tree() {
+        let tree = tree_from_count(&ids(3)).expect("three panes");
+        let swapped = swap_panes(&tree, &pid("p1"), &pid("p3")).expect("swap p1 and p3");
+        let found = collect_pane_ids(&swapped);
+        assert!(found.contains(&pid("p1")));
+        assert!(found.contains(&pid("p3")));
+        // After swap, p3 should be where p1 was (first position in in-order traversal)
+        assert_eq!(found[0], pid("p3"));
+    }
+
+    // -------------------------------------------------------------------------
+    // validate_layout
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn validate_layout_passes_for_matching_ids() {
+        let pane_ids = ids(2);
+        let tree = tree_from_count(&pane_ids).expect("two panes");
+        super::validate_layout(&tree, &pane_ids).expect("matching layout should validate");
+    }
+
+    #[test]
+    fn validate_layout_fails_for_missing_pane_in_tree() {
+        let pane_ids = ids(2);
+        let tree = tree_from_count(&pane_ids).expect("two panes");
+        // Add an extra pane ID not present in tree
+        let mut extended = pane_ids.clone();
+        extended.push(pid("p_extra"));
+        let result = super::validate_layout(&tree, &extended);
+        assert!(result.is_err(), "extra pane in slots but not tree should fail");
+    }
+
+    #[test]
+    fn validate_layout_fails_for_orphan_pane_in_tree() {
+        let tree = tree_from_count(&ids(2)).expect("two panes");
+        // Only provide one of the two pane IDs in the slot list
+        let only_one = vec![pid("p1")];
+        let result = super::validate_layout(&tree, &only_one);
+        assert!(result.is_err(), "pane in tree but not in slots should fail");
+    }
+
+    // -------------------------------------------------------------------------
+    // remap_pane_ids
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn remap_pane_ids_replaces_template_ids_with_real_ids() {
+        use crate::ids::PaneId;
+        let template = super::tree_from_preset(LayoutPreset::OneByTwo, &[
+            PaneId::from(String::from("ph1")),
+            PaneId::from(String::from("ph2")),
+        ]);
+        let real_ids = vec![
+            PaneId::from(String::from("real1")),
+            PaneId::from(String::from("real2")),
+        ];
+        let remapped = super::remap_pane_ids(&template, &real_ids);
+        let found = collect_pane_ids(&remapped);
+        assert_eq!(found, real_ids);
+    }
+
+    // -------------------------------------------------------------------------
+    // collect_pane_ids
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn collect_pane_ids_on_single_leaf() {
+        use super::SplitNode;
+        let leaf = SplitNode::Pane { pane_id: pid("solo") };
+        assert_eq!(collect_pane_ids(&leaf), vec![pid("solo")]);
+    }
+
+    #[test]
+    fn collect_pane_ids_returns_ids_in_depth_first_order() {
+        let tree = tree_from_count(&ids(4)).expect("four panes");
+        let found = collect_pane_ids(&tree);
+        assert_eq!(found, ids(4), "should be depth-first left-to-right order");
+    }
+
+    // -------------------------------------------------------------------------
+    // SplitNode: structural properties
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn split_node_pane_equality() {
+        use super::SplitNode;
+        let a = SplitNode::Pane { pane_id: pid("x") };
+        let b = SplitNode::Pane { pane_id: pid("x") };
+        let c = SplitNode::Pane { pane_id: pid("y") };
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn split_node_clone_preserves_structure() {
+        let tree = tree_from_count(&ids(3)).expect("three panes");
+        let cloned = tree.clone();
+        assert_eq!(tree, cloned);
+    }
+
+    #[test]
+    fn split_direction_equality() {
+        assert_eq!(SplitDirection::Horizontal, SplitDirection::Horizontal);
+        assert_ne!(SplitDirection::Horizontal, SplitDirection::Vertical);
+    }
+
+    #[test]
+    fn split_direction_copy() {
+        let d = SplitDirection::Vertical;
+        let d2 = d;
+        assert_eq!(d, d2);
+    }
 }

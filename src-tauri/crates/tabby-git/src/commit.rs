@@ -162,4 +162,60 @@ mod tests {
         let b = a.clone();
         assert_eq!(a, b);
     }
+
+    #[test]
+    fn commit_info_empty_message() {
+        let commit = CommitInfo::new(
+            sample_hash(),
+            "abc123d".to_string(),
+            "Alice".to_string(),
+            "alice@example.com".to_string(),
+            "2026-03-10T01:00:00Z".to_string(),
+            "".to_string(),
+            vec![],
+        );
+        assert_eq!(commit.message(), "");
+    }
+
+    #[test]
+    fn commit_info_multiline_message() {
+        let msg = "feat: add feature\n\nThis adds a new feature\nwith multiple lines.";
+        let commit = CommitInfo::new(
+            sample_hash(),
+            "abc123d".to_string(),
+            "Alice".to_string(),
+            "alice@example.com".to_string(),
+            "2026-03-10T01:00:00Z".to_string(),
+            msg.to_string(),
+            vec![],
+        );
+        assert_eq!(commit.message(), msg);
+    }
+
+    #[test]
+    fn commit_info_short_hash_different_from_full() {
+        let commit = sample_commit();
+        assert_ne!(commit.short_hash(), commit.hash().as_ref());
+    }
+
+    #[test]
+    fn commit_info_author_email_format() {
+        let commit = sample_commit();
+        assert!(commit.author_email().contains('@'));
+    }
+
+    #[test]
+    fn commit_info_debug() {
+        let commit = sample_commit();
+        let debug = format!("{commit:?}");
+        assert!(debug.contains("CommitInfo"));
+        assert!(debug.contains("Alice"));
+    }
+
+    #[test]
+    fn commit_info_parent_hashes_returns_slice() {
+        let commit = sample_commit();
+        let parents: &[CommitHash] = commit.parent_hashes();
+        assert_eq!(parents.len(), 1);
+    }
 }

@@ -131,4 +131,106 @@ mod tests {
         let b = a.clone();
         assert_eq!(a, b);
     }
+
+    #[test]
+    fn branch_info_ahead_behind_zero() {
+        let branch = BranchInfo::new(
+            BranchName::try_new("main").expect("valid"),
+            true,
+            Some("origin/main".to_string()),
+            0,
+            0,
+        );
+        assert_eq!(branch.ahead(), 0);
+        assert_eq!(branch.behind(), 0);
+    }
+
+    #[test]
+    fn branch_info_large_ahead_count() {
+        let branch = BranchInfo::new(
+            BranchName::try_new("feature/lots-of-commits").expect("valid"),
+            false,
+            Some("origin/feature/lots-of-commits".to_string()),
+            1000,
+            0,
+        );
+        assert_eq!(branch.ahead(), 1000);
+    }
+
+    #[test]
+    fn branch_info_large_behind_count() {
+        let branch = BranchInfo::new(
+            BranchName::try_new("stale").expect("valid"),
+            false,
+            Some("origin/main".to_string()),
+            0,
+            500,
+        );
+        assert_eq!(branch.behind(), 500);
+    }
+
+    #[test]
+    fn branch_info_not_current() {
+        let branch = BranchInfo::new(
+            BranchName::try_new("feature/other").expect("valid"),
+            false,
+            None,
+            0,
+            0,
+        );
+        assert!(!branch.is_current());
+    }
+
+    #[test]
+    fn branch_info_upstream_none_returns_none() {
+        let branch = BranchInfo::new(
+            BranchName::try_new("orphan").expect("valid"),
+            true,
+            None,
+            0,
+            0,
+        );
+        assert!(branch.upstream().is_none());
+    }
+
+    #[test]
+    fn branch_info_name_returns_branch_name_ref() {
+        let branch = sample_branch();
+        let name: &BranchName = branch.name();
+        assert_eq!(name.as_ref(), "main");
+    }
+
+    #[test]
+    fn branch_info_debug() {
+        let branch = sample_branch();
+        let debug = format!("{branch:?}");
+        assert!(debug.contains("BranchInfo"));
+        assert!(debug.contains("main"));
+    }
+
+    #[test]
+    fn branch_info_inequality_ahead() {
+        let a = sample_branch();
+        let b = BranchInfo::new(
+            BranchName::try_new("main").expect("valid"),
+            true,
+            Some("origin/main".to_string()),
+            99,
+            1,
+        );
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn branch_info_inequality_upstream() {
+        let a = sample_branch();
+        let b = BranchInfo::new(
+            BranchName::try_new("main").expect("valid"),
+            true,
+            Some("upstream/main".to_string()),
+            2,
+            1,
+        );
+        assert_ne!(a, b);
+    }
 }

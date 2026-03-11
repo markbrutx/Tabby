@@ -342,4 +342,179 @@ mod tests {
         assert_eq!(id.index(), 999);
         assert_eq!(id.to_string(), "stash@{999}");
     }
+
+    // -- BranchName edge cases ---------------------------------------------
+
+    #[test]
+    fn branch_name_single_char_accepted() {
+        let name = BranchName::try_new("x").expect("single char should be valid");
+        assert_eq!(name.as_ref(), "x");
+    }
+
+    #[test]
+    fn branch_name_with_numbers() {
+        let name = BranchName::try_new("branch-42").expect("numbers should be valid");
+        assert_eq!(name.to_string(), "branch-42");
+    }
+
+    #[test]
+    fn branch_name_unicode_accepted() {
+        let name = BranchName::try_new("feature/café").expect("unicode should be valid");
+        assert_eq!(name.as_ref(), "feature/café");
+    }
+
+    #[test]
+    fn branch_name_rejects_leading_space() {
+        let err = BranchName::try_new(" leading").expect_err("leading space should fail");
+        assert!(err.to_string().contains("must not contain spaces"));
+    }
+
+    #[test]
+    fn branch_name_rejects_trailing_space() {
+        let err = BranchName::try_new("trailing ").expect_err("trailing space should fail");
+        assert!(err.to_string().contains("must not contain spaces"));
+    }
+
+    #[test]
+    fn branch_name_display_equals_as_ref() {
+        let name = BranchName::try_new("feature/test").expect("valid");
+        assert_eq!(name.to_string(), name.as_ref());
+    }
+
+    #[test]
+    fn branch_name_hash_used_in_hashset() {
+        use std::collections::HashSet;
+        let a = BranchName::try_new("main").expect("valid");
+        let b = BranchName::try_new("develop").expect("valid");
+        let c = BranchName::try_new("main").expect("valid");
+        let mut set = HashSet::new();
+        set.insert(a);
+        set.insert(b);
+        set.insert(c); // duplicate of a
+        assert_eq!(set.len(), 2);
+    }
+
+    // -- CommitHash edge cases ---------------------------------------------
+
+    #[test]
+    fn commit_hash_exactly_4_chars_accepted() {
+        let hash = CommitHash::try_new("abcd").expect("4 chars should be valid");
+        assert_eq!(hash.as_ref(), "abcd");
+    }
+
+    #[test]
+    fn commit_hash_exactly_40_chars_accepted() {
+        let hash = CommitHash::try_new("abcdef1234567890abcdef1234567890abcdef12")
+            .expect("40 chars should be valid");
+        assert_eq!(hash.as_ref().len(), 40);
+    }
+
+    #[test]
+    fn commit_hash_exactly_3_chars_rejected() {
+        CommitHash::try_new("abc").expect_err("3 chars should be rejected");
+    }
+
+    #[test]
+    fn commit_hash_exactly_41_chars_rejected() {
+        let long = "a".repeat(41);
+        CommitHash::try_new(long).expect_err("41 chars should be rejected");
+    }
+
+    #[test]
+    fn commit_hash_mixed_case_normalizes() {
+        let hash = CommitHash::try_new("DEADBEEF").expect("uppercase valid");
+        assert_eq!(hash.as_ref(), "deadbeef");
+        assert_eq!(hash.to_string(), "deadbeef");
+    }
+
+    #[test]
+    fn commit_hash_display_equals_as_ref() {
+        let hash = CommitHash::try_new("deadbeef").expect("valid");
+        assert_eq!(hash.to_string(), hash.as_ref());
+    }
+
+    #[test]
+    fn commit_hash_hash_in_hashmap() {
+        use std::collections::HashMap;
+        let h1 = CommitHash::try_new("deadbeef").expect("valid");
+        let h2 = CommitHash::try_new("cafebabe").expect("valid");
+        let mut map = HashMap::new();
+        map.insert(h1.clone(), "first");
+        map.insert(h2, "second");
+        assert_eq!(*map.get(&h1).unwrap(), "first");
+    }
+
+    #[test]
+    fn commit_hash_rejects_spaces() {
+        CommitHash::try_new("dead beef").expect_err("space is not hex");
+    }
+
+    // -- RemoteName edge cases ---------------------------------------------
+
+    #[test]
+    fn remote_name_single_char_accepted() {
+        let name = RemoteName::try_new("o").expect("single char should be valid");
+        assert_eq!(name.as_ref(), "o");
+    }
+
+    #[test]
+    fn remote_name_with_slashes_accepted() {
+        // git does allow complex remote names
+        let name = RemoteName::try_new("company/fork").expect("slashes valid");
+        assert_eq!(name.to_string(), "company/fork");
+    }
+
+    #[test]
+    fn remote_name_display_equals_as_ref() {
+        let name = RemoteName::try_new("origin").expect("valid");
+        assert_eq!(name.to_string(), name.as_ref());
+    }
+
+    #[test]
+    fn remote_name_hash_in_hashset() {
+        use std::collections::HashSet;
+        let a = RemoteName::try_new("origin").expect("valid");
+        let b = RemoteName::try_new("origin").expect("valid");
+        let c = RemoteName::try_new("upstream").expect("valid");
+        let mut set = HashSet::new();
+        set.insert(a);
+        set.insert(b);
+        set.insert(c);
+        assert_eq!(set.len(), 2);
+    }
+
+    // -- StashId edge cases ------------------------------------------------
+
+    #[test]
+    fn stash_id_zero() {
+        let id = StashId::new(0);
+        assert_eq!(id.index(), 0);
+        assert_eq!(id.to_string(), "stash@{0}");
+    }
+
+    #[test]
+    fn stash_id_max_usize() {
+        let id = StashId::new(usize::MAX);
+        assert_eq!(id.index(), usize::MAX);
+    }
+
+    #[test]
+    fn stash_id_hash_in_hashset() {
+        use std::collections::HashSet;
+        let a = StashId::new(0);
+        let b = StashId::new(0);
+        let c = StashId::new(1);
+        let mut set = HashSet::new();
+        set.insert(a);
+        set.insert(b);
+        set.insert(c);
+        assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn stash_id_debug() {
+        let id = StashId::new(5);
+        let debug = format!("{id:?}");
+        assert!(debug.contains("5"));
+    }
 }

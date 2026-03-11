@@ -116,4 +116,95 @@ mod tests {
         let b = a.clone();
         assert_eq!(a, b);
     }
+
+    #[test]
+    fn blame_entry_line_start_zero() {
+        let entry = BlameEntry::new(
+            sample_hash(),
+            "Alice".to_string(),
+            "2026-03-10T01:00:00Z".to_string(),
+            0,
+            1,
+            "fn init() {}".to_string(),
+        );
+        assert_eq!(entry.line_start(), 0);
+        assert_eq!(entry.line_count(), 1);
+    }
+
+    #[test]
+    fn blame_entry_large_line_range() {
+        let entry = BlameEntry::new(
+            sample_hash(),
+            "Bob".to_string(),
+            "2026-01-01T00:00:00Z".to_string(),
+            100,
+            500,
+            "big block".to_string(),
+        );
+        assert_eq!(entry.line_start(), 100);
+        assert_eq!(entry.line_count(), 500);
+    }
+
+    #[test]
+    fn blame_entry_empty_content() {
+        let entry = BlameEntry::new(
+            sample_hash(),
+            "Alice".to_string(),
+            "2026-03-10T01:00:00Z".to_string(),
+            1,
+            1,
+            "".to_string(),
+        );
+        assert_eq!(entry.content(), "");
+    }
+
+    #[test]
+    fn blame_entry_multiline_content() {
+        let content = "line1\nline2\nline3";
+        let entry = BlameEntry::new(
+            sample_hash(),
+            "Alice".to_string(),
+            "2026-03-10T01:00:00Z".to_string(),
+            1,
+            3,
+            content.to_string(),
+        );
+        assert_eq!(entry.content(), content);
+    }
+
+    #[test]
+    fn blame_entry_debug() {
+        let entry = sample_entry();
+        let debug = format!("{entry:?}");
+        assert!(debug.contains("BlameEntry"));
+        assert!(debug.contains("Alice"));
+    }
+
+    #[test]
+    fn blame_entry_hash_accessor_returns_ref() {
+        let entry = sample_entry();
+        let hash_ref: &CommitHash = entry.hash();
+        assert_eq!(hash_ref, &sample_hash());
+    }
+
+    #[test]
+    fn blame_entries_can_be_collected_into_vec() {
+        let entries: Vec<BlameEntry> = (0..5)
+            .map(|i| {
+                BlameEntry::new(
+                    CommitHash::try_new(format!("deadbeef{i:08}")).unwrap_or_else(|_| {
+                        CommitHash::try_new("deadbeef").expect("fallback valid")
+                    }),
+                    format!("Author {i}"),
+                    "2026-03-10T01:00:00Z".to_string(),
+                    i as u32 * 10 + 1,
+                    10,
+                    format!("block {i}"),
+                )
+            })
+            .collect();
+        assert_eq!(entries.len(), 5);
+        assert_eq!(entries[0].line_start(), 1);
+        assert_eq!(entries[4].line_start(), 41);
+    }
 }

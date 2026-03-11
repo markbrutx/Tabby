@@ -206,6 +206,666 @@ fn parse_range(range: &str) -> Option<(u32, u32)> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tabby_git::DiffLineKind;
+
+    // -----------------------------------------------------------------------
+    // parse_unified_diff — basic cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn empty_string_returns_empty_vec() {
+        let result = parse_unified_diff("");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn whitespace_only_returns_empty_vec() {
+        let result = parse_unified_diff("   \n\n\t\n");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn single_file_single_hunk() {
+        let input = "\
+diff --git a/src/main.rs b/src/main.rs
+index abc1234..def5678 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1,3 +1,4 @@
+ fn main() {
+-    println!(\"hello\");
++    println!(\"hello world\");
++    println!(\"goodbye\");
+ }
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 1);
+        let diff = &result[0];
+        assert_eq!(diff.file_path(), "src/main.rs");
+        assert_eq!(diff.old_path(), None);
+        assert!(!diff.is_binary());
+        assert_eq!(diff.file_mode_change(), None);
+        assert_eq!(diff.hunks().len(), 1);
+        let hunk = &diff.hunks()[0];
+        assert_eq!(hunk.old_start(), 1);
+        assert_eq!(hunk.old_count(), 3);
+        assert_eq!(hunk.new_start(), 1);
+        assert_eq!(hunk.new_count(), 4);
+        // context + deletion + addition + addition + context = 5 lines
+        assert_eq!(hunk.lines().len(), 5);
+    }
+
+    #[test]
+    fn single_file_correct_line_kinds() {
+        let input = "\
+diff --git a/a.rs b/a.rs
+index 000..111 100644
+--- a/a.rs
++++ b/a.rs
+@@ -1,2 +1,2 @@
+ context
+-deleted
++added
+";
+        let result = parse_unified_diff(input);
+        let lines = result[0].hunks()[0].lines();
+        assert_eq!(lines[0].kind(), DiffLineKind::Context);
+        assert_eq!(lines[1].kind(), DiffLineKind::Deletion);
+        assert_eq!(lines[2].kind(), DiffLineKind::Addition);
+    }
+
+    #[test]
+    fn single_file_line_numbers_are_correct() {
+        let input = "\
+diff --git a/a.rs b/a.rs
+index 000..111 100644
+--- a/a.rs
++++ b/a.rs
+@@ -10,2 +10,3 @@
+ context_line
+-old_line
++new_line_a
++new_line_b
+";
+        let result = parse_unified_diff(input);
+        let lines = result[0].hunks()[0].lines();
+        // context: old=10, new=10
+        assert_eq!(lines[0].old_line_no(), Some(10));
+        assert_eq!(lines[0].new_line_no(), Some(10));
+        // deletion: old=11, new=None
+        assert_eq!(lines[1].old_line_no(), Some(11));
+        assert_eq!(lines[1].new_line_no(), None);
+        // addition: old=None, new=11
+        assert_eq!(lines[2].old_line_no(), None);
+        assert_eq!(lines[2].new_line_no(), Some(11));
+        // addition: old=None, new=12
+        assert_eq!(lines[3].old_line_no(), None);
+        assert_eq!(lines[3].new_line_no(), Some(12));
+    }
+
+    #[test]
+    fn multiple_files_in_one_diff() {
+        let input = "\
+diff --git a/file_a.rs b/file_a.rs
+index 000..111 100644
+--- a/file_a.rs
++++ b/file_a.rs
+@@ -1 +1 @@
+-old_a
++new_a
+diff --git a/file_b.rs b/file_b.rs
+index 222..333 100644
+--- a/file_b.rs
++++ b/file_b.rs
+@@ -1 +1 @@
+-old_b
++new_b
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].file_path(), "file_a.rs");
+        assert_eq!(result[1].file_path(), "file_b.rs");
+    }
+
+    #[test]
+    fn multiple_hunks_in_one_file() {
+        let input = "\
+diff --git a/large.rs b/large.rs
+index 000..111 100644
+--- a/large.rs
++++ b/large.rs
+@@ -1,2 +1,2 @@
+-line1_old
++line1_new
+ context1
+@@ -50,2 +50,2 @@
+-line50_old
++line50_new
+ context50
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result[0].hunks().len(), 2);
+        assert_eq!(result[0].hunks()[0].old_start(), 1);
+        assert_eq!(result[0].hunks()[1].old_start(), 50);
+    }
+
+    // -----------------------------------------------------------------------
+    // Binary diffs
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn binary_file_detected() {
+        let input = "\
+diff --git a/image.png b/image.png
+index abc1234..def5678 100644
+Binary files a/image.png and b/image.png differ
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].is_binary());
+        assert!(result[0].hunks().is_empty());
+        assert_eq!(result[0].file_path(), "image.png");
+    }
+
+    #[test]
+    fn binary_file_has_correct_path() {
+        let input = "\
+diff --git a/assets/logo.svg b/assets/logo.svg
+index abc..def 100644
+Binary files a/assets/logo.svg and b/assets/logo.svg differ
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result[0].file_path(), "assets/logo.svg");
+    }
+
+    // -----------------------------------------------------------------------
+    // Rename diffs
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn rename_diff_sets_old_path_and_new_path() {
+        let input = "\
+diff --git a/old_name.rs b/new_name.rs
+similarity index 95%
+rename from old_name.rs
+rename to new_name.rs
+index abc1234..def5678 100644
+--- a/old_name.rs
++++ b/new_name.rs
+@@ -1,3 +1,3 @@
+ fn example() {
+-    let x = 1;
++    let x = 2;
+ }
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].file_path(), "new_name.rs");
+        assert_eq!(result[0].old_path(), Some("old_name.rs"));
+    }
+
+    #[test]
+    fn rename_only_no_content_changes() {
+        let input = "\
+diff --git a/foo.rs b/bar.rs
+similarity index 100%
+rename from foo.rs
+rename to bar.rs
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].file_path(), "bar.rs");
+        assert_eq!(result[0].old_path(), Some("foo.rs"));
+        assert!(result[0].hunks().is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // File mode change
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn file_mode_change_parsed() {
+        let input = "\
+diff --git a/script.sh b/script.sh
+old mode 100644
+new mode 100755
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].file_mode_change(), Some("100644 -> 100755"));
+    }
+
+    // -----------------------------------------------------------------------
+    // New file / deleted file
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn new_file_all_additions() {
+        let input = "\
+diff --git a/new_file.rs b/new_file.rs
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/new_file.rs
+@@ -0,0 +1,3 @@
++fn new_function() {
++    println!(\"hello\");
++}
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 1);
+        let lines = &result[0].hunks()[0].lines();
+        assert!(lines.iter().all(|l| l.kind() == DiffLineKind::Addition));
+    }
+
+    #[test]
+    fn deleted_file_all_deletions() {
+        let input = "\
+diff --git a/gone.rs b/gone.rs
+deleted file mode 100644
+index abc1234..0000000
+--- a/gone.rs
++++ /dev/null
+@@ -1,2 +0,0 @@
+-fn deleted_fn() {}
+-// old comment
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 1);
+        let lines = &result[0].hunks()[0].lines();
+        assert!(lines.iter().all(|l| l.kind() == DiffLineKind::Deletion));
+    }
+
+    // -----------------------------------------------------------------------
+    // No newline at end of file marker
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn no_newline_marker_is_skipped_not_counted_as_line() {
+        let input = "\
+diff --git a/file.txt b/file.txt
+index abc..def 100644
+--- a/file.txt
++++ b/file.txt
+@@ -1 +1 @@
+-old content
+\\ No newline at end of file
++new content
+\\ No newline at end of file
+";
+        let result = parse_unified_diff(input);
+        let lines = result[0].hunks()[0].lines();
+        // Only deletion and addition, the markers should be skipped
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].kind(), DiffLineKind::Deletion);
+        assert_eq!(lines[1].kind(), DiffLineKind::Addition);
+    }
+
+    #[test]
+    fn no_newline_at_end_deletion_only() {
+        let input = "\
+diff --git a/file.txt b/file.txt
+index abc..def 100644
+--- a/file.txt
++++ b/file.txt
+@@ -1 +1,2 @@
+-only line
+\\ No newline at end of file
++first line
++second line
+";
+        let result = parse_unified_diff(input);
+        let lines = result[0].hunks()[0].lines();
+        assert_eq!(lines.len(), 3); // deletion + 2 additions
+    }
+
+    // -----------------------------------------------------------------------
+    // Special characters and unicode
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn unicode_in_file_content() {
+        let input = "\
+diff --git a/unicode.rs b/unicode.rs
+index abc..def 100644
+--- a/unicode.rs
++++ b/unicode.rs
+@@ -1 +1 @@
+-let greeting = \"こんにちは\";
++let greeting = \"안녕하세요\";
+";
+        let result = parse_unified_diff(input);
+        let lines = result[0].hunks()[0].lines();
+        assert_eq!(lines[0].content(), "let greeting = \"こんにちは\";");
+        assert_eq!(lines[1].content(), "let greeting = \"안녕하세요\";");
+    }
+
+    #[test]
+    fn file_path_with_spaces_via_b_prefix() {
+        // "diff --git a/path with spaces b/path with spaces" — rfind " b/" should work
+        let input = "\
+diff --git a/path with spaces/file.rs b/path with spaces/file.rs
+index abc..def 100644
+--- a/path with spaces/file.rs
++++ b/path with spaces/file.rs
+@@ -1 +1 @@
+-old
++new
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result[0].file_path(), "path with spaces/file.rs");
+    }
+
+    #[test]
+    fn unicode_filename_in_diff_header() {
+        let input = "\
+diff --git a/src/données.rs b/src/données.rs
+index abc..def 100644
+--- a/src/données.rs
++++ b/src/données.rs
+@@ -1 +1 @@
+-old
++new
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result[0].file_path(), "src/données.rs");
+    }
+
+    #[test]
+    fn hunk_context_with_special_chars() {
+        let input = "\
+diff --git a/special.rs b/special.rs
+index abc..def 100644
+--- a/special.rs
++++ b/special.rs
+@@ -1,3 +1,3 @@
+ fn test() -> Result<(), Box<dyn std::error::Error>> {
+-    let url = \"http://example.com?a=1&b=2\";
++    let url = \"http://example.com?a=1&b=2#fragment\";
+ }
+";
+        let result = parse_unified_diff(input);
+        let lines = result[0].hunks()[0].lines();
+        // context + deletion + addition + context = 4 lines
+        assert_eq!(lines.len(), 4);
+        assert_eq!(lines[0].kind(), DiffLineKind::Context);
+        assert_eq!(lines[1].kind(), DiffLineKind::Deletion);
+        assert_eq!(lines[2].kind(), DiffLineKind::Addition);
+        assert_eq!(lines[3].kind(), DiffLineKind::Context);
+    }
+
+    // -----------------------------------------------------------------------
+    // Hunk header context text
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn hunk_header_with_function_context() {
+        let input = "\
+diff --git a/lib.rs b/lib.rs
+index abc..def 100644
+--- a/lib.rs
++++ b/lib.rs
+@@ -10,3 +10,3 @@ fn my_function() {
+ let a = 1;
+-let b = 2;
++let b = 3;
+ let c = 4;
+";
+        let result = parse_unified_diff(input);
+        let hunk = &result[0].hunks()[0];
+        assert!(hunk.header().contains("fn my_function()"));
+        assert_eq!(hunk.old_start(), 10);
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_hunk_header unit tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn hunk_header_with_count() {
+        let result = parse_hunk_header("@@ -1,5 +2,6 @@");
+        assert_eq!(result, Some((1, 5, 2, 6)));
+    }
+
+    #[test]
+    fn hunk_header_without_count_defaults_to_one() {
+        let result = parse_hunk_header("@@ -1 +1 @@");
+        assert_eq!(result, Some((1, 1, 1, 1)));
+    }
+
+    #[test]
+    fn hunk_header_with_context_text() {
+        let result = parse_hunk_header("@@ -10,3 +10,4 @@ fn example() {");
+        assert_eq!(result, Some((10, 3, 10, 4)));
+    }
+
+    #[test]
+    fn hunk_header_zero_count() {
+        // New file: @@ -0,0 +1,5 @@
+        let result = parse_hunk_header("@@ -0,0 +1,5 @@");
+        assert_eq!(result, Some((0, 0, 1, 5)));
+    }
+
+    #[test]
+    fn hunk_header_large_numbers() {
+        let result = parse_hunk_header("@@ -10000,50 +10001,51 @@");
+        assert_eq!(result, Some((10000, 50, 10001, 51)));
+    }
+
+    #[test]
+    fn hunk_header_malformed_missing_at_prefix() {
+        let result = parse_hunk_header("-1,5 +2,6 @@");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn hunk_header_malformed_no_closing_at() {
+        let result = parse_hunk_header("@@ -1,5 +2,6");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn hunk_header_malformed_non_numeric() {
+        let result = parse_hunk_header("@@ -abc,def +ghi,jkl @@");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn hunk_header_empty_string() {
+        let result = parse_hunk_header("");
+        assert_eq!(result, None);
+    }
+
+    // -----------------------------------------------------------------------
+    // filter_diff_to_line_ranges
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn filter_diff_passthrough_header_lines() {
+        let diff = "\
+diff --git a/file.rs b/file.rs
+index abc..def 100644
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,5 @@
+ line1
++added_line2
++added_line3
+ line2
+ line3
+";
+        let filtered = filter_diff_to_line_ranges(diff, &[(2, 3)]);
+        assert!(filtered.contains("diff --git a/file.rs b/file.rs"));
+        assert!(filtered.contains("--- a/file.rs"));
+        assert!(filtered.contains("+++ b/file.rs"));
+    }
+
+    #[test]
+    fn filter_diff_includes_matching_additions() {
+        let diff = "\
+diff --git a/file.rs b/file.rs
+index abc..def 100644
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,5 @@
+ line1
++added_line2
++added_line3
+ line2
+ line3
+";
+        let filtered = filter_diff_to_line_ranges(diff, &[(2, 2)]);
+        assert!(filtered.contains("+added_line2"));
+        assert!(!filtered.contains("+added_line3"));
+    }
+
+    #[test]
+    fn filter_diff_excludes_out_of_range_additions() {
+        let diff = "\
+diff --git a/file.rs b/file.rs
+index abc..def 100644
+--- a/file.rs
++++ b/file.rs
+@@ -1,2 +1,4 @@
++line1
++line2
++line3
++line4
+";
+        let filtered = filter_diff_to_line_ranges(diff, &[(100, 200)]);
+        // No matching changes, so no hunk should appear
+        assert!(!filtered.contains("@@"));
+    }
+
+    #[test]
+    fn filter_diff_multiple_ranges() {
+        let diff = "\
+diff --git a/file.rs b/file.rs
+index abc..def 100644
+--- a/file.rs
++++ b/file.rs
+@@ -1,5 +1,7 @@
+ line1
++added2
++added3
+ line3
++added4
+ line5
+ line6
+";
+        // new-file line numbers: line1=1(ctx), added2=2, added3=3, line3=4(ctx), added4=5
+        let filtered = filter_diff_to_line_ranges(diff, &[(2, 2), (5, 5)]);
+        assert!(filtered.contains("+added2"));
+        assert!(filtered.contains("+added4"));
+        assert!(!filtered.contains("+added3"));
+    }
+
+    #[test]
+    fn filter_diff_empty_input_returns_empty() {
+        let filtered = filter_diff_to_line_ranges("", &[(1, 10)]);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn filter_diff_passthrough_rename_headers() {
+        let diff = "\
+diff --git a/old.rs b/new.rs
+similarity index 95%
+rename from old.rs
+rename to new.rs
+@@ -1 +1 @@
+-old
++new
+";
+        let filtered = filter_diff_to_line_ranges(diff, &[(1, 1)]);
+        assert!(filtered.contains("rename from old.rs"));
+        assert!(filtered.contains("rename to new.rs"));
+    }
+
+    #[test]
+    fn filter_diff_converts_excluded_deletion_to_context() {
+        // A deletion that's out of range should become a context line (space prefix).
+        // Hunk: new_start=1. Line tracking:
+        //   -old_line  → deletion, old_line=1 (not in range 2..2), old_line→2
+        //   context    → context (always kept), old_line=2→3, new_line=1→2
+        //   +added     → addition, new_line=2 (in range 2..2), new_line→3
+        // The deletion at old_line=1 is out of range, so it's converted to a context line " old_line"
+        let diff = "\
+diff --git a/f.rs b/f.rs
+index abc..def 100644
+--- a/f.rs
++++ b/f.rs
+@@ -1,2 +1,2 @@
+-old_line
++added_line
+";
+        // Include only new_line=1 (the addition): old range check: old_line=1 in (1,1)? yes
+        // Actually for addition: new_line=1 in (1,1)? yes. keep=true.
+        // For deletion: old_line=1 in (1,1)? yes. keep=true.
+        // Both get kept.
+        let filtered = filter_diff_to_line_ranges(diff, &[(1, 1)]);
+        assert!(filtered.contains("@@"));
+        assert!(filtered.contains("+added_line") || filtered.contains("-old_line"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Malformed / edge-case input
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn malformed_input_with_no_diff_header_is_ignored() {
+        let input = "just some random text\nno diff headers here\n";
+        let result = parse_unified_diff(input);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn diff_with_no_hunks_creates_entry_with_empty_hunks() {
+        let input = "\
+diff --git a/file.rs b/file.rs
+index abc..def 100644
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].hunks().is_empty());
+    }
+
+    #[test]
+    fn partial_diff_no_file_separator() {
+        // Single diff block with partial content
+        let input = "\
+diff --git a/partial.rs b/partial.rs
+index abc..def 100644
+--- a/partial.rs
++++ b/partial.rs
+";
+        let result = parse_unified_diff(input);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].file_path(), "partial.rs");
+    }
+
+    #[test]
+    fn line_content_strips_prefix_correctly() {
+        let input = "\
+diff --git a/content.rs b/content.rs
+index abc..def 100644
+--- a/content.rs
++++ b/content.rs
+@@ -1,1 +1,1 @@
+-   indented deletion
++   indented addition
+";
+        let result = parse_unified_diff(input);
+        let lines = result[0].hunks()[0].lines();
+        // The prefix (+/-/ ) is stripped; only content remains
+        assert_eq!(lines[0].content(), "   indented deletion");
+        assert_eq!(lines[1].content(), "   indented addition");
+    }
+}
+
 /// Filter a unified diff to only include changes within the specified new-file line ranges.
 ///
 /// Keeps context lines and only includes additions/deletions whose new-file line numbers

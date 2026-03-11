@@ -174,4 +174,104 @@ mod tests {
         let cloned = original.clone();
         assert_eq!(original, cloned);
     }
+
+    // -- FileStatusKind additional -----------------------------------------
+
+    #[test]
+    fn file_status_kind_copy() {
+        let kind = FileStatusKind::Conflicted;
+        let copy = kind;
+        assert_eq!(kind, copy);
+    }
+
+    #[test]
+    fn file_status_kind_hash_in_hashset() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(FileStatusKind::Modified);
+        set.insert(FileStatusKind::Added);
+        set.insert(FileStatusKind::Modified); // duplicate
+        assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn file_status_kind_conflicted_variant() {
+        let kind = FileStatusKind::Conflicted;
+        assert_eq!(format!("{kind:?}"), "Conflicted");
+    }
+
+    #[test]
+    fn file_status_kind_ignored_variant() {
+        let kind = FileStatusKind::Ignored;
+        assert_eq!(format!("{kind:?}"), "Ignored");
+    }
+
+    #[test]
+    fn file_status_kind_copied_variant() {
+        let kind = FileStatusKind::Copied;
+        assert_eq!(format!("{kind:?}"), "Copied");
+    }
+
+    // -- FileStatus additional ---------------------------------------------
+
+    #[test]
+    fn file_status_ignored_file() {
+        let status = FileStatus::new(
+            ".DS_Store",
+            None,
+            FileStatusKind::Ignored,
+            FileStatusKind::Ignored,
+        );
+        assert_eq!(status.index_status(), FileStatusKind::Ignored);
+        assert_eq!(status.worktree_status(), FileStatusKind::Ignored);
+    }
+
+    #[test]
+    fn file_status_conflicted_file() {
+        let status = FileStatus::new(
+            "src/conflicted.rs",
+            None,
+            FileStatusKind::Conflicted,
+            FileStatusKind::Conflicted,
+        );
+        assert_eq!(status.path(), "src/conflicted.rs");
+        assert_eq!(status.index_status(), FileStatusKind::Conflicted);
+    }
+
+    #[test]
+    fn file_status_copied_file_with_origin() {
+        let status = FileStatus::new(
+            "src/copy.rs",
+            Some("src/original.rs".to_string()),
+            FileStatusKind::Copied,
+            FileStatusKind::Copied,
+        );
+        assert_eq!(status.old_path(), Some("src/original.rs"));
+        assert_eq!(status.index_status(), FileStatusKind::Copied);
+    }
+
+    #[test]
+    fn file_status_deleted_in_index_untracked_in_worktree() {
+        let status = FileStatus::new(
+            "old_file.rs",
+            None,
+            FileStatusKind::Deleted,
+            FileStatusKind::Untracked,
+        );
+        assert_eq!(status.index_status(), FileStatusKind::Deleted);
+        assert_eq!(status.worktree_status(), FileStatusKind::Untracked);
+    }
+
+    #[test]
+    fn file_status_debug() {
+        let status = FileStatus::new(
+            "debug.rs",
+            None,
+            FileStatusKind::Modified,
+            FileStatusKind::Modified,
+        );
+        let debug = format!("{status:?}");
+        assert!(debug.contains("debug.rs"));
+        assert!(debug.contains("Modified"));
+    }
 }

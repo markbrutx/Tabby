@@ -114,4 +114,78 @@ mod tests {
         let b = PaneContentId::from(String::from("c1"));
         assert_eq!(a, b);
     }
+
+    #[test]
+    fn pane_content_id_inequality() {
+        let a = PaneContentId::from(String::from("c1"));
+        let b = PaneContentId::from(String::from("c2"));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn pane_content_id_as_ref_returns_inner_str() {
+        let id = PaneContentId::from(String::from("content-xyz"));
+        let s: &str = id.as_ref();
+        assert_eq!(s, "content-xyz");
+    }
+
+    #[test]
+    fn pane_content_id_clone_equals_original() {
+        let id = PaneContentId::from(String::from("clone-me"));
+        let cloned = id.clone();
+        assert_eq!(id, cloned);
+    }
+
+    #[test]
+    fn pane_content_id_ordering() {
+        let a = PaneContentId::from(String::from("alpha"));
+        let b = PaneContentId::from(String::from("beta"));
+        assert!(a < b);
+        assert!(b > a);
+    }
+
+    #[test]
+    fn pane_content_id_debug_format() {
+        let id = PaneContentId::from(String::from("debug-id"));
+        let debug = format!("{id:?}");
+        assert!(debug.contains("debug-id"));
+    }
+
+    #[test]
+    fn pane_content_id_in_hash_set() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        let id1 = PaneContentId::from(String::from("h1"));
+        let id2 = PaneContentId::from(String::from("h1"));
+        let id3 = PaneContentId::from(String::from("h2"));
+        set.insert(id1.clone());
+        set.insert(id2.clone()); // duplicate
+        set.insert(id3.clone());
+        assert_eq!(set.len(), 2, "duplicate IDs should deduplicate in a HashSet");
+    }
+
+    #[test]
+    fn tab_id_ordering() {
+        let a = TabId::from(String::from("a"));
+        let b = TabId::from(String::from("b"));
+        assert!(a < b);
+    }
+
+    #[test]
+    fn tab_id_as_ref_returns_inner_str() {
+        let id = TabId::from(String::from("tab-ref-test"));
+        let s: &str = id.as_ref();
+        assert_eq!(s, "tab-ref-test");
+    }
+
+    #[test]
+    fn pane_id_hash_set_deduplication() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        let id1 = PaneId::from(String::from("pane-dup"));
+        let id2 = PaneId::from(String::from("pane-dup"));
+        set.insert(id1);
+        set.insert(id2);
+        assert_eq!(set.len(), 1);
+    }
 }

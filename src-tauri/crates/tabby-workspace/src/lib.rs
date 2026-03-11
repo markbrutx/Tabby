@@ -1573,6 +1573,666 @@ mod tests {
         assert!(ws.active_tab_id.is_none());
     }
 
+    fn git(cwd: &str) -> PaneSpec {
+        PaneSpec::Git(super::GitPaneSpec {
+            working_directory: String::from(cwd),
+        })
+    }
+
+    // -------------------------------------------------------------------------
+    // WorkspaceSession: creation / default state
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn default_workspace_has_no_tabs_and_no_active_tab() {
+        let ws = WorkspaceSession::default();
+        assert!(ws.tabs.is_empty());
+        assert!(ws.active_tab_id.is_none());
+    }
+
+    #[test]
+    fn default_workspace_is_valid() {
+        let ws = WorkspaceSession::default();
+        ws.validate().expect("empty workspace should be valid");
+    }
+
+    #[test]
+    fn tab_summaries_returns_all_tabs() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::Preset(LayoutPreset::OneByOne), vec![terminal("/a")])
+            .unwrap();
+        ws.open_tab(TabLayoutStrategy::Preset(LayoutPreset::OneByOne), vec![terminal("/b")])
+            .unwrap();
+        assert_eq!(ws.tab_summaries().len(), 2);
+    }
+
+    // -------------------------------------------------------------------------
+    // open_tab: validation edge cases
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn open_tab_with_zero_panes_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        let result = ws.open_tab(TabLayoutStrategy::AutoCount, vec![]);
+        assert!(result.is_err(), "zero panes should be rejected");
+    }
+
+    #[test]
+    fn open_tab_with_ten_panes_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        let specs: Vec<PaneSpec> = (0..10).map(|i| terminal(&format!("/{i}"))).collect();
+        let result = ws.open_tab(TabLayoutStrategy::AutoCount, specs);
+        assert!(result.is_err(), "10 panes should be rejected");
+    }
+
+    #[test]
+    fn open_tab_with_nine_panes_succeeds() {
+        let mut ws = WorkspaceSession::default();
+        let specs: Vec<PaneSpec> = (0..9).map(|i| terminal(&format!("/{i}"))).collect();
+        ws.open_tab(TabLayoutStrategy::Preset(LayoutPreset::ThreeByThree), specs)
+            .expect("9 panes should be accepted");
+        assert_eq!(ws.tabs[0].panes.len(), 9);
+    }
+
+    #[test]
+    fn open_tab_auto_count_single_pane() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/tmp")])
+            .expect("single pane auto count");
+        assert_eq!(ws.tabs.len(), 1);
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn open_tab_auto_count_two_panes() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a"), terminal("/b")])
+            .expect("two panes auto count");
+        assert_eq!(ws.tabs[0].panes.len(), 2);
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn open_tab_auto_count_three_panes() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a"), terminal("/b"), terminal("/c")])
+            .expect("three panes");
+        assert_eq!(ws.tabs[0].panes.len(), 3);
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn open_tab_auto_count_four_panes() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, (0..4).map(|i| terminal(&format!("/{i}"))).collect())
+            .expect("four panes");
+        assert_eq!(ws.tabs[0].panes.len(), 4);
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn open_tab_auto_count_five_panes() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, (0..5).map(|i| terminal(&format!("/{i}"))).collect())
+            .expect("five panes");
+        assert_eq!(ws.tabs[0].panes.len(), 5);
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn open_tab_auto_count_six_panes() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, (0..6).map(|i| terminal(&format!("/{i}"))).collect())
+            .expect("six panes");
+        assert_eq!(ws.tabs[0].panes.len(), 6);
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn open_tab_auto_count_seven_panes() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, (0..7).map(|i| terminal(&format!("/{i}"))).collect())
+            .expect("seven panes");
+        assert_eq!(ws.tabs[0].panes.len(), 7);
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn open_tab_auto_count_eight_panes() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, (0..8).map(|i| terminal(&format!("/{i}"))).collect())
+            .expect("eight panes");
+        assert_eq!(ws.tabs[0].panes.len(), 8);
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn open_tab_preset_mismatch_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        // OneByOne expects 1 pane but we give 2
+        let result = ws.open_tab(
+            TabLayoutStrategy::Preset(LayoutPreset::OneByOne),
+            vec![terminal("/a"), terminal("/b")],
+        );
+        assert!(result.is_err(), "preset mismatch should be rejected");
+    }
+
+    #[test]
+    fn open_tab_with_git_pane_creates_git_content() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![git("/repo")])
+            .expect("git pane should open");
+        let content_id = ws.tabs[0].panes[0].content_id.clone();
+        let content = ws.pane_content(&content_id).expect("content should exist");
+        assert_eq!(content.working_directory(), Some("/repo"));
+        assert!(content.terminal_profile_id().is_none());
+        assert!(content.browser_url().is_none());
+    }
+
+    #[test]
+    fn open_tab_with_browser_pane_creates_browser_content() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![browser("https://tabby.dev")])
+            .expect("browser pane should open");
+        let content_id = ws.tabs[0].panes[0].content_id.clone();
+        let content = ws.pane_content(&content_id).expect("content should exist");
+        assert_eq!(content.browser_url().map(|u| u.as_str()), Some("https://tabby.dev"));
+    }
+
+    #[test]
+    fn open_tab_sets_sequential_titles() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/b")]).unwrap();
+        assert!(ws.tabs[0].title.contains('1'));
+        assert!(ws.tabs[1].title.contains('2'));
+    }
+
+    #[test]
+    fn open_tab_sets_active_tab_to_newest() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab1_id = ws.tabs[0].tab_id.clone();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/b")]).unwrap();
+        let tab2_id = ws.tabs[1].tab_id.clone();
+        assert_eq!(ws.active_tab_id, Some(tab2_id));
+        assert_ne!(ws.active_tab_id, Some(tab1_id));
+    }
+
+    #[test]
+    fn open_tab_explicit_tree_strategy() {
+        use super::layout::{SplitNode, SplitDirection};
+        let mut ws = WorkspaceSession::default();
+        // Build a 2-pane template tree with placeholder IDs
+        let template = SplitNode::Split {
+            direction: SplitDirection::Horizontal,
+            ratio: 500,
+            first: Box::new(SplitNode::Pane { pane_id: PaneId::from(String::from("ph1")) }),
+            second: Box::new(SplitNode::Pane { pane_id: PaneId::from(String::from("ph2")) }),
+        };
+        ws.open_tab(
+            TabLayoutStrategy::ExplicitTree(template),
+            vec![terminal("/a"), terminal("/b")],
+        )
+        .expect("explicit tree should work");
+        assert_eq!(ws.tabs[0].panes.len(), 2);
+        ws.validate().unwrap();
+    }
+
+    // -------------------------------------------------------------------------
+    // close_tab: edge cases
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn close_tab_on_nonexistent_tab_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        let fake_id = TabId::from(String::from("does-not-exist"));
+        let result = ws.close_tab(&fake_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn close_tab_on_empty_workspace_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        let fake_id = TabId::from(String::from("t1"));
+        assert!(ws.close_tab(&fake_id).is_err());
+    }
+
+    #[test]
+    fn close_non_active_tab_preserves_active_tab() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/b")]).unwrap();
+        let tab1_id = ws.tabs[0].tab_id.clone();
+        let tab2_id = ws.tabs[1].tab_id.clone();
+        // tab2 is active (opened last); close tab1 — active should stay tab2
+        ws.close_tab(&tab1_id).expect("should close tab1");
+        assert_eq!(ws.active_tab_id, Some(tab2_id));
+    }
+
+    #[test]
+    fn close_active_tab_switches_to_adjacent_tab() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/b")]).unwrap();
+        let tab1_id = ws.tabs[0].tab_id.clone();
+        let tab2_id = ws.tabs[1].tab_id.clone();
+        // tab2 is active; close it — active should switch to tab1
+        ws.close_tab(&tab2_id).expect("close active tab");
+        assert_eq!(ws.active_tab_id, Some(tab1_id));
+    }
+
+    #[test]
+    fn close_last_tab_leaves_workspace_empty() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab_id = ws.tabs[0].tab_id.clone();
+        ws.close_tab(&tab_id).expect("close last tab");
+        assert!(ws.tabs.is_empty());
+        assert!(ws.active_tab_id.is_none());
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn close_tab_emits_active_tab_changed_only_if_active_was_closed() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/b")]).unwrap();
+        let tab1_id = ws.tabs[0].tab_id.clone();
+        // close non-active tab1 — should NOT emit ActiveTabChanged
+        let events = ws.close_tab(&tab1_id).expect("close non-active tab");
+        let has_tab_changed = events.iter().any(|e| matches!(e, WorkspaceDomainEvent::ActiveTabChanged { .. }));
+        assert!(!has_tab_changed, "closing non-active tab should not emit ActiveTabChanged");
+    }
+
+    #[test]
+    fn close_active_tab_emits_active_tab_changed() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/b")]).unwrap();
+        let tab2_id = ws.tabs[1].tab_id.clone();
+        let events = ws.close_tab(&tab2_id).expect("close active tab");
+        assert!(events.iter().any(|e| matches!(e, WorkspaceDomainEvent::ActiveTabChanged { .. })));
+    }
+
+    // -------------------------------------------------------------------------
+    // rename_tab
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn rename_tab_succeeds_with_valid_title() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab_id = ws.tabs[0].tab_id.clone();
+        let events = ws.rename_tab(&tab_id, String::from("My Project")).expect("rename should succeed");
+        assert_eq!(ws.tabs[0].title, "My Project");
+        assert_eq!(events.len(), 1);
+        assert!(matches!(&events[0], WorkspaceDomainEvent::TabRenamed { tab_id: tid, new_title } if *tid == tab_id && new_title == "My Project"));
+    }
+
+    #[test]
+    fn rename_tab_trims_whitespace() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab_id = ws.tabs[0].tab_id.clone();
+        ws.rename_tab(&tab_id, String::from("  trimmed  ")).expect("rename with whitespace");
+        assert_eq!(ws.tabs[0].title, "trimmed");
+    }
+
+    #[test]
+    fn rename_tab_rejects_empty_title() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab_id = ws.tabs[0].tab_id.clone();
+        let result = ws.rename_tab(&tab_id, String::from(""));
+        assert!(result.is_err(), "empty title should be rejected");
+    }
+
+    #[test]
+    fn rename_tab_rejects_whitespace_only_title() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab_id = ws.tabs[0].tab_id.clone();
+        let result = ws.rename_tab(&tab_id, String::from("   "));
+        assert!(result.is_err(), "whitespace-only title should be rejected");
+    }
+
+    #[test]
+    fn rename_tab_rejects_title_over_64_chars() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab_id = ws.tabs[0].tab_id.clone();
+        let long_title = "a".repeat(65);
+        let result = ws.rename_tab(&tab_id, long_title);
+        assert!(result.is_err(), "title over 64 chars should be rejected");
+    }
+
+    #[test]
+    fn rename_tab_accepts_title_of_exactly_64_chars() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab_id = ws.tabs[0].tab_id.clone();
+        let max_title = "a".repeat(64);
+        ws.rename_tab(&tab_id, max_title.clone()).expect("64-char title should be accepted");
+        assert_eq!(ws.tabs[0].title, max_title);
+    }
+
+    #[test]
+    fn rename_tab_on_nonexistent_tab_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        let fake_id = TabId::from(String::from("not-real"));
+        let result = ws.rename_tab(&fake_id, String::from("Valid Title"));
+        assert!(result.is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // focus_pane: edge cases
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn focus_pane_on_nonexistent_tab_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let fake_tab = TabId::from(String::from("ghost-tab"));
+        let pane_id = ws.tabs[0].panes[0].pane_id.clone();
+        assert!(ws.focus_pane(&fake_tab, &pane_id).is_err());
+    }
+
+    #[test]
+    fn focus_pane_on_nonexistent_pane_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab_id = ws.tabs[0].tab_id.clone();
+        let fake_pane = PaneId::from(String::from("ghost-pane"));
+        assert!(ws.focus_pane(&tab_id, &fake_pane).is_err());
+    }
+
+    #[test]
+    fn focus_pane_same_pane_same_tab_emits_nothing() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let tab_id = ws.tabs[0].tab_id.clone();
+        let pane_id = ws.tabs[0].active_pane_id.clone();
+        // Focus same pane on same (already active) tab — no events expected
+        let events = ws.focus_pane(&tab_id, &pane_id).expect("should succeed");
+        assert!(events.is_empty(), "no event when focusing already-active pane in already-active tab");
+    }
+
+    #[test]
+    fn focus_pane_from_different_tab_emits_tab_changed_and_pane_changed() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/b")]).unwrap();
+        let tab1_id = ws.tabs[0].tab_id.clone();
+        let pane1_id = ws.tabs[0].panes[0].pane_id.clone();
+        // Currently tab2 is active; focus on tab1's pane
+        let events = ws.focus_pane(&tab1_id, &pane1_id).expect("focus cross-tab");
+        assert!(events.iter().any(|e| matches!(e, WorkspaceDomainEvent::ActiveTabChanged { .. })));
+        assert!(events.iter().any(|e| matches!(e, WorkspaceDomainEvent::ActivePaneChanged { .. })));
+    }
+
+    // -------------------------------------------------------------------------
+    // set_active_tab: edge cases
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn set_active_tab_on_nonexistent_tab_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        let fake = TabId::from(String::from("phantom"));
+        assert!(ws.set_active_tab(&fake).is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // split_pane: edge cases
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn split_pane_on_nonexistent_pane_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let fake_pane = PaneId::from(String::from("ghost"));
+        assert!(ws.split_pane(&fake_pane, super::layout::SplitDirection::Horizontal, terminal("/b")).is_err());
+    }
+
+    #[test]
+    fn split_pane_vertical_direction_succeeds() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let pane_id = ws.tabs[0].panes[0].pane_id.clone();
+        ws.split_pane(&pane_id, super::layout::SplitDirection::Vertical, terminal("/b"))
+            .expect("vertical split");
+        assert_eq!(ws.tabs[0].panes.len(), 2);
+        ws.validate().unwrap();
+    }
+
+    #[test]
+    fn split_pane_with_git_spec() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let pane_id = ws.tabs[0].panes[0].pane_id.clone();
+        ws.split_pane(&pane_id, super::layout::SplitDirection::Horizontal, git("/repo"))
+            .expect("git split");
+        assert_eq!(ws.tabs[0].panes.len(), 2);
+        ws.validate().unwrap();
+    }
+
+    // -------------------------------------------------------------------------
+    // close_pane: edge cases
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn close_pane_on_nonexistent_pane_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let fake_pane = PaneId::from(String::from("phantom-pane"));
+        assert!(ws.close_pane(&fake_pane).is_err());
+    }
+
+    #[test]
+    fn close_non_active_pane_does_not_change_active_pane() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::Preset(LayoutPreset::OneByTwo), vec![terminal("/a"), terminal("/b")]).unwrap();
+        let active_pane = ws.tabs[0].active_pane_id.clone();
+        // Close the non-active pane
+        let non_active_pane = ws.tabs[0].panes.iter().find(|p| p.pane_id != active_pane).unwrap().pane_id.clone();
+        let events = ws.close_pane(&non_active_pane).expect("close non-active pane");
+        // Active pane should remain unchanged
+        assert_eq!(ws.tabs[0].active_pane_id, active_pane);
+        assert!(!events.iter().any(|e| matches!(e, WorkspaceDomainEvent::ActivePaneChanged { .. })));
+    }
+
+    #[test]
+    fn close_last_pane_in_active_tab_auto_activates_other_tab() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/b")]).unwrap();
+        let tab1_id = ws.tabs[0].tab_id.clone();
+        let tab2_pane = ws.tabs[1].panes[0].pane_id.clone();
+        // tab2 is active; close its only pane — should auto-activate tab1
+        let events = ws.close_pane(&tab2_pane).expect("close last pane in active tab");
+        assert!(events.iter().any(|e| matches!(e, WorkspaceDomainEvent::ActiveTabChanged { tab_id } if *tab_id == tab1_id)));
+        assert_eq!(ws.active_tab_id, Some(tab1_id));
+    }
+
+    // -------------------------------------------------------------------------
+    // swap_pane_slots
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn swap_pane_slots_swaps_positions_in_layout() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::Preset(LayoutPreset::OneByTwo), vec![terminal("/a"), terminal("/b")]).unwrap();
+        let pane_a = ws.tabs[0].panes[0].pane_id.clone();
+        let pane_b = ws.tabs[0].panes[1].pane_id.clone();
+        ws.swap_pane_slots(&pane_a, &pane_b).expect("swap should succeed");
+        ws.validate().expect("workspace valid after swap");
+    }
+
+    #[test]
+    fn swap_pane_slots_across_different_tabs_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/b")]).unwrap();
+        let pane_a = ws.tabs[0].panes[0].pane_id.clone();
+        let pane_b = ws.tabs[1].panes[0].pane_id.clone();
+        assert!(ws.swap_pane_slots(&pane_a, &pane_b).is_err(), "cross-tab swap should fail");
+    }
+
+    #[test]
+    fn swap_pane_slots_with_nonexistent_pane_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let pane_a = ws.tabs[0].panes[0].pane_id.clone();
+        let ghost = PaneId::from(String::from("ghost-pane"));
+        assert!(ws.swap_pane_slots(&pane_a, &ghost).is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // replace_pane_spec: edge cases
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn replace_pane_spec_on_nonexistent_pane_returns_error() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let fake_pane = PaneId::from(String::from("ghost"));
+        assert!(ws.replace_pane_spec(&fake_pane, terminal("/b")).is_err());
+    }
+
+    #[test]
+    fn replace_pane_spec_terminal_to_git_emits_content_changed() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal("/a")]).unwrap();
+        let pane_id = ws.tabs[0].panes[0].pane_id.clone();
+        let events = ws.replace_pane_spec(&pane_id, git("/repo")).expect("replace with git spec");
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            WorkspaceDomainEvent::PaneContentChanged { old_content, new_content, .. } => {
+                assert!(old_content.terminal_profile_id().is_some());
+                assert_eq!(new_content.working_directory(), Some("/repo"));
+            }
+            other => panic!("expected PaneContentChanged, got {other:?}"),
+        }
+        ws.validate().unwrap();
+    }
+
+    // -------------------------------------------------------------------------
+    // pane_spec
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn pane_spec_for_browser_pane_returns_browser_spec() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![browser("https://rust-lang.org")]).unwrap();
+        let pane_id = ws.tabs[0].panes[0].pane_id.clone();
+        match ws.pane_spec(&pane_id) {
+            Some(PaneSpec::Browser(b)) => assert_eq!(b.initial_url.as_str(), "https://rust-lang.org"),
+            other => panic!("expected Browser spec, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pane_spec_for_git_pane_returns_git_spec() {
+        let mut ws = WorkspaceSession::default();
+        ws.open_tab(TabLayoutStrategy::AutoCount, vec![git("/my-repo")]).unwrap();
+        let pane_id = ws.tabs[0].panes[0].pane_id.clone();
+        match ws.pane_spec(&pane_id) {
+            Some(PaneSpec::Git(g)) => assert_eq!(g.working_directory, "/my-repo"),
+            other => panic!("expected Git spec, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pane_spec_for_nonexistent_pane_returns_none() {
+        let ws = WorkspaceSession::default();
+        let ghost = PaneId::from(String::from("ghost"));
+        assert!(ws.pane_spec(&ghost).is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // PaneSpec helpers
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn terminal_pane_spec_terminal_profile_id_returns_some() {
+        let spec = terminal("/a");
+        assert_eq!(spec.terminal_profile_id(), Some("terminal"));
+    }
+
+    #[test]
+    fn browser_pane_spec_terminal_profile_id_returns_none() {
+        let spec = browser("https://example.com");
+        assert!(spec.terminal_profile_id().is_none());
+    }
+
+    #[test]
+    fn git_pane_spec_terminal_profile_id_returns_none() {
+        let spec = git("/repo");
+        assert!(spec.terminal_profile_id().is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // WorkspaceDomainEvent: is_runtime_relevant for TabRenamed
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn tab_renamed_event_is_not_runtime_relevant() {
+        let event = WorkspaceDomainEvent::TabRenamed {
+            tab_id: TabId::from(String::from("t1")),
+            new_title: String::from("New Name"),
+        };
+        assert!(!event.is_runtime_relevant(), "TabRenamed is metadata-only and must not trigger runtime actions");
+    }
+
+    // -------------------------------------------------------------------------
+    // pane_content
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn pane_content_returns_none_for_unknown_content_id() {
+        let ws = WorkspaceSession::default();
+        let fake_id = super::PaneContentId::from(String::from("unknown"));
+        assert!(ws.pane_content(&fake_id).is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // Validate: invariant enforcement
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn validate_passes_after_multiple_open_tabs() {
+        let mut ws = WorkspaceSession::default();
+        for i in 0..5 {
+            ws.open_tab(TabLayoutStrategy::AutoCount, vec![terminal(&format!("/{i}"))]).unwrap();
+        }
+        ws.validate().expect("workspace with 5 tabs should be valid");
+    }
+
+    // -------------------------------------------------------------------------
+    // create_pane_id / create_tab_id / create_content_id helpers
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn create_pane_id_generates_unique_ids() {
+        let a = super::create_pane_id();
+        let b = super::create_pane_id();
+        assert_ne!(a, b, "each create_pane_id call should return a unique ID");
+    }
+
+    #[test]
+    fn create_tab_id_generates_unique_ids() {
+        let a = super::create_tab_id();
+        let b = super::create_tab_id();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn create_content_id_generates_unique_ids() {
+        let a = super::create_content_id();
+        let b = super::create_content_id();
+        assert_ne!(a, b);
+    }
+
     #[test]
     fn close_last_pane_destroys_content_and_tab() {
         let mut workspace = WorkspaceSession::default();

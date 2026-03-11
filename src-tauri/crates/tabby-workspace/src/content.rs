@@ -231,4 +231,95 @@ mod tests {
         let id = make_content_id("boundary-test");
         let _def = PaneContentDefinition::terminal(id, "sh", "/", None);
     }
+
+    #[test]
+    fn git_construction_and_field_access() {
+        let id = make_content_id("git-content-1");
+        let def = PaneContentDefinition::git(id.clone(), "/my/repo");
+
+        assert_eq!(*def.content_id(), id);
+        assert_eq!(def.working_directory(), Some("/my/repo"));
+        assert_eq!(def.terminal_profile_id(), None);
+        assert_eq!(def.browser_url(), None);
+
+        match &def {
+            PaneContentDefinition::Git { working_directory, .. } => {
+                assert_eq!(working_directory, "/my/repo");
+            }
+            _ => panic!("expected Git variant"),
+        }
+    }
+
+    #[test]
+    fn git_clone_preserves_all_fields() {
+        let id = make_content_id("git-clone");
+        let def = PaneContentDefinition::git(id, "/clone/path");
+        let cloned = def.clone();
+        assert_eq!(def, cloned);
+    }
+
+    #[test]
+    fn git_and_terminal_have_distinct_working_directory_semantics() {
+        let git_id = make_content_id("git-wd");
+        let term_id = make_content_id("term-wd");
+        let git_def = PaneContentDefinition::git(git_id, "/shared");
+        let term_def = PaneContentDefinition::terminal(term_id, "sh", "/shared", None);
+
+        // Both have working_directory but are different variants
+        assert_eq!(git_def.working_directory(), Some("/shared"));
+        assert_eq!(term_def.working_directory(), Some("/shared"));
+        assert_ne!(git_def, term_def);
+    }
+
+    #[test]
+    fn git_debug_format_is_readable() {
+        let id = make_content_id("git-debug");
+        let def = PaneContentDefinition::git(id, "/debug/repo");
+        let debug = format!("{def:?}");
+        assert!(debug.contains("Git"));
+        assert!(debug.contains("debug/repo"));
+    }
+
+    #[test]
+    fn content_id_returns_same_id_for_all_variants() {
+        let term_id = make_content_id("term-id-check");
+        let browser_id = make_content_id("browser-id-check");
+        let git_id = make_content_id("git-id-check");
+
+        let term = PaneContentDefinition::terminal(term_id.clone(), "zsh", "/", None);
+        let browser = PaneContentDefinition::browser(browser_id.clone(), BrowserUrl::new("https://x.com"));
+        let git = PaneContentDefinition::git(git_id.clone(), "/");
+
+        assert_eq!(*term.content_id(), term_id);
+        assert_eq!(*browser.content_id(), browser_id);
+        assert_eq!(*git.content_id(), git_id);
+    }
+
+    #[test]
+    fn terminal_working_directory_different_from_git_variant() {
+        let term_id = make_content_id("t1");
+        let git_id = make_content_id("g1");
+        let term = PaneContentDefinition::terminal(term_id, "sh", "/home", None);
+        let git = PaneContentDefinition::git(git_id, "/repo");
+        // terminal has profile_id, git does not
+        assert!(term.terminal_profile_id().is_some());
+        assert!(git.terminal_profile_id().is_none());
+    }
+
+    #[test]
+    fn browser_equality_same_url_and_id() {
+        let id = make_content_id("browser-eq");
+        let url = BrowserUrl::new("https://example.com");
+        let def_a = PaneContentDefinition::browser(id.clone(), url.clone());
+        let def_b = PaneContentDefinition::browser(id, url);
+        assert_eq!(def_a, def_b);
+    }
+
+    #[test]
+    fn browser_inequality_different_url() {
+        let id = make_content_id("browser-ne");
+        let def_a = PaneContentDefinition::browser(id.clone(), BrowserUrl::new("https://a.com"));
+        let def_b = PaneContentDefinition::browser(id, BrowserUrl::new("https://b.com"));
+        assert_ne!(def_a, def_b);
+    }
 }
