@@ -182,7 +182,9 @@ impl RuntimeRegistry {
 mod tests {
     use std::collections::{HashMap, HashSet};
 
-    use super::{PaneRuntime, RuntimeError, RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus};
+    use super::{
+        PaneRuntime, RuntimeError, RuntimeKind, RuntimeRegistry, RuntimeSessionId, RuntimeStatus,
+    };
     use tabby_kernel::{BrowserUrl, PaneId, WorkingDirectory};
 
     // ---------------------------------------------------------------------------
@@ -320,7 +322,10 @@ mod tests {
         assert_eq!(runtime.runtime_session_id, Some(session_id));
         assert_eq!(runtime.kind, RuntimeKind::Browser);
         assert_eq!(runtime.status, RuntimeStatus::Running);
-        assert_eq!(runtime.browser_location.as_ref().map(|u| u.as_str()), Some("https://example.com"));
+        assert_eq!(
+            runtime.browser_location.as_ref().map(|u| u.as_str()),
+            Some("https://example.com")
+        );
         assert!(runtime.last_error.is_none());
         assert!(runtime.terminal_cwd.is_none());
         assert!(runtime.git_repo_path.is_none());
@@ -335,7 +340,10 @@ mod tests {
 
         assert_eq!(registry.snapshot().len(), 1);
         let r = registry.get(&pane_id).unwrap();
-        assert_eq!(r.browser_location.as_ref().map(|u| u.as_str()), Some("https://b.com"));
+        assert_eq!(
+            r.browser_location.as_ref().map(|u| u.as_str()),
+            Some("https://b.com")
+        );
     }
 
     // ---------------------------------------------------------------------------
@@ -353,7 +361,10 @@ mod tests {
 
         assert_eq!(runtime.kind, RuntimeKind::Git);
         assert_eq!(runtime.status, RuntimeStatus::Running);
-        assert_eq!(runtime.git_repo_path.as_ref().map(|p| p.as_str()), Some("/projects/tabby"));
+        assert_eq!(
+            runtime.git_repo_path.as_ref().map(|p| p.as_str()),
+            Some("/projects/tabby")
+        );
         assert!(runtime.browser_location.is_none());
         assert!(runtime.terminal_cwd.is_none());
     }
@@ -484,8 +495,14 @@ mod tests {
         registry.register_terminal(&pid("pane-a"), sid("sa"));
         registry.register_browser(&pid("pane-b"), sid("sb"), url("https://b.com"));
 
-        assert_eq!(registry.get(&pid("pane-a")).unwrap().kind, RuntimeKind::Terminal);
-        assert_eq!(registry.get(&pid("pane-b")).unwrap().kind, RuntimeKind::Browser);
+        assert_eq!(
+            registry.get(&pid("pane-a")).unwrap().kind,
+            RuntimeKind::Terminal
+        );
+        assert_eq!(
+            registry.get(&pid("pane-b")).unwrap().kind,
+            RuntimeKind::Browser
+        );
     }
 
     // ---------------------------------------------------------------------------
@@ -539,7 +556,12 @@ mod tests {
         registry.register_terminal(&pane_id, session_id.clone());
 
         let runtime = registry
-            .mark_terminal_exit(&pane_id, Some(&session_id), true, Some("process crashed".into()))
+            .mark_terminal_exit(
+                &pane_id,
+                Some(&session_id),
+                true,
+                Some("process crashed".into()),
+            )
             .unwrap();
         assert_eq!(runtime.status, RuntimeStatus::Failed);
         assert_eq!(runtime.last_error.as_deref(), Some("process crashed"));
@@ -603,7 +625,9 @@ mod tests {
         let pane_id = pid("pane-persist-exit");
         let session_id = sid("s-persist");
         registry.register_terminal(&pane_id, session_id.clone());
-        registry.mark_terminal_exit(&pane_id, Some(&session_id), false, None).unwrap();
+        registry
+            .mark_terminal_exit(&pane_id, Some(&session_id), false, None)
+            .unwrap();
 
         let r = registry.get(&pane_id).unwrap();
         assert_eq!(r.status, RuntimeStatus::Exited);
@@ -621,7 +645,10 @@ mod tests {
 
         let new_cwd = cwd("/projects/tabby");
         let runtime = registry.update_terminal_cwd(&pane_id, new_cwd).unwrap();
-        assert_eq!(runtime.terminal_cwd.as_ref().map(|w| w.as_str()), Some("/projects/tabby"));
+        assert_eq!(
+            runtime.terminal_cwd.as_ref().map(|w| w.as_str()),
+            Some("/projects/tabby")
+        );
     }
 
     #[test]
@@ -629,8 +656,12 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
         let pane_id = pid("pane-cwd-overwrite");
         registry.register_terminal(&pane_id, sid("s1"));
-        registry.update_terminal_cwd(&pane_id, cwd("/first")).unwrap();
-        registry.update_terminal_cwd(&pane_id, cwd("/second")).unwrap();
+        registry
+            .update_terminal_cwd(&pane_id, cwd("/first"))
+            .unwrap();
+        registry
+            .update_terminal_cwd(&pane_id, cwd("/second"))
+            .unwrap();
 
         let r = registry.get(&pane_id).unwrap();
         assert_eq!(r.terminal_cwd.as_ref().map(|w| w.as_str()), Some("/second"));
@@ -640,7 +671,10 @@ mod tests {
     fn terminal_cwd_update_for_nonexistent_pane_returns_error() {
         let mut registry = RuntimeRegistry::default();
         let result = registry.update_terminal_cwd(&pid("nonexistent"), cwd("/tmp"));
-        assert!(result.is_err(), "updating cwd for nonexistent pane should fail");
+        assert!(
+            result.is_err(),
+            "updating cwd for nonexistent pane should fail"
+        );
     }
 
     #[test]
@@ -648,10 +682,15 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
         let pane_id = pid("pane-cwd-persist");
         registry.register_terminal(&pane_id, sid("s1"));
-        registry.update_terminal_cwd(&pane_id, cwd("/persisted")).unwrap();
+        registry
+            .update_terminal_cwd(&pane_id, cwd("/persisted"))
+            .unwrap();
 
         let r = registry.get(&pane_id).unwrap();
-        assert_eq!(r.terminal_cwd.as_ref().map(|w| w.as_str()), Some("/persisted"));
+        assert_eq!(
+            r.terminal_cwd.as_ref().map(|w| w.as_str()),
+            Some("/persisted")
+        );
     }
 
     // ---------------------------------------------------------------------------
@@ -667,7 +706,10 @@ mod tests {
         let runtime = registry
             .update_browser_location(&pane_id, url("https://openai.com"))
             .unwrap();
-        assert_eq!(runtime.browser_location.as_ref().map(|u| u.as_str()), Some("https://openai.com"));
+        assert_eq!(
+            runtime.browser_location.as_ref().map(|u| u.as_str()),
+            Some("https://openai.com")
+        );
     }
 
     #[test]
@@ -675,11 +717,18 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
         let pane_id = pid("pane-url-overwrite");
         registry.register_browser(&pane_id, sid("b1"), url("https://initial.com"));
-        registry.update_browser_location(&pane_id, url("https://updated.com")).unwrap();
-        registry.update_browser_location(&pane_id, url("https://final.com")).unwrap();
+        registry
+            .update_browser_location(&pane_id, url("https://updated.com"))
+            .unwrap();
+        registry
+            .update_browser_location(&pane_id, url("https://final.com"))
+            .unwrap();
 
         let r = registry.get(&pane_id).unwrap();
-        assert_eq!(r.browser_location.as_ref().map(|u| u.as_str()), Some("https://final.com"));
+        assert_eq!(
+            r.browser_location.as_ref().map(|u| u.as_str()),
+            Some("https://final.com")
+        );
     }
 
     #[test]
@@ -694,10 +743,15 @@ mod tests {
         let mut registry = RuntimeRegistry::default();
         let pane_id = pid("pane-url-persist");
         registry.register_browser(&pane_id, sid("b1"), url("https://a.com"));
-        registry.update_browser_location(&pane_id, url("https://b.com")).unwrap();
+        registry
+            .update_browser_location(&pane_id, url("https://b.com"))
+            .unwrap();
 
         let r = registry.get(&pane_id).unwrap();
-        assert_eq!(r.browser_location.as_ref().map(|u| u.as_str()), Some("https://b.com"));
+        assert_eq!(
+            r.browser_location.as_ref().map(|u| u.as_str()),
+            Some("https://b.com")
+        );
     }
 
     // ---------------------------------------------------------------------------
@@ -752,18 +806,35 @@ mod tests {
             registry.register_terminal(&pid(&format!("term-{i}")), sid(&format!("st-{i}")));
         }
         for i in 0..5 {
-            registry.register_browser(&pid(&format!("browser-{i}")), sid(&format!("sb-{i}")), url("https://x.com"));
+            registry.register_browser(
+                &pid(&format!("browser-{i}")),
+                sid(&format!("sb-{i}")),
+                url("https://x.com"),
+            );
         }
         for i in 0..3 {
-            registry.register_git(&pid(&format!("git-{i}")), sid(&format!("sg-{i}")), cwd("/r"));
+            registry.register_git(
+                &pid(&format!("git-{i}")),
+                sid(&format!("sg-{i}")),
+                cwd("/r"),
+            );
         }
 
         let snapshot = registry.snapshot();
         assert_eq!(snapshot.len(), 18);
 
-        let terminals = snapshot.iter().filter(|r| r.kind == RuntimeKind::Terminal).count();
-        let browsers = snapshot.iter().filter(|r| r.kind == RuntimeKind::Browser).count();
-        let gits = snapshot.iter().filter(|r| r.kind == RuntimeKind::Git).count();
+        let terminals = snapshot
+            .iter()
+            .filter(|r| r.kind == RuntimeKind::Terminal)
+            .count();
+        let browsers = snapshot
+            .iter()
+            .filter(|r| r.kind == RuntimeKind::Browser)
+            .count();
+        let gits = snapshot
+            .iter()
+            .filter(|r| r.kind == RuntimeKind::Git)
+            .count();
 
         assert_eq!(terminals, 10);
         assert_eq!(browsers, 5);
@@ -782,7 +853,15 @@ mod tests {
         // Update cwd for p1 only
         registry.update_terminal_cwd(&p1, cwd("/for-p1")).unwrap();
 
-        assert_eq!(registry.get(&p1).unwrap().terminal_cwd.as_ref().map(|w| w.as_str()), Some("/for-p1"));
+        assert_eq!(
+            registry
+                .get(&p1)
+                .unwrap()
+                .terminal_cwd
+                .as_ref()
+                .map(|w| w.as_str()),
+            Some("/for-p1")
+        );
         assert!(registry.get(&p2).unwrap().terminal_cwd.is_none());
     }
 
@@ -809,13 +888,6 @@ mod tests {
     }
 
     #[test]
-    fn runtime_kind_is_clone() {
-        let kind = RuntimeKind::Browser;
-        let cloned = kind.clone();
-        assert_eq!(kind, cloned);
-    }
-
-    #[test]
     fn runtime_kind_debug_format() {
         assert!(format!("{:?}", RuntimeKind::Terminal).contains("Terminal"));
         assert!(format!("{:?}", RuntimeKind::Browser).contains("Browser"));
@@ -839,13 +911,6 @@ mod tests {
         let status = RuntimeStatus::Running;
         let copy = status;
         assert_eq!(status, copy);
-    }
-
-    #[test]
-    fn runtime_status_is_clone() {
-        let status = RuntimeStatus::Exited;
-        let cloned = status.clone();
-        assert_eq!(status, cloned);
     }
 
     #[test]
@@ -915,7 +980,9 @@ mod tests {
         // Both should be equal initially
         assert_eq!(original, cloned);
         // Mutating the registry does not affect the clone
-        registry.update_terminal_cwd(&pane_id, cwd("/changed")).unwrap();
+        registry
+            .update_terminal_cwd(&pane_id, cwd("/changed"))
+            .unwrap();
         // The clone still has no cwd
         assert!(cloned.terminal_cwd.is_none());
     }
@@ -1015,10 +1082,15 @@ mod tests {
 
         // Attempt to exit with a stale session from a previous incarnation
         let stale = sid("stale");
-        registry.mark_terminal_exit(&pane_id, Some(&stale), true, Some("crash".into())).unwrap();
+        registry
+            .mark_terminal_exit(&pane_id, Some(&stale), true, Some("crash".into()))
+            .unwrap();
 
         // Status in registry must remain Running
-        assert_eq!(registry.get(&pane_id).unwrap().status, RuntimeStatus::Running);
+        assert_eq!(
+            registry.get(&pane_id).unwrap().status,
+            RuntimeStatus::Running
+        );
     }
 
     #[test]
@@ -1027,9 +1099,14 @@ mod tests {
         let pane_id = pid("pane-unconditional");
         registry.register_terminal(&pane_id, sid("s1"));
 
-        registry.mark_terminal_exit(&pane_id, None, false, None).unwrap();
+        registry
+            .mark_terminal_exit(&pane_id, None, false, None)
+            .unwrap();
 
-        assert_eq!(registry.get(&pane_id).unwrap().status, RuntimeStatus::Exited);
+        assert_eq!(
+            registry.get(&pane_id).unwrap().status,
+            RuntimeStatus::Exited
+        );
     }
 
     // ---------------------------------------------------------------------------
@@ -1043,8 +1120,13 @@ mod tests {
         let session1 = sid("session-v1");
 
         registry.register_terminal(&pane_id, session1.clone());
-        registry.mark_terminal_exit(&pane_id, Some(&session1), false, None).unwrap();
-        assert_eq!(registry.get(&pane_id).unwrap().status, RuntimeStatus::Exited);
+        registry
+            .mark_terminal_exit(&pane_id, Some(&session1), false, None)
+            .unwrap();
+        assert_eq!(
+            registry.get(&pane_id).unwrap().status,
+            RuntimeStatus::Exited
+        );
 
         // Respawn: register again with a new session
         let session2 = sid("session-v2");

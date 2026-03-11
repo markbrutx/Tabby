@@ -268,10 +268,10 @@ mod tests {
     }
 
     #[test]
-    fn font_size_clone_is_equal() {
+    fn font_size_copy_is_equal() {
         let fs = FontSize::new(20).unwrap();
-        let cloned = fs.clone();
-        assert_eq!(fs, cloned);
+        let copied = fs;
+        assert_eq!(fs, copied);
     }
 
     #[test]

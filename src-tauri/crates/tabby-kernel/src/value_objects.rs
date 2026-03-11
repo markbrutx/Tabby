@@ -537,14 +537,14 @@ mod tests {
 
     #[test]
     fn id_newtype_sorted_order_matches_lexicographic() {
-        let mut ids = vec![
+        let mut ids = [
             PaneId::try_new("c").unwrap(),
             PaneId::try_new("a").unwrap(),
             PaneId::try_new("b").unwrap(),
         ];
         ids.sort();
         let strs: Vec<&str> = ids.iter().map(|id| id.as_ref()).collect();
-        assert_eq!(strs, vec!["a", "b", "c"]);
+        assert_eq!(strs, ["a", "b", "c"]);
     }
 
     // =========================================================================
@@ -591,7 +591,10 @@ mod tests {
     #[test]
     fn browser_url_try_new_accepts_special_characters_in_path() {
         let url = BrowserUrl::try_new("https://example.com/path?q=hello%20world&lang=en").unwrap();
-        assert_eq!(url.as_str(), "https://example.com/path?q=hello%20world&lang=en");
+        assert_eq!(
+            url.as_str(),
+            "https://example.com/path?q=hello%20world&lang=en"
+        );
     }
 
     #[test]

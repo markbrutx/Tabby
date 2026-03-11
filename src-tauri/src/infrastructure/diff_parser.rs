@@ -206,6 +206,146 @@ fn parse_range(range: &str) -> Option<(u32, u32)> {
     }
 }
 
+/// Filter a unified diff to only include changes within the specified new-file line ranges.
+///
+/// Keeps context lines and only includes additions/deletions whose new-file line numbers
+/// fall within one of the given `(start, end)` ranges (inclusive).
+/// Returns a valid unified diff patch suitable for `git apply --cached`.
+pub(super) fn filter_diff_to_line_ranges(diff_output: &str, line_ranges: &[(u32, u32)]) -> String {
+    let lines: Vec<&str> = diff_output.lines().collect();
+    let mut result = String::new();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+
+        // Pass through diff header lines
+        if line.starts_with("diff --git ")
+            || line.starts_with("index ")
+            || line.starts_with("--- ")
+            || line.starts_with("+++ ")
+            || line.starts_with("new file ")
+            || line.starts_with("deleted file ")
+            || line.starts_with("old mode ")
+            || line.starts_with("new mode ")
+            || line.starts_with("similarity index ")
+            || line.starts_with("rename from ")
+            || line.starts_with("rename to ")
+        {
+            result.push_str(line);
+            result.push('\n');
+            i += 1;
+            continue;
+        }
+
+        // Parse hunk headers and filter their content
+        if line.starts_with("@@ ") {
+            if let Some((old_start, _old_count, new_start, _new_count)) = parse_hunk_header(line) {
+                // Collect all lines in this hunk
+                let mut hunk_lines: Vec<&str> = Vec::new();
+                let mut old_line = old_start;
+                let mut new_line = new_start;
+
+                // Track which hunk lines to keep (true = keep as-is, false = convert to context)
+                let mut keep_flags: Vec<bool> = Vec::new();
+                let mut line_numbers: Vec<(u32, u32)> = Vec::new(); // (old_line, new_line) at each position
+
+                i += 1;
+                while i < lines.len() {
+                    let hline = lines[i];
+                    if hline.starts_with("diff --git ") || hline.starts_with("@@ ") {
+                        break;
+                    }
+
+                    if hline.starts_with('+') {
+                        let in_range = line_ranges
+                            .iter()
+                            .any(|&(start, end)| new_line >= start && new_line <= end);
+                        keep_flags.push(in_range);
+                        line_numbers.push((old_line, new_line));
+                        hunk_lines.push(hline);
+                        new_line += 1;
+                    } else if hline.starts_with('-') {
+                        let in_range = line_ranges
+                            .iter()
+                            .any(|&(start, end)| old_line >= start && old_line <= end);
+                        keep_flags.push(in_range);
+                        line_numbers.push((old_line, new_line));
+                        hunk_lines.push(hline);
+                        old_line += 1;
+                    } else if hline.starts_with(' ') {
+                        keep_flags.push(true);
+                        line_numbers.push((old_line, new_line));
+                        hunk_lines.push(hline);
+                        old_line += 1;
+                        new_line += 1;
+                    } else if hline == "\\ No newline at end of file" {
+                        keep_flags.push(true);
+                        line_numbers.push((old_line, new_line));
+                        hunk_lines.push(hline);
+                    } else {
+                        break;
+                    }
+                    i += 1;
+                }
+
+                let has_changes = hunk_lines
+                    .iter()
+                    .zip(keep_flags.iter())
+                    .any(|(l, &keep)| keep && (l.starts_with('+') || l.starts_with('-')));
+
+                if !has_changes {
+                    continue;
+                }
+
+                let mut filtered: Vec<String> = Vec::new();
+                let mut new_old_count: u32 = 0;
+                let mut new_new_count: u32 = 0;
+
+                for (hline, &keep) in hunk_lines.iter().zip(keep_flags.iter()) {
+                    if hline.starts_with('+') {
+                        if keep {
+                            filtered.push(hline.to_string());
+                            new_new_count += 1;
+                        }
+                    } else if let Some(content) = hline.strip_prefix('-') {
+                        if keep {
+                            filtered.push(hline.to_string());
+                            new_old_count += 1;
+                        } else {
+                            filtered.push(format!(" {content}"));
+                            new_old_count += 1;
+                            new_new_count += 1;
+                        }
+                    } else if hline.starts_with(' ') {
+                        filtered.push(hline.to_string());
+                        new_old_count += 1;
+                        new_new_count += 1;
+                    } else if *hline == "\\ No newline at end of file" {
+                        filtered.push(hline.to_string());
+                    }
+                }
+
+                result.push_str(&format!(
+                    "@@ -{},{} +{},{} @@\n",
+                    old_start, new_old_count, new_start, new_new_count
+                ));
+                for fl in &filtered {
+                    result.push_str(fl);
+                    result.push('\n');
+                }
+            } else {
+                i += 1;
+            }
+            continue;
+        }
+
+        i += 1;
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -864,150 +1004,4 @@ index abc..def 100644
         assert_eq!(lines[0].content(), "   indented deletion");
         assert_eq!(lines[1].content(), "   indented addition");
     }
-}
-
-/// Filter a unified diff to only include changes within the specified new-file line ranges.
-///
-/// Keeps context lines and only includes additions/deletions whose new-file line numbers
-/// fall within one of the given `(start, end)` ranges (inclusive).
-/// Returns a valid unified diff patch suitable for `git apply --cached`.
-pub(super) fn filter_diff_to_line_ranges(diff_output: &str, line_ranges: &[(u32, u32)]) -> String {
-    let lines: Vec<&str> = diff_output.lines().collect();
-    let mut result = String::new();
-    let mut i = 0;
-
-    while i < lines.len() {
-        let line = lines[i];
-
-        // Pass through diff header lines
-        if line.starts_with("diff --git ")
-            || line.starts_with("index ")
-            || line.starts_with("--- ")
-            || line.starts_with("+++ ")
-            || line.starts_with("new file ")
-            || line.starts_with("deleted file ")
-            || line.starts_with("old mode ")
-            || line.starts_with("new mode ")
-            || line.starts_with("similarity index ")
-            || line.starts_with("rename from ")
-            || line.starts_with("rename to ")
-        {
-            result.push_str(line);
-            result.push('\n');
-            i += 1;
-            continue;
-        }
-
-        // Parse hunk headers and filter their content
-        if line.starts_with("@@ ") {
-            if let Some((old_start, _old_count, new_start, _new_count)) = parse_hunk_header(line) {
-                // Collect all lines in this hunk
-                let mut hunk_lines: Vec<&str> = Vec::new();
-                let mut old_line = old_start;
-                let mut new_line = new_start;
-
-                // Track which hunk lines to keep (true = keep as-is, false = convert to context)
-                let mut keep_flags: Vec<bool> = Vec::new();
-                let mut line_numbers: Vec<(u32, u32)> = Vec::new(); // (old_line, new_line) at each position
-
-                i += 1;
-                while i < lines.len() {
-                    let hline = lines[i];
-                    if hline.starts_with("diff --git ") || hline.starts_with("@@ ") {
-                        break;
-                    }
-
-                    if hline.starts_with('+') {
-                        let in_range = line_ranges
-                            .iter()
-                            .any(|&(start, end)| new_line >= start && new_line <= end);
-                        keep_flags.push(in_range);
-                        line_numbers.push((old_line, new_line));
-                        hunk_lines.push(hline);
-                        new_line += 1;
-                    } else if hline.starts_with('-') {
-                        // For deletions, check if the old line number's corresponding new
-                        // position falls in range
-                        let in_range = line_ranges
-                            .iter()
-                            .any(|&(start, end)| old_line >= start && old_line <= end);
-                        keep_flags.push(in_range);
-                        line_numbers.push((old_line, new_line));
-                        hunk_lines.push(hline);
-                        old_line += 1;
-                    } else if hline.starts_with(' ') {
-                        keep_flags.push(true); // context always kept
-                        line_numbers.push((old_line, new_line));
-                        hunk_lines.push(hline);
-                        old_line += 1;
-                        new_line += 1;
-                    } else if hline == "\\ No newline at end of file" {
-                        keep_flags.push(true);
-                        line_numbers.push((old_line, new_line));
-                        hunk_lines.push(hline);
-                    } else {
-                        break;
-                    }
-                    i += 1;
-                }
-
-                // Check if any non-context lines are kept
-                let has_changes = hunk_lines
-                    .iter()
-                    .zip(keep_flags.iter())
-                    .any(|(l, &keep)| keep && (l.starts_with('+') || l.starts_with('-')));
-
-                if !has_changes {
-                    continue;
-                }
-
-                // Build filtered hunk: convert excluded changes to context lines
-                let mut filtered: Vec<String> = Vec::new();
-                let mut new_old_count: u32 = 0;
-                let mut new_new_count: u32 = 0;
-
-                for (hline, &keep) in hunk_lines.iter().zip(keep_flags.iter()) {
-                    if hline.starts_with('+') {
-                        if keep {
-                            filtered.push(hline.to_string());
-                            new_new_count += 1;
-                        }
-                        // Excluded additions are simply dropped
-                    } else if let Some(content) = hline.strip_prefix('-') {
-                        if keep {
-                            filtered.push(hline.to_string());
-                            new_old_count += 1;
-                        } else {
-                            // Convert excluded deletion to context
-                            filtered.push(format!(" {content}"));
-                            new_old_count += 1;
-                            new_new_count += 1;
-                        }
-                    } else if hline.starts_with(' ') {
-                        filtered.push(hline.to_string());
-                        new_old_count += 1;
-                        new_new_count += 1;
-                    } else if *hline == "\\ No newline at end of file" {
-                        filtered.push(hline.to_string());
-                    }
-                }
-
-                result.push_str(&format!(
-                    "@@ -{},{} +{},{} @@\n",
-                    old_start, new_old_count, new_start, new_new_count
-                ));
-                for fl in &filtered {
-                    result.push_str(fl);
-                    result.push('\n');
-                }
-            } else {
-                i += 1;
-            }
-            continue;
-        }
-
-        i += 1;
-    }
-
-    result
 }
