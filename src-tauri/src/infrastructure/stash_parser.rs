@@ -70,7 +70,8 @@ mod tests {
 
     #[test]
     fn single_entry_parsed_correctly() {
-        let output = "stash@{0}\x1eWIP on main: abc1234 feat: something\x1e2026-03-10T01:00:00+00:00\n";
+        let output =
+            "stash@{0}\x1eWIP on main: abc1234 feat: something\x1e2026-03-10T01:00:00+00:00\n";
         let result = parse_stash_list_output(output).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].index(), StashId::new(0));
@@ -147,7 +148,10 @@ stash@{1}\x1emsg2\x1e2026-03-10T08:00:00+00:00
     fn stash_message_with_colons_and_spaces() {
         let output = "stash@{0}\x1eWIP on main: abc1234 feat: add new feature\x1e2026-03-10T00:00:00+00:00\n";
         let result = parse_stash_list_output(output).unwrap();
-        assert_eq!(result[0].message(), "WIP on main: abc1234 feat: add new feature");
+        assert_eq!(
+            result[0].message(),
+            "WIP on main: abc1234 feat: add new feature"
+        );
     }
 
     #[test]

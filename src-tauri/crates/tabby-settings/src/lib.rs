@@ -212,10 +212,9 @@ mod tests {
     use super::{
         built_in_profile_catalog, default_preferences, normalize_preferences,
         resolve_default_working_directory, resolve_terminal_profile, validate_preferences,
-        FontSize, LayoutPreset, ProfileId, SettingsError,
-        TerminalProfile, UserPreferences, WorkingDirectory, CLAUDE_PROFILE_ID,
-        CODEX_PROFILE_ID, CUSTOM_PROFILE_ID, GEMINI_PROFILE_ID, OPENCODE_PROFILE_ID,
-        TERMINAL_PROFILE_ID,
+        FontSize, LayoutPreset, ProfileId, SettingsError, TerminalProfile, UserPreferences,
+        WorkingDirectory, CLAUDE_PROFILE_ID, CODEX_PROFILE_ID, CUSTOM_PROFILE_ID,
+        GEMINI_PROFILE_ID, OPENCODE_PROFILE_ID, TERMINAL_PROFILE_ID,
     };
     use tabby_kernel::CommandTemplate;
 
@@ -498,8 +497,7 @@ mod tests {
 
     #[test]
     fn resolve_custom_profile_with_default_command() {
-        let resolved =
-            resolve_terminal_profile(CUSTOM_PROFILE_ID, None, "vim").unwrap();
+        let resolved = resolve_terminal_profile(CUSTOM_PROFILE_ID, None, "vim").unwrap();
         assert_eq!(resolved.id, CUSTOM_PROFILE_ID);
         assert_eq!(resolved.command.unwrap().as_str(), "vim");
     }
@@ -529,8 +527,7 @@ mod tests {
 
     #[test]
     fn resolve_custom_profile_trims_default_command() {
-        let resolved =
-            resolve_terminal_profile(CUSTOM_PROFILE_ID, None, "  fish  ").unwrap();
+        let resolved = resolve_terminal_profile(CUSTOM_PROFILE_ID, None, "  fish  ").unwrap();
         assert_eq!(resolved.command.unwrap().as_str(), "fish");
     }
 
@@ -711,10 +708,7 @@ mod tests {
     #[test]
     fn resolve_default_working_directory_falls_back_to_tilde_when_all_empty() {
         let preferences = default_preferences();
-        assert_eq!(
-            resolve_default_working_directory(None, &preferences),
-            "~"
-        );
+        assert_eq!(resolve_default_working_directory(None, &preferences), "~");
     }
 
     #[test]
@@ -735,10 +729,7 @@ mod tests {
             last_working_directory: Some(String::from("   ")),
             ..default_preferences()
         };
-        assert_eq!(
-            resolve_default_working_directory(None, &preferences),
-            "~"
-        );
+        assert_eq!(resolve_default_working_directory(None, &preferences), "~");
     }
 
     #[test]
@@ -768,7 +759,9 @@ mod tests {
     fn settings_error_from_value_object_error() {
         let vo_err = tabby_kernel::ValueObjectError::new("some constraint violated");
         let settings_err = SettingsError::from(vo_err);
-        assert!(settings_err.to_string().contains("some constraint violated"));
+        assert!(settings_err
+            .to_string()
+            .contains("some constraint violated"));
     }
 
     // -----------------------------------------------------------------------
@@ -786,10 +779,7 @@ mod tests {
         assert_eq!(profile.id.as_str(), "my-profile");
         assert_eq!(profile.label, "My Profile");
         assert_eq!(profile.description, "A test profile");
-        assert_eq!(
-            profile.startup_command_template.unwrap().as_str(),
-            "zsh"
-        );
+        assert_eq!(profile.startup_command_template.unwrap().as_str(), "zsh");
     }
 
     #[test]

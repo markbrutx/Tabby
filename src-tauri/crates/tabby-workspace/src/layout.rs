@@ -515,7 +515,12 @@ mod tests {
     #[test]
     fn split_pane_on_nonexistent_target_returns_none() {
         let tree = tree_from_count(&ids(1)).expect("single pane");
-        let result = split_pane(&tree, &pid("nonexistent"), SplitDirection::Horizontal, &pid("new"));
+        let result = split_pane(
+            &tree,
+            &pid("nonexistent"),
+            SplitDirection::Horizontal,
+            &pid("new"),
+        );
         assert!(result.is_none());
     }
 
@@ -550,14 +555,20 @@ mod tests {
     fn close_pane_last_pane_returns_none_tree() {
         let tree = super::tree_from_preset(LayoutPreset::OneByOne, &ids(1));
         let result = close_pane(&tree, &pid("p1")).expect("target found");
-        assert!(result.is_none(), "closing last pane should return None tree");
+        assert!(
+            result.is_none(),
+            "closing last pane should return None tree"
+        );
     }
 
     #[test]
     fn close_pane_nonexistent_target_returns_none_outer() {
         let tree = tree_from_count(&ids(2)).expect("two panes");
         let result = close_pane(&tree, &pid("not-in-tree"));
-        assert!(result.is_none(), "target not in tree should return None outer");
+        assert!(
+            result.is_none(),
+            "target not in tree should return None outer"
+        );
     }
 
     #[test]
@@ -626,7 +637,10 @@ mod tests {
         let mut extended = pane_ids.clone();
         extended.push(pid("p_extra"));
         let result = super::validate_layout(&tree, &extended);
-        assert!(result.is_err(), "extra pane in slots but not tree should fail");
+        assert!(
+            result.is_err(),
+            "extra pane in slots but not tree should fail"
+        );
     }
 
     #[test]
@@ -645,10 +659,13 @@ mod tests {
     #[test]
     fn remap_pane_ids_replaces_template_ids_with_real_ids() {
         use crate::ids::PaneId;
-        let template = super::tree_from_preset(LayoutPreset::OneByTwo, &[
-            PaneId::from(String::from("ph1")),
-            PaneId::from(String::from("ph2")),
-        ]);
+        let template = super::tree_from_preset(
+            LayoutPreset::OneByTwo,
+            &[
+                PaneId::from(String::from("ph1")),
+                PaneId::from(String::from("ph2")),
+            ],
+        );
         let real_ids = vec![
             PaneId::from(String::from("real1")),
             PaneId::from(String::from("real2")),
@@ -665,7 +682,9 @@ mod tests {
     #[test]
     fn collect_pane_ids_on_single_leaf() {
         use super::SplitNode;
-        let leaf = SplitNode::Pane { pane_id: pid("solo") };
+        let leaf = SplitNode::Pane {
+            pane_id: pid("solo"),
+        };
         assert_eq!(collect_pane_ids(&leaf), vec![pid("solo")]);
     }
 

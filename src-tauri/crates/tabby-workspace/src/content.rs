@@ -243,7 +243,9 @@ mod tests {
         assert_eq!(def.browser_url(), None);
 
         match &def {
-            PaneContentDefinition::Git { working_directory, .. } => {
+            PaneContentDefinition::Git {
+                working_directory, ..
+            } => {
                 assert_eq!(working_directory, "/my/repo");
             }
             _ => panic!("expected Git variant"),
@@ -287,7 +289,8 @@ mod tests {
         let git_id = make_content_id("git-id-check");
 
         let term = PaneContentDefinition::terminal(term_id.clone(), "zsh", "/", None);
-        let browser = PaneContentDefinition::browser(browser_id.clone(), BrowserUrl::new("https://x.com"));
+        let browser =
+            PaneContentDefinition::browser(browser_id.clone(), BrowserUrl::new("https://x.com"));
         let git = PaneContentDefinition::git(git_id.clone(), "/");
 
         assert_eq!(*term.content_id(), term_id);

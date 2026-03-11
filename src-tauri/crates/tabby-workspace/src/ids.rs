@@ -161,7 +161,11 @@ mod tests {
         set.insert(id1.clone());
         set.insert(id2.clone()); // duplicate
         set.insert(id3.clone());
-        assert_eq!(set.len(), 2, "duplicate IDs should deduplicate in a HashSet");
+        assert_eq!(
+            set.len(),
+            2,
+            "duplicate IDs should deduplicate in a HashSet"
+        );
     }
 
     #[test]

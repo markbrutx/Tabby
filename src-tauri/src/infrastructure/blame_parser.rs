@@ -112,7 +112,13 @@ mod tests {
     use super::*;
 
     // Minimal valid porcelain blame block helper
-    fn make_blame_block(hash: &str, author: &str, author_time: &str, final_line: usize, content: &str) -> String {
+    fn make_blame_block(
+        hash: &str,
+        author: &str,
+        author_time: &str,
+        final_line: usize,
+        content: &str,
+    ) -> String {
         format!(
             "{hash} 1 {final_line} 1\nauthor {author}\nauthor-mail <{author}@example.com>\nauthor-time {author_time}\nauthor-tz +0000\ncommitter {author}\ncommitter-mail <{author}@example.com>\ncommitter-time {author_time}\ncommitter-tz +0000\nsummary test commit\nfilename src/lib.rs\n\t{content}\n",
         )
@@ -167,7 +173,10 @@ mod tests {
         );
         let result = parse_blame_porcelain(&block).unwrap();
         // Parser lowercases the hash
-        assert_eq!(result[0].hash().as_ref(), "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+        assert_eq!(
+            result[0].hash().as_ref(),
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -330,7 +339,7 @@ mod tests {
         // A: lines 1-2, B: line 3, C: lines 4-5
         let block_a1 = make_blame_block(hash_a, "Alice", "100", 1, "line1");
         let block_a2 = make_blame_block(hash_a, "Alice", "100", 2, "line2");
-        let block_b  = make_blame_block(hash_b, "Bob",   "200", 3, "line3");
+        let block_b = make_blame_block(hash_b, "Bob", "200", 3, "line3");
         let block_c1 = make_blame_block(hash_c, "Carol", "300", 4, "line4");
         let block_c2 = make_blame_block(hash_c, "Carol", "300", 5, "line5");
 
@@ -338,8 +347,8 @@ mod tests {
         let result = parse_blame_porcelain(&output).unwrap();
 
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0].line_count(), 2);  // A: 2 lines merged
-        assert_eq!(result[1].line_count(), 1);  // B: 1 line
-        assert_eq!(result[2].line_count(), 2);  // C: 2 lines merged
+        assert_eq!(result[0].line_count(), 2); // A: 2 lines merged
+        assert_eq!(result[1].line_count(), 1); // B: 1 line
+        assert_eq!(result[2].line_count(), 2); // C: 2 lines merged
     }
 }

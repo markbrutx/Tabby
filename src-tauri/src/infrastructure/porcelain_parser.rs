@@ -462,8 +462,7 @@ mod tests {
 
     #[test]
     fn copied_entry_parsed_correctly() {
-        let output =
-            "2 C. N... 100644 100644 100644 abc1234 def5678 C100 copy.rs\toriginal.rs\n";
+        let output = "2 C. N... 100644 100644 100644 abc1234 def5678 C100 copy.rs\toriginal.rs\n";
         let result = parse_porcelain_v2(output).unwrap();
         assert_eq!(result[0].index_status(), FileStatusKind::Copied);
         assert_eq!(result[0].old_path(), Some("original.rs"));
@@ -491,7 +490,8 @@ mod tests {
 
     #[test]
     fn unmerged_entry_is_conflicted() {
-        let output = "u UU N... 100644 100644 100644 100644 abc1234 def5678 ghi9012 merge_conflict.rs\n";
+        let output =
+            "u UU N... 100644 100644 100644 100644 abc1234 def5678 ghi9012 merge_conflict.rs\n";
         let result = parse_porcelain_v2(output).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].index_status(), FileStatusKind::Conflicted);
